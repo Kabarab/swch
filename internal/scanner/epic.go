@@ -2,8 +2,10 @@ package scanner
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"swch/internal/models"
 )
 
@@ -18,25 +20,30 @@ type EpicManifest struct {
 func ScanEpicGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	
-	// Путь к манифестам Epic Games (обычно скрытая папка ProgramData)
+	// 1. Стандартный путь: C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests
 	programData := os.Getenv("ProgramData")
 	if programData == "" {
 		programData = "C:\\ProgramData"
 	}
 	manifestPath := filepath.Join(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests")
 
+	fmt.Println("Scanning Epic manifests at:", manifestPath) // ЛОГ ДЛЯ ОТЛАДКИ
+
 	files, err := os.ReadDir(manifestPath)
 	if err != nil {
+		fmt.Println("Error reading Epic path:", err)
 		return games
 	}
 
 	for _, f := range files {
-		if filepath.Ext(f.Name()) == ".item" {
+		if strings.HasSuffix(f.Name(), ".item") {
 			data, err := os.ReadFile(filepath.Join(manifestPath, f.Name()))
 			if err != nil { continue }
 
 			var manifest EpicManifest
 			if err := json.Unmarshal(data, &manifest); err != nil { continue }
+
+			fmt.Println("Found Epic Game:", manifest.DisplayName) // ЛОГ
 
 			games = append(games, models.LibraryGame{
 				ID:       manifest.AppName,
@@ -52,11 +59,12 @@ func ScanEpicGames() []models.LibraryGame {
 }
 
 func ScanEpicAccounts() []models.Account {
+	// Заглушка, так как Epic шифрует данные аккаунта
 	return []models.Account{
 		{
 			ID:          "EpicMain",
-			DisplayName: "Current User",
-			Username:    "EpicUser",
+			DisplayName: "Epic Games User",
+			Username:    "Main Profile",
 			Platform:    "Epic",
 		},
 	}
