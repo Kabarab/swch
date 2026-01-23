@@ -1,37 +1,39 @@
 package main
 
 import (
-	"embed"
-	"swch/internal/app"
-
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"fmt"
+	"log"
+	
+	"myproject/internal/registry"
+	"myproject/internal/processes"
 )
 
-//go:embed all:frontend/dist
-var assets embed.FS
+func SwitchSteamAccount(username string) {
+	fmt.Println("Closing Steam...")
+	processes.KillProcess("steam.exe")
+
+	fmt.Printf("Switching to %s...\n", username)
+	
+	keyPath := `HKCU\Software\Valve\Steam`
+	
+	// Устанавливаем авто-логин
+	err := registry.SetStringValue(keyPath, "AutoLoginUser", username)
+	if err != nil {
+		log.Printf("Error setting AutoLoginUser: %v", err)
+	}
+	
+	// Важно: сбросить RememberPassword в 1, чтобы не просил пароль (если токен жив)
+	registry.SetStringValue(keyPath, "RememberPassword", "1")
+
+	fmt.Println("Starting Steam...")
+	// Путь к Steam лучше тоже брать из реестра
+	steamPath, _ := registry.GetStringValue(keyPath, "SteamPath")
+	if steamPath != "" {
+		processes.StartProgram(steamPath + "/steam.exe")
+	}
+}
 
 func main() {
-	// Создаем экземпляр приложения
-	myApp := app.NewApp()
-
-	// Запускаем окно
-	err := wails.Run(&options.App{
-		Title:  "swch",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 18, G: 18, B: 18, A: 255}, // Темный фон #121212
-		OnStartup:        myApp.Startup,
-		Bind: []interface{}{
-			myApp,
-		},
-	})
-
-	if err != nil {
-		println("Error:", err.Error())
-	}
+	// Пример использования
+	SwitchSteamAccount("MyGameAccount")
 }
