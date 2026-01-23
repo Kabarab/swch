@@ -22,140 +22,111 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// Константа для конвертации SteamID3 -> SteamID64
-const steamID64Identifier = 76561197960265728
+// GetGames возвращает список установленных игр с привязкой к аккаунтам
+func (s *SteamScanner) GetGames() []models.LibraryGame {
+	var games []models.LibraryGame
+	if s.Path == "" { return games }
 
-func (s *SteamScanner) Scan() []models.Account {
-	var accounts []models.Account
-	if s.Path == "" {
-		return accounts
-	}
-
-	// 1. Ищем установленные игры
-	installedGames := s.scanInstalledGames()
-
-	// 2. Читаем файл с пользователями (loginusers.vdf)
-	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
-	loginData := parseVdf(loginUsersPath) // Возвращает map[string]interface{} где ключи - SteamID64
-
-	// 3. Идем по папкам userdata (названия папок - это SteamID3)
-	userDataPath := filepath.Join(s.Path, "userdata")
-	entries, _ := os.ReadDir(userDataPath)
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		steamID3Str := entry.Name()
-		
-		// Пропускаем системные папки
-		if steamID3Str == "0" || steamID3Str == "anonymous" || steamID3Str == "ac" {
-			continue
-		}
-
-		// --- ЛОГИКА ОПРЕДЕЛЕНИЯ ИМЕН ---
-		
-		// По умолчанию
-		displayName := "User " + steamID3Str
-		username := ""
-
-		// Пытаемся конвертировать ID3 (папка) в ID64 (ключ в файле)
-		// ID64 = ID3 + 76561197960265728
-		id3, err := strconv.ParseInt(steamID3Str, 10, 64)
-		if err == nil {
-			id64 := id3 + steamID64Identifier
-			id64Str := strconv.FormatInt(id64, 10)
-
-			// Ищем этот ID64 в данных loginusers.vdf
-			// Структура VDF: "users" -> { "7656..." : { "AccountName": "...", "PersonaName": "..." } }
-			if users, ok := loginData["users"].(map[string]interface{}); ok {
-				if userData, found := users[id64Str].(map[string]interface{}); found {
-					// Нашли! Берем данные
-					if pName, ok := userData["PersonaName"].(string); ok {
-						displayName = pName
-					}
-					if accName, ok := userData["AccountName"].(string); ok {
-						username = accName
-					}
-				}
-			} else {
-				// Если структура файла плоская (иногда бывает без "users")
-				if userData, found := loginData[id64Str].(map[string]interface{}); found {
-					if pName, ok := userData["PersonaName"].(string); ok {
-						displayName = pName
-					}
-					if accName, ok := userData["AccountName"].(string); ok {
-						username = accName
-					}
-				}
-			}
-		}
-
-		// Если логин так и не нашли, используем ID как заглушку
-		if username == "" {
-			username = steamID3Str
-		}
-
-		// 4. Фильтруем игры
-		myGames := s.filterGamesForAccount(steamID3Str, installedGames)
-
-		if len(myGames) > 0 {
-			acc := models.Account{
-				ID:          steamID3Str,
-				DisplayName: displayName, // Никнейм (NazarSlayer)
-				Username:    username,    // Логин (nazarn2008)
-				Platform:    "Steam",
-				OwnedGames:  myGames,
-			}
-			accounts = append(accounts, acc)
-		}
-	}
-	return accounts
-}
-
-func (s *SteamScanner) scanInstalledGames() map[string]string {
-	games := make(map[string]string)
-	steamAppsPath := filepath.Join(s.Path, "steamapps")
+	// 1. Получаем список всех аккаунтов (нужен для проверки владения)
+	accounts := s.GetAccounts()
 	
-	files, err := os.ReadDir(steamAppsPath)
-	if err != nil { return games }
+	// 2. Ищем файлы appmanifest (установленные игры)
+	steamAppsPath := filepath.Join(s.Path, "steamapps")
+	files, _ := os.ReadDir(steamAppsPath)
 
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), "appmanifest_") && strings.HasSuffix(f.Name(), ".acf") {
-			fullPath := filepath.Join(steamAppsPath, f.Name())
-			data := parseVdf(fullPath)
-			
-			if appState, ok := data["AppState"].(map[string]interface{}); ok {
-				name, _ := appState["name"].(string)
-				appid, _ := appState["appid"].(string)
-				if appid != "" {
-					games[appid] = name
+			data := parseVdf(filepath.Join(steamAppsPath, f.Name()))
+			appState, ok := data["AppState"].(map[string]interface{})
+			if !ok { continue }
+
+			name := appState["name"].(string)
+			appID := appState["appid"].(string)
+
+			// 3. Проверяем, на каких аккаунтах есть эта игра
+			var owners []models.AccountStat
+			for _, acc := range accounts {
+				playtime := s.checkPlaytime(acc.ID, appID)
+				if playtime >= 0 { // Если игра найдена в конфиге
+					owners = append(owners, models.AccountStat{
+						AccountID:   acc.ID,
+						DisplayName: acc.DisplayName,
+						PlaytimeMin: playtime,
+					})
 				}
 			}
+
+			games = append(games, models.LibraryGame{
+				ID:                  appID,
+				Name:                name,
+				Platform:            "Steam",
+				IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
+				AvailableOnAccounts: owners,
+			})
 		}
 	}
 	return games
 }
 
-func (s *SteamScanner) filterGamesForAccount(steamID3 string, installedGames map[string]string) []models.Game {
-	var myGames []models.Game
-	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
+// GetAccounts возвращает чистый список аккаунтов
+func (s *SteamScanner) GetAccounts() []models.Account {
+	var accounts []models.Account
+	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
+	loginData := parseVdf(loginUsersPath)
 	
+	userDataPath := filepath.Join(s.Path, "userdata")
+	entries, _ := os.ReadDir(userDataPath)
+
+	for _, entry := range entries {
+		if !entry.IsDir() { continue }
+		steamID3 := entry.Name()
+		if steamID3 == "0" || steamID3 == "anonymous" || steamID3 == "ac" { continue }
+
+		displayName := "User " + steamID3
+		username := steamID3
+
+		// Конвертация ID3 -> ID64 для поиска имени
+		id3, _ := strconv.ParseInt(steamID3, 10, 64)
+		id64 := id3 + 76561197960265728
+		id64Str := strconv.FormatInt(id64, 10)
+
+		// Ищем в loginusers
+		if users, ok := loginData["users"].(map[string]interface{}); ok {
+			if u, found := users[id64Str].(map[string]interface{}); found {
+				if n, ok := u["PersonaName"].(string); ok { displayName = n }
+				if a, ok := u["AccountName"].(string); ok { username = a }
+			}
+		} else if u, found := loginData[id64Str].(map[string]interface{}); found {
+             if n, ok := u["PersonaName"].(string); ok { displayName = n }
+             if a, ok := u["AccountName"].(string); ok { username = a }
+        }
+
+		accounts = append(accounts, models.Account{
+			ID:          steamID3, // Для переключения нужен SteamID3
+			DisplayName: displayName,
+			Username:    username,
+			Platform:    "Steam",
+		})
+	}
+	return accounts
+}
+
+// checkPlaytime возвращает минуты в игре или -1 если игра не найдена у аккаунта
+func (s *SteamScanner) checkPlaytime(steamID3 string, appID string) int {
+	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
 	contentBytes, err := ioutil.ReadFile(localConfigPath)
-	if err != nil { return myGames }
+	if err != nil { return -1 }
 	content := string(contentBytes)
 
-	for appID, name := range installedGames {
-		if strings.Contains(content, fmt.Sprintf(`"%s"`, appID)) {
-			myGames = append(myGames, models.Game{
-				ID:       appID,
-				Name:     name,
-				Platform: "Steam",
-				ImageURL: fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
-			})
-		}
+	// Быстрая проверка наличия (для оптимизации)
+	if !strings.Contains(content, fmt.Sprintf(`"%s"`, appID)) {
+		return -1
 	}
-	return myGames
+    
+    // В идеале нужен полный парсинг VDF для получения PlayTime, 
+    // но для скорости и offline режима пока вернем 0 (владеет), если нашли ID.
+    // Парсить localconfig целиком долго.
+    return 0 
 }
 
 func parseVdf(path string) map[string]interface{} {

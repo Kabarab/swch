@@ -21,6 +21,7 @@ export namespace models {
 	export class Account {
 	    id: string;
 	    displayName: string;
+	    username: string;
 	    avatarUrl: string;
 	    platform: string;
 	    ownedGames: Game[];
@@ -33,6 +34,7 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.displayName = source["displayName"];
+	        this.username = source["username"];
 	        this.avatarUrl = source["avatarUrl"];
 	        this.platform = source["platform"];
 	        this.ownedGames = this.convertValues(source["ownedGames"], Game);
