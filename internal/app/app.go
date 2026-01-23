@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
+	"syscall" // Обязательно нужен для скрытия черного окна
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -28,8 +31,39 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// ... (методы GetLibrary, GetLaunchers, SelectExe, AddCustomGame оставляем без изменений) ...
+// --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ЗАПУСКА C# ---
+func runCSharpSwitcher(username string, gameID string) string {
+	cwd, _ := os.Getwd()
+	// Путь к F:\swch\tools\switcher.exe
+	switcherPath := filepath.Join(cwd, "tools", "switcher.exe")
 
+	if _, err := os.Stat(switcherPath); os.IsNotExist(err) {
+		return "Error: switcher.exe not found! Did you compile it?"
+	}
+
+	var cmd *exec.Cmd
+	if gameID != "" {
+		// Запуск игры: switcher.exe login gameID
+		cmd = exec.Command(switcherPath, username, gameID)
+	} else {
+		// Просто смена: switcher.exe login
+		cmd = exec.Command(switcherPath, username)
+	}
+
+	// Скрываем консольное окно при запуске
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	
+	// Запускаем и ждем выполнения
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("Switcher Error:", string(output))
+		return "Error switching: " + err.Error()
+	}
+	
+	return "Success"
+}
+
+// GetLibrary возвращает список игр
 func (a *App) GetLibrary() []models.LibraryGame {
 	var library []models.LibraryGame
 	library = append(library, a.steam.GetGames()...)
@@ -72,59 +106,30 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 	return "Success"
 }
 
-// SwitchToAccount
+// SwitchToAccount - Кнопка во вкладке Accounts
 func (a *App) SwitchToAccount(accountName string, platform string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Unknown Login" }
-
-		sys.KillSteam()
-
-		// Патчим файл
-		_ = a.steam.SetUserActive(accountName)
-
-		// Чистим реестр и ставим юзера
-		if err := sys.SetSteamUser(accountName); err != nil {
-			return "Registry Error: " + err.Error()
+		if accountName == "UNKNOWN" { return "Error: Login not found." }
+		
+		res := runCSharpSwitcher(accountName, "")
+		if res == "Success" {
+			return "Switched to " + accountName
 		}
-
-		steamDir, err := sys.GetSteamPath()
-		if err != nil { return "Steam path not found" }
-		exePath := filepath.Join(steamDir, "steam.exe")
-
-		sys.StartGame(exePath)
-		return "Switched to " + accountName
+		return res
 	}
 	return "Platform not supported"
 }
 
-// LaunchGame
+// LaunchGame - Кнопка Play
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Unknown Login" }
+		if accountName == "UNKNOWN" { return "Error: Login not found." }
 
-		fmt.Println("Closing Steam...")
-		sys.KillSteam()
-		
-		// 1. Патчим VDF
-		_ = a.steam.SetUserActive(accountName)
-
-		// 2. Реестр (с очисткой ActiveProcess!)
-		if accountName != "" {
-			fmt.Printf("Switching to: %s\n", accountName)
-			if err := sys.SetSteamUser(accountName); err != nil {
-				return "Error: " + err.Error()
-			}
+		res := runCSharpSwitcher(accountName, gameID)
+		if res == "Success" {
+			return "Launched on Steam"
 		}
-		
-		fmt.Println("Launching...")
-		
-		steamDir, _ := sys.GetSteamPath()
-		steamExe := filepath.Join(steamDir, "steam.exe")
-		
-		// Запуск через аргумент -applaunch гарантирует, что Steam сначала прогрузится, а потом запустит игру
-		sys.StartGameWithArgs(steamExe, "-applaunch", gameID)
-		
-		return "Launched on Steam"
+		return res
 	}
 
 	if platform == "Epic" {

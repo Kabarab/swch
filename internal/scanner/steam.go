@@ -10,6 +10,7 @@ import (
 	"strings"
 	"swch/internal/models"
 	"swch/internal/sys"
+	"time"
 
 	"github.com/andygrunwald/vdf"
 )
@@ -23,47 +24,65 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// SetUserActive делает магию с loginusers.vdf
+// SetUserActive реализует логику TcNo: ставит MostRecent=1 И обновляет Timestamp
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	
 	contentBytes, err := ioutil.ReadFile(loginUsersPath)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	content := string(contentBytes)
 
-	// 1. Сбрасываем флаг "MostRecent" у всех
+	// 1. Сбрасываем "MostRecent" "1" у всех на "0"
 	reReset := regexp.MustCompile(`"MostRecent"\s+"1"`)
 	content = reReset.ReplaceAllString(content, `"MostRecent"		"0"`)
 
-	// 2. Ищем нашего пользователя (регистронезависимо)
+	// 2. Ищем нашего пользователя
 	targetPattern := fmt.Sprintf(`"(?i)%s"`, regexp.QuoteMeta(targetUsername))
 	loc := regexp.MustCompile(targetPattern).FindStringIndex(content)
 	
 	if loc != nil {
-		// Ищем параметр MostRecent ПОСЛЕ имени пользователя
+		// Область поиска параметров для этого юзера (от его имени до конца файла)
+		// (В идеале надо искать до следующей закрывающей скобки, но для VDF это обычно работает)
 		restOfFile := content[loc[1]:]
+		
+		// --- АПДЕЙТ 1: MostRecent ---
 		reMostRecent := regexp.MustCompile(`"MostRecent"\s+"0"`)
 		locRecent := reMostRecent.FindStringIndex(restOfFile)
 		
 		if locRecent != nil {
 			startPos := loc[1] + locRecent[0]
 			endPos := loc[1] + locRecent[1]
-			
-			// Ставим 1
+			// Меняем 0 на 1
 			content = content[:startPos] + `"MostRecent"		"1"` + content[endPos:]
 			
-			return ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
+			// Перечитываем restOfFile, так как длина строки могла измениться (хотя тут замена 1 к 1)
+			restOfFile = content[loc[1]:] 
 		}
+
+		// --- АПДЕЙТ 2: Timestamp (КЛЮЧЕВОЙ МОМЕНТ TCNO) ---
+		// Ищем поле Timestamp
+		reTime := regexp.MustCompile(`"Timestamp"\s+"(\d+)"`)
+		locTime := reTime.FindStringSubmatchIndex(restOfFile)
+
+		if locTime != nil {
+			// locTime[2] и locTime[3] - это индексы самой цифры времени
+			startPos := loc[1] + locTime[2]
+			endPos := loc[1] + locTime[3]
+			
+			// Текущее время Unix
+			newTime := fmt.Sprintf("%d", time.Now().Unix())
+			
+			// Заменяем старое время на новое
+			content = content[:startPos] + newTime + content[endPos:]
+		}
+		
+		return ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
 	}
 	
-	// Если не нашли, не страшно, полагаемся на реестр
-	fmt.Println("Warning: User not found in VDF for patching")
-	return nil
+	return fmt.Errorf("user not found in VDF")
 }
 
-// GetGames сканирует игры
+// GetGames возвращает игры
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" { return games }
@@ -119,9 +138,9 @@ func (s *SteamScanner) getLibraryFolders() []string {
 	f, err := os.Open(vdfPath)
 	if err != nil { return paths }
 	defer f.Close()
-
 	p := vdf.NewParser(f)
 	m, _ := p.Parse()
+	
 	if m != nil {
 		if libFolders, ok := m["libraryfolders"].(map[string]interface{}); ok {
 			for _, v := range libFolders {
@@ -142,7 +161,6 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 	var accounts []models.Account
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	loginData := parseVdf(loginUsersPath)
-	
 	userDataPath := filepath.Join(s.Path, "userdata")
 	entries, _ := os.ReadDir(userDataPath)
 
@@ -158,16 +176,15 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 		id64 := id3 + 76561197960265728
 		id64Str := strconv.FormatInt(id64, 10)
 
-		// Поиск данных пользователя
 		var userData map[string]interface{}
 		
-		// Обработка разных форматов VDF (с "users" и без)
 		if users, ok := loginData["users"].(map[string]interface{}); ok {
 			if u, found := users[id64Str].(map[string]interface{}); found {
 				userData = u
 			}
 		} 
 		if userData == nil {
+			// Пробуем искать в корне (старый формат или без users)
 			if u, found := loginData[id64Str].(map[string]interface{}); found {
 				userData = u
 			}
@@ -178,9 +195,7 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 			if a, ok := userData["AccountName"].(string); ok { username = a }
 		}
 
-		if username == "" {
-			username = "UNKNOWN"
-		}
+		if username == "" { username = "UNKNOWN" }
 
 		accounts = append(accounts, models.Account{
 			ID:          steamID3,
