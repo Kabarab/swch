@@ -1,9 +1,12 @@
 package sys
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -20,42 +23,56 @@ func GetSteamPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Clean(path), nil
+	// Steam хранит пути с /, Windows любит \
+	return filepath.Clean(strings.ReplaceAll(path, "/", "\\")), nil
 }
 
-// KillSteam убивает процесс
+// KillSteam убивает процесс жестко и ждет
 func KillSteam() {
-	// /F - принудительно, /IM - по имени
-	cmd := exec.Command("taskkill", "/F", "/IM", "steam.exe")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	cmd.Run()
+	// Убиваем не только Steam, но и его "помощников", которые держат файлы
+	targetProcs := []string{"steam.exe", "steamwebhelper.exe"}
+	
+	for _, p := range targetProcs {
+		cmd := exec.Command("taskkill", "/F", "/IM", p)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		cmd.Run()
+	}
+
+	// Ждем 3 секунды, чтобы Windows успела освободить файл реестра.
+	// Без этого Steam при закрытии перезапишет нашего пользователя!
+	time.Sleep(3 * time.Second)
 }
 
-// SetSteamUser меняет пользователя (ИСПРАВЛЕНО)
+// SetSteamUser меняет пользователя
 func SetSteamUser(username string) error {
+	if username == "" {
+		return fmt.Errorf("empty username")
+	}
+
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
 	defer k.Close()
 
-	// 1. Устанавливаем логин (строка)
+	// 1. Устанавливаем логин
 	if err := k.SetStringValue("AutoLoginUser", username); err != nil {
 		return err
 	}
 
-	// 2. ВАЖНО: Устанавливаем "Запомнить пароль" как ЧИСЛО (DWORD), а не строку!
-	// Без этого Steam будет просить пароль при каждом переключении.
+	// 2. ВАЖНО: 1 должно быть числом (DWORD), иначе Steam попросит пароль
 	if err := k.SetDWordValue("RememberPassword", 1); err != nil {
 		return err
 	}
 	
+	// Дополнительный флаг для новых версий Steam
+	// Убирает предупреждение "Запускается в офлайн режиме" если нет сети
+	k.SetDWordValue("SkipOfflineModeWarning", 1) 
+	
 	return nil
 }
 
-// StartGame запускает EXE или URL
 func StartGame(pathOrUrl string) {
-	// Используем cmd /C start, чтобы запускать и файлы, и ссылки (steam://)
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()

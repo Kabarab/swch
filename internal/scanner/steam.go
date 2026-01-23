@@ -22,6 +22,9 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
+// ... GetGames и getLibraryFolders оставьте как были в прошлом ответе ...
+// (Чтобы не дублировать код, убедитесь, что GetGames берет field Username из аккаунта)
+
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" { return games }
@@ -51,7 +54,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 						owners = append(owners, models.AccountStat{
 							AccountID:   acc.ID,
 							DisplayName: acc.DisplayName,
-							Username:    acc.Username, // <--- ВАЖНО: Сохраняем логин для запуска
+							Username:    acc.Username, // <-- Передаем логин!
 							PlaytimeMin: 0,
 						})
 					}
@@ -77,11 +80,8 @@ func (s *SteamScanner) getLibraryFolders() []string {
 	f, err := os.Open(vdfPath)
 	if err != nil { return paths }
 	defer f.Close()
-
 	p := vdf.NewParser(f)
-	m, err := p.Parse()
-	if err != nil { return paths }
-
+	m, _ := p.Parse()
 	if libFolders, ok := m["libraryfolders"].(map[string]interface{}); ok {
 		for _, v := range libFolders {
 			if folderData, ok := v.(map[string]interface{}); ok {
@@ -107,20 +107,36 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 	for _, entry := range entries {
 		if !entry.IsDir() { continue }
 		steamID3 := entry.Name()
-		if steamID3 == "0" || steamID3 == "anonymous" || steamID3 == "ac" { continue }
+		if _, err := strconv.Atoi(steamID3); err != nil { continue } // Пропускаем не-числовые папки
 
 		displayName := "User " + steamID3
-		username := steamID3
+		username := "" // Изначально пусто
 
 		id3, _ := strconv.ParseInt(steamID3, 10, 64)
 		id64 := id3 + 76561197960265728
 		id64Str := strconv.FormatInt(id64, 10)
 
+		// Попытка найти в loginusers.vdf
+		// Файл может иметь структуру "users" -> "ID" ИЛИ просто "ID" в корне
+		var userData map[string]interface{}
+		
 		if users, ok := loginData["users"].(map[string]interface{}); ok {
 			if u, found := users[id64Str].(map[string]interface{}); found {
-				if n, ok := u["PersonaName"].(string); ok { displayName = n }
-				if a, ok := u["AccountName"].(string); ok { username = a }
+				userData = u
 			}
+		} else if u, found := loginData[id64Str].(map[string]interface{}); found {
+			userData = u
+		}
+
+		if userData != nil {
+			if n, ok := userData["PersonaName"].(string); ok { displayName = n }
+			if a, ok := userData["AccountName"].(string); ok { username = a }
+		}
+
+		// Если логин не найден, мы НЕ можем использовать авто-вход.
+		// Но покажем аккаунт, чтобы пользователь знал о проблеме.
+		if username == "" {
+			username = "UNKNOWN_LOGIN" // Маркер ошибки
 		}
 
 		accounts = append(accounts, models.Account{
@@ -137,8 +153,7 @@ func (s *SteamScanner) ownsGame(steamID3 string, appID string) bool {
 	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
 	contentBytes, err := ioutil.ReadFile(localConfigPath)
 	if err != nil { return false }
-	content := string(contentBytes)
-	return strings.Contains(content, fmt.Sprintf(`"%s"`, appID))
+	return strings.Contains(string(contentBytes), fmt.Sprintf(`"%s"`, appID))
 }
 
 func parseVdf(path string) map[string]interface{} {

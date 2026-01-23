@@ -11,3 +11,5 @@ export function GetLibrary():Promise<Array<models.LibraryGame>>;
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function SelectExe():Promise<string>;
+
+export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;

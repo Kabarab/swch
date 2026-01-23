@@ -7,7 +7,7 @@ import (
 	"swch/internal/models"
 )
 
-// Получаем путь к файлу настроек: %APPDATA%\swch\custom_games.json
+// getCustomGamesPath возвращает путь к файлу %APPDATA%/swch/custom_games.json
 func getCustomGamesPath() string {
 	configDir, _ := os.UserConfigDir()
 	path := filepath.Join(configDir, "swch")
@@ -15,7 +15,7 @@ func getCustomGamesPath() string {
 	return filepath.Join(path, "custom_games.json")
 }
 
-// SaveCustomGame сохраняет новую игру в JSON
+// SaveCustomGame сохраняет игру в файл
 func SaveCustomGame(game models.LibraryGame) error {
 	games := LoadCustomGames()
 	games = append(games, game)
@@ -26,7 +26,7 @@ func SaveCustomGame(game models.LibraryGame) error {
 	return os.WriteFile(getCustomGamesPath(), data, 0644)
 }
 
-// LoadCustomGames загружает список своих игр
+// LoadCustomGames читает список игр
 func LoadCustomGames() []models.LibraryGame {
 	path := getCustomGamesPath()
 	if _, err := os.Stat(path); os.IsNotExist(err) {

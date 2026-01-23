@@ -50,14 +50,14 @@
     <div id="add-game-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Add Game (Torrent/Other)</h3>
+                <h3>Add Non-Steam Game</h3>
                 <span class="close" onclick="closeModal('add-game-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <input type="text" id="custom-name" placeholder="Game Name" class="input-field" style="width:100%; margin-bottom:10px; padding:8px; background:#333; border:none; color:white;">
+                <input type="text" id="custom-name" placeholder="Game Name" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="custom-path" placeholder="Path to .exe" class="input-field" style="flex:1; padding:8px; background:#333; border:none; color:white;" readonly>
-                    <button onclick="browseFile()" style="padding:8px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
+                    <input type="text" id="custom-path" placeholder="Path to .exe" class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
+                    <button onclick="browseFile()" style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
                 </div>
                 <button onclick="saveCustomGame()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Add to Library</button>
             </div>
@@ -71,6 +71,7 @@
 
         function switchTab(tab) {
             document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
+            document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
             if(tab === 'library') {
                 document.getElementById('view-library').style.display = 'block';
                 loadLibrary();
@@ -87,6 +88,8 @@
             globalGames = games;
             list.innerHTML = '';
 
+            if(!games.length) list.innerHTML = "No games found.";
+
             games.forEach(game => {
                 const card = document.createElement('div');
                 card.className = 'card';
@@ -97,7 +100,7 @@
                 if(game.platform === 'Epic') platColor = '#333';
                 if(game.platform === 'Custom') platColor = '#2d8c58';
 
-                // Используем заглушку если нет иконки
+                // Для кастомных игр ставим заглушку, если нет URL
                 const img = game.iconUrl || 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
 
                 card.innerHTML = `
@@ -115,28 +118,34 @@
             const game = globalGames.find(g => g.id === gameId);
             if(!game) return;
 
-            // Если игра Custom или нет аккаунтов — запускаем напрямую
-            if (game.platform === 'Custom' || !game.availableOn || game.availableOn.length === 0) {
-                // Передаем exePath для запуска
-                launch('', game.id, game.platform, game.exePath); 
-                return; 
+            // Если Custom игра — запускаем сразу, выбора аккаунта нет
+            if (game.platform === 'Custom') {
+                launch('', game.id, game.platform, game.exePath);
+                return;
             }
 
             document.getElementById('modal-game-title').innerText = "Launch " + game.name;
             const list = document.getElementById('modal-accounts-list');
             list.innerHTML = '';
 
-            game.availableOn.forEach(acc => {
-                const item = document.createElement('div');
-                item.className = 'modal-item';
-                // ВАЖНО: передаем acc.username (логин), который нужен для реестра
-                item.onclick = () => launch(acc.username, game.id, game.platform, ''); 
-                item.innerHTML = `
-                    <div class="acc-name" style="font-weight:bold;">${acc.displayName}</div>
-                    <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
-                `;
-                list.appendChild(item);
-            });
+            if (!game.availableOn || game.availableOn.length === 0) {
+                // Запуск без смены аккаунта
+                list.innerHTML = `<div class="modal-item" onclick="launch('', '${game.id}', '${game.platform}', '')">
+                    <div class="acc-name">Launch Game</div><div class="acc-meta">Current Account</div>
+                </div>`;
+            } else {
+                game.availableOn.forEach(acc => {
+                    const item = document.createElement('div');
+                    item.className = 'modal-item';
+                    // Передаем username (логин) для реестра
+                    item.onclick = () => launch(acc.username, game.id, game.platform, ''); 
+                    item.innerHTML = `
+                        <div class="acc-name" style="font-weight:bold;">${acc.displayName}</div>
+                        <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
+                    `;
+                    list.appendChild(item);
+                });
+            }
             document.getElementById('account-modal').style.display = 'flex';
         }
 
@@ -147,7 +156,6 @@
 
         // --- CUSTOM GAME FUNC ---
         function openAddGameModal() { document.getElementById('add-game-modal').style.display = 'flex'; }
-        
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
         async function browseFile() {
@@ -161,21 +169,24 @@
             const res = await window['go']['app']['App']['AddCustomGame'](name, path);
             if(res === 'Success') {
                 closeModal('add-game-modal');
-                loadLibrary(); // Обновляем список
+                loadLibrary();
+                document.getElementById('custom-name').value = ''; 
+                document.getElementById('custom-path').value = '';
             } else {
                 alert(res);
             }
         }
 
         async function loadAccounts() {
-            // (Логика загрузки списка аккаунтов для вкладки Accounts - можно взять из прошлого ответа)
             const container = document.getElementById('launchers-list');
             const launchers = await window['go']['app']['App']['GetLaunchers']();
             container.innerHTML = '';
             launchers.forEach(group => {
-               container.innerHTML += `<div style="padding:10px; background:#222; margin-bottom:10px; border-radius:5px;">
-                   <h3>${group.name}</h3>
-                   ${group.accounts.map(a => `<div>${a.displayName} <small>(${a.username})</small></div>`).join('')}
+               container.innerHTML += `<div style="padding:15px; background:#222; margin-bottom:15px; border-radius:5px;">
+                   <h3 style="margin-top:0">${group.name}</h3>
+                   ${group.accounts.map(a => `<div style="padding:5px 0; border-bottom:1px solid #333;">
+                        <b>${a.displayName}</b> <span style="color:#888">(${a.username})</span>
+                   </div>`).join('')}
                </div>`;
             });
         }

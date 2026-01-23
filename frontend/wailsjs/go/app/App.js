@@ -21,3 +21,7 @@ export function LaunchGame(arg1, arg2, arg3, arg4) {
 export function SelectExe() {
   return window['go']['app']['App']['SelectExe']();
 }
+
+export function SwitchToAccount(arg1, arg2) {
+  return window['go']['app']['App']['SwitchToAccount'](arg1, arg2);
+}
