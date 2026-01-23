@@ -21,17 +21,22 @@ public class Program
         string steamPath = GetSteamPath();
         if (string.IsNullOrEmpty(steamPath))
         {
-             Console.WriteLine("Error: Steam path not found in Registry.");
+             // Fallback paths
              if (Directory.Exists("C:\\Program Files (x86)\\Steam"))
                  steamPath = "C:\\Program Files (x86)\\Steam";
+             else if (Directory.Exists("C:\\Program Files\\Steam"))
+                 steamPath = "C:\\Program Files\\Steam";
              else
+             {
+                 Console.WriteLine("Error: Steam path not found.");
                  return;
+             }
         }
 
-        Console.WriteLine("[1/4] Killing Steam...");
+        Console.WriteLine("[1/4] Switching to: " + targetUser);
         KillSteam();
 
-        Console.WriteLine("[2/4] Patching VDF...");
+        Console.WriteLine("[2/4] Patching loginusers.vdf...");
         PatchVdf(steamPath, targetUser);
 
         Console.WriteLine("[3/4] Updating Registry...");
@@ -68,7 +73,7 @@ public class Program
                 try { proc.Kill(); } catch { }
             }
         }
-        Thread.Sleep(2000);
+        Thread.Sleep(1500);
     }
 
     static void SetRegistry(string username)
@@ -100,56 +105,62 @@ public class Program
         }
     }
 
-    static void PatchVdf(string steamPath, string username)
+    static void PatchVdf(string steamPath, string targetUsername)
     {
         string vdfPath = Path.Combine(steamPath, "config", "loginusers.vdf");
-        if (!File.Exists(vdfPath)) 
-        {
-            Console.WriteLine("Warning: VDF file not found at " + vdfPath);
-            return;
-        }
+        if (!File.Exists(vdfPath)) return;
 
         try
         {
             string content = File.ReadAllText(vdfPath);
 
-            content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"     \"0\"");
+            // 1. Reset ALL "MostRecent" to "0" globally first
+            content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"      \"0\"");
 
-            int userIndex = content.IndexOf("\"" + username + "\"", StringComparison.OrdinalIgnoreCase);
+            // 2. Find the specific user block using Regex
+            string userBlockPattern = "(\\\"" + "\\d{17}" + "\\\"\\s*\\{[^{}]*\\\"AccountName\\\"\\s*\\\"" + Regex.Escape(targetUsername) + "\\\"[^{}]*\\})";
             
-            if (userIndex != -1)
+            content = Regex.Replace(content, userBlockPattern, new MatchEvaluator(delegate(Match match)
             {
-                int blockEnd = content.IndexOf('}', userIndex);
-                if (blockEnd != -1)
-                {
-                    string block = content.Substring(userIndex, blockEnd - userIndex);
-                    
-                    string newBlock = Regex.Replace(block, "\"MostRecent\"\\s+\"0\"", "\"MostRecent\"       \"1\"");
-                    
-                    TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
-                    int secondsSinceEpoch = (int)t.TotalSeconds;
-                    newBlock = Regex.Replace(newBlock, "\"Timestamp\"\\s+\"\\d+\"", "\"Timestamp\"      \"" + secondsSinceEpoch + "\"");
+                string block = match.Value;
+                
+                // Calculate timestamp
+                TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
+                int now = (int)t.TotalSeconds;
 
-                    content = content.Remove(userIndex, blockEnd - userIndex).Insert(userIndex, newBlock);
-                }
-            }
-            else
-            {
-                Console.WriteLine("Warning: User " + username + " not found in VDF file. Registry will be used as fallback.");
-            }
+                // Update or Add "MostRecent"
+                if (block.Contains("\"MostRecent\""))
+                    block = Regex.Replace(block, "\"MostRecent\"\\s+\"0\"", "\"MostRecent\"      \"1\"");
+                else
+                    block = block.Insert(block.LastIndexOf('}'), "\t\"MostRecent\"      \"1\"\n\t");
+
+                // Update or Add "Timestamp"
+                if (block.Contains("\"Timestamp\""))
+                    block = Regex.Replace(block, "\"Timestamp\"\\s+\"\\d+\"", "\"Timestamp\"      \"" + now + "\"");
+                else
+                    block = block.Insert(block.LastIndexOf('}'), "\t\"Timestamp\"      \"" + now + "\"\n\t");
+
+                // Update or Add "AllowAutoLogin"
+                if (block.Contains("\"AllowAutoLogin\""))
+                    block = Regex.Replace(block, "\"AllowAutoLogin\"\\s+\"0\"", "\"AllowAutoLogin\"      \"1\"");
+                else if (!block.Contains("\"AllowAutoLogin\""))
+                    block = block.Insert(block.LastIndexOf('}'), "\t\"AllowAutoLogin\"      \"1\"\n\t");
+
+                return block;
+            }), RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
             File.WriteAllText(vdfPath, content);
         }
         catch (Exception ex)
         {
-            Console.WriteLine("File Error: " + ex.Message);
+            Console.WriteLine("VDF Patch Error: " + ex.Message);
         }
     }
 
     static void StartSteam(string steamPath, string appId)
     {
         string exe = Path.Combine(steamPath, "steam.exe");
-        string args = (appId != null && appId.Length > 0) ? "-applaunch " + appId : "";
+        string args = (string.IsNullOrEmpty(appId)) ? "" : "-applaunch " + appId;
         
         try
         {
@@ -157,7 +168,8 @@ public class Program
             {
                 FileName = exe,
                 Arguments = args,
-                UseShellExecute = true
+                UseShellExecute = true,
+                WorkingDirectory = steamPath
             });
         }
         catch (Exception ex)
