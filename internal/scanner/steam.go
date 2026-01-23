@@ -23,56 +23,57 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// SetUserActive обновляет файл loginusers.vdf, делая пользователя "последним активным"
+// SetUserActive делает магию с loginusers.vdf
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	
-	// 1. Читаем файл как текст
+	// 1. Читаем файл
 	contentBytes, err := ioutil.ReadFile(loginUsersPath)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	content := string(contentBytes)
 
-	// 2. Сбрасываем флаг "MostRecent" "1" на "0" везде
+	// 2. Сначала сбрасываем "MostRecent" "1" у ВСЕХ пользователей на "0"
+	// Это гарантирует, что двух активных пользователей не будет
 	reReset := regexp.MustCompile(`"MostRecent"\s+"1"`)
 	content = reReset.ReplaceAllString(content, `"MostRecent"		"0"`)
 
-	// 3. Находим имя пользователя в файле
-	// Ищем без учета регистра, так как Steam иногда меняет регистр логина
-	lowerContent := strings.ToLower(content)
-	lowerTarget := strings.ToLower(targetUsername)
+	// 3. Теперь ищем нашего целевого пользователя
+	// Нам нужно найти блок, где есть "AccountName" "targetUsername"
+	// И внутри этого блока (или рядом) поменять MostRecent на 1.
 	
-	idx := strings.Index(lowerContent, `"accountname"		"`+lowerTarget+`"`)
-	if idx == -1 {
-		// Попробуем поискать просто логин, если формат немного отличается
-		idx = strings.Index(lowerContent, `"`+lowerTarget+`"`)
-	}
-
-	if idx != -1 {
-		// Если нашли пользователя, ищем ближайшее поле "MostRecent" ПОСЛЕ его имени
-		// и меняем его обратно на "1"
-		restOfString := content[idx:]
+	// Поиск позиции имени пользователя
+	targetPattern := fmt.Sprintf(`"(?i)%s"`, regexp.QuoteMeta(targetUsername)) // (?i) - регистронезависимый поиск
+	loc := regexp.MustCompile(targetPattern).FindStringIndex(content)
+	
+	if loc != nil {
+		// Мы нашли имя пользователя. Теперь ищем "MostRecent" "0" ПОСЛЕ этого имени
+		// (обычно параметр идет ниже имени аккаунта в блоке)
+		restOfFile := content[loc[1]:]
 		
-		// Ищем "MostRecent" "0" (так как мы их все сбросили на шаге 2)
-		reZero := regexp.MustCompile(`"MostRecent"\s+"0"`)
-		locZero := reZero.FindStringIndex(restOfString)
+		// Ищем ближайший MostRecent
+		reMostRecent := regexp.MustCompile(`"MostRecent"\s+"0"`)
+		locRecent := reMostRecent.FindStringIndex(restOfFile)
 		
-		if locZero != nil {
-			// Вычисляем позицию замены в оригинальной строке
-			absoluteStart := idx + locZero[0]
-			absoluteEnd := idx + locZero[1]
+		if locRecent != nil {
+			// Вычисляем точные координаты для замены
+			startPos := loc[1] + locRecent[0]
+			endPos := loc[1] + locRecent[1]
 			
-			// Заменяем "0" на "1"
-			content = content[:absoluteStart] + `"MostRecent"		"1"` + content[absoluteEnd:]
+			// Заменяем на "1"
+			content = content[:startPos] + `"MostRecent"		"1"` + content[endPos:]
 			
-			// Сохраняем файл
-			_ = ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
-			return nil
+			// Сохраняем файл обратно
+			err = ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
+			return err
 		}
 	}
 	
-	return fmt.Errorf("user not found in VDF")
+	return fmt.Errorf("could not find user block in VDF")
 }
 
+// GetGames сканирует игры
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" { return games }
@@ -128,6 +129,7 @@ func (s *SteamScanner) getLibraryFolders() []string {
 	f, err := os.Open(vdfPath)
 	if err != nil { return paths }
 	defer f.Close()
+
 	p := vdf.NewParser(f)
 	m, _ := p.Parse()
 	if m != nil {
@@ -150,6 +152,7 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 	var accounts []models.Account
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	loginData := parseVdf(loginUsersPath)
+	
 	userDataPath := filepath.Join(s.Path, "userdata")
 	entries, _ := os.ReadDir(userDataPath)
 
@@ -165,13 +168,19 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 		id64 := id3 + 76561197960265728
 		id64Str := strconv.FormatInt(id64, 10)
 
+		// Поиск данных пользователя
 		var userData map[string]interface{}
+		
+		// Обработка разных форматов VDF (с "users" и без)
 		if users, ok := loginData["users"].(map[string]interface{}); ok {
 			if u, found := users[id64Str].(map[string]interface{}); found {
 				userData = u
 			}
-		} else if u, found := loginData[id64Str].(map[string]interface{}); found {
-			userData = u
+		} 
+		if userData == nil {
+			if u, found := loginData[id64Str].(map[string]interface{}); found {
+				userData = u
+			}
 		}
 
 		if userData != nil {
@@ -179,7 +188,9 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 			if a, ok := userData["AccountName"].(string); ok { username = a }
 		}
 
-		if username == "" { username = "UNKNOWN" }
+		if username == "" {
+			username = "UNKNOWN"
+		}
 
 		accounts = append(accounts, models.Account{
 			ID:          steamID3,
