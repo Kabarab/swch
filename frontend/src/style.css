@@ -146,3 +146,25 @@ body {
     justify-content: center;
     color: black;
 }
+
+/* ... существующие стили ... */
+
+.account-info {
+    margin-top: 8px;
+}
+
+.account-nick {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.account-login {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 20px; /* Отступ чтобы быть под текстом ника, а не иконкой */
+    margin-top: 2px;
+}
