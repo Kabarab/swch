@@ -2,10 +2,14 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
+	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -23,7 +27,6 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// GetLibrary возвращает ВСЕ игры со всех лаунчеров
 func (a *App) GetLibrary() []models.LibraryGame {
 	var library []models.LibraryGame
 
@@ -33,10 +36,9 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	// 2. Epic Games
 	library = append(library, scanner.ScanEpicGames()...)
 
-	// 3. Riot / Torrent (заглушки для примера структуры)
-	// library = append(library, scanner.ScanRiotGames()...)
+	// 3. Custom Games (Добавленные вручную)
+	library = append(library, scanner.LoadCustomGames()...)
 
-	// Сортировка по имени
 	sort.Slice(library, func(i, j int) bool {
 		return library[i].Name < library[j].Name
 	})
@@ -44,11 +46,9 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	return library
 }
 
-// GetLaunchers возвращает аккаунты, сгруппированные по лаунчерам
 func (a *App) GetLaunchers() []models.LauncherGroup {
 	var groups []models.LauncherGroup
 
-	// Steam Group
 	steamAccs := a.steam.GetAccounts()
 	if len(steamAccs) > 0 {
 		groups = append(groups, models.LauncherGroup{
@@ -58,7 +58,6 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		})
 	}
 
-	// Epic Group
 	epicAccs := scanner.ScanEpicAccounts()
 	if len(epicAccs) > 0 {
 		groups = append(groups, models.LauncherGroup{
@@ -71,11 +70,40 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	return groups
 }
 
-func (a *App) LaunchGame(accountName string, gameID string, platform string) string {
+// SelectExe открывает диалог выбора файла
+func (a *App) SelectExe() string {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Game Executable",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Executables", Pattern: "*.exe"},
+		},
+	})
+	if err != nil { return "" }
+	return path
+}
+
+// AddCustomGame сохраняет игру
+func (a *App) AddCustomGame(name string, exePath string) string {
+	if name == "" || exePath == "" { return "Invalid data" }
+	
+	newGame := models.LibraryGame{
+		ID:       fmt.Sprintf("custom_%d", time.Now().Unix()),
+		Name:     name,
+		Platform: "Custom",
+		ExePath:  exePath,
+		IconURL:  "", // Можно добавить выбор иконки позже
+	}
+	
+	err := scanner.SaveCustomGame(newGame)
+	if err != nil { return err.Error() }
+	return "Success"
+}
+
+func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
 		sys.KillSteam()
-		// Если аккаунт не указан (например для Epic), просто запускаем
 		if accountName != "" {
+			// Здесь accountName должен быть логином (username)
 			err := sys.SetSteamUser(accountName)
 			if err != nil { return "Error registry" }
 		}
@@ -84,9 +112,16 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string) str
 	}
 	
 	if platform == "Epic" {
-		// Запуск Epic игры: com.epicgames.launcher://apps/{AppID}?action=launch&silent=true
 		sys.StartGame("com.epicgames.launcher://apps/" + gameID + "?action=launch&silent=true")
 		return "Launched on Epic"
+	}
+
+	if platform == "Custom" {
+		if exePath != "" {
+			// Запускаем EXE напрямую
+			sys.StartGame(exePath)
+			return "Launched Custom Game"
+		}
 	}
 
 	return "Platform not supported"
