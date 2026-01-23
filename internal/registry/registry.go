@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"fmt"
 	"strings"
 
 	"golang.org/x/sys/windows/registry"

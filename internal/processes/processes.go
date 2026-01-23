@@ -1,7 +1,6 @@
 package processes
 
 import (
-	"fmt"
 	"os/exec"
 	"syscall"
 )
