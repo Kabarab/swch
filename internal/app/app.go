@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json" // <--- ДОБАВЛЕН ИМПОРТ
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,6 +20,75 @@ import (
 type App struct {
 	ctx   context.Context
 	steam *scanner.SteamScanner
+}
+
+// Структура для хранения настроек в JSON файле
+type AccountSettings struct {
+	Comment    string `json:"comment"`
+	AvatarPath string `json:"avatarPath"`
+	Hidden     bool   `json:"hidden"`
+}
+
+var accountSettingsMap = make(map[string]AccountSettings)
+
+const settingsFile = "accounts_settings.json"
+
+func loadSettings() {
+	data, err := os.ReadFile(settingsFile)
+	if err == nil {
+		json.Unmarshal(data, &accountSettingsMap)
+	}
+}
+
+func saveSettings() {
+	data, _ := json.MarshalIndent(accountSettingsMap, "", "  ")
+	os.WriteFile(settingsFile, data, 0644)
+}
+
+func makeKey(platform, username string) string {
+	return platform + ":" + username
+}
+
+// --- Методы для вызова из JS ---
+
+func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	settings.Comment = comment
+	if avatarPath != "" {
+		settings.AvatarPath = avatarPath
+	}
+	accountSettingsMap[key] = settings
+
+	saveSettings()
+	return "Saved"
+}
+
+func (a *App) DeleteAccount(username, platform string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	settings.Hidden = true
+	accountSettingsMap[key] = settings
+
+	saveSettings()
+	return "Account removed from list"
+}
+
+func (a *App) SelectImage() string {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Avatar",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico"},
+		},
+	})
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 func NewApp() *App {
@@ -69,16 +139,52 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	return library
 }
 
+// ВАЖНО: Обновленный метод GetLaunchers
 func (a *App) GetLaunchers() []models.LauncherGroup {
+	loadSettings() // Загружаем настройки перед чтением аккаунтов
+
 	var groups []models.LauncherGroup
+
+	// Функция-хелпер для фильтрации и обогащения данных
+	processAccounts := func(accs []models.Account) []models.Account {
+		var result []models.Account
+		for _, acc := range accs {
+			key := makeKey(acc.Platform, acc.Username)
+			settings, exists := accountSettingsMap[key]
+
+			// Если аккаунт скрыт - пропускаем его
+			if exists && settings.Hidden {
+				continue
+			}
+
+			// Если есть настройки, применяем их
+			if exists {
+				acc.Comment = settings.Comment
+				if settings.AvatarPath != "" {
+					acc.AvatarURL = settings.AvatarPath
+				}
+			}
+			result = append(result, acc)
+		}
+		return result
+	}
+
 	steamAccs := a.steam.GetAccounts()
 	if len(steamAccs) > 0 {
-		groups = append(groups, models.LauncherGroup{Name: "Steam", Platform: "Steam", Accounts: steamAccs})
+		filtered := processAccounts(steamAccs)
+		if len(filtered) > 0 {
+			groups = append(groups, models.LauncherGroup{Name: "Steam", Platform: "Steam", Accounts: filtered})
+		}
 	}
+
 	epicAccs := scanner.ScanEpicAccounts()
 	if len(epicAccs) > 0 {
-		groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: epicAccs})
+		filtered := processAccounts(epicAccs)
+		if len(filtered) > 0 {
+			groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filtered})
+		}
 	}
+
 	return groups
 }
 

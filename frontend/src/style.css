@@ -76,3 +76,48 @@ body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg-dark
     margin-top: 10px;
     text-align: center;
 }
+
+.account-row {
+        cursor: pointer;
+        position: relative; /* Для позиционирования кнопок */
+        transition: background 0.2s;
+    }
+    .account-row:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Стили для комментария */
+    .acc-comment {
+        font-size: 11px; 
+        color: #aaa; 
+        font-style: italic;
+        margin-top: 2px;
+    }
+
+    /* Панель действий (появляется при наведении) */
+    .acc-actions {
+        display: none;
+        position: absolute;
+        right: 50px; /* Сдвиг, чтобы не перекрывать иконку входа */
+        top: 50%;
+        transform: translateY(-50%);
+        gap: 10px;
+    }
+    .account-row:hover .acc-actions {
+        display: flex;
+    }
+
+    .action-icon-btn {
+        color: #888;
+        font-size: 14px;
+        padding: 5px;
+        border-radius: 4px;
+    }
+    .action-icon-btn:hover {
+        background: #444;
+        color: white;
+    }
+    .delete-btn:hover {
+        background: #600;
+        color: #ffcccc;
+    }

@@ -15,34 +15,33 @@ public class Program
             return;
         }
 
-        string targetUser = args[0]; // ВАЖНО: Это должен быть ЛОГИН (AccountName), а не никнейм!
+        string targetUser = args[0]; // Важно: это должен быть логин для входа!
         string gameId = (args.Length > 1) ? args[1] : null;
 
         string steamPath = GetSteamPath();
         if (string.IsNullOrEmpty(steamPath))
         {
-             // Стандартные пути, если реестр пуст
              if (Directory.Exists("C:\\Program Files (x86)\\Steam")) steamPath = "C:\\Program Files (x86)\\Steam";
              else if (Directory.Exists("C:\\Program Files\\Steam")) steamPath = "C:\\Program Files\\Steam";
              else { Console.WriteLine("Error: Steam path not found."); return; }
         }
 
-        Console.WriteLine("--- STEAM ACCOUNT SWITCHER ---");
-        Console.WriteLine("Target Login: " + targetUser);
+        Console.WriteLine("--- SWITCHING STEAM ACCOUNT ---");
+        Console.WriteLine("Target: " + targetUser);
 
-        // 1. Закрываем Steam (Критически важно!)
-        Console.WriteLine("[1/4] Killing Steam processes...");
+        // 1. Полное закрытие Steam
+        Console.WriteLine("[1/4] Stopping Steam processes...");
         KillSteam();
 
-        // 2. Обновляем файл loginusers.vdf (для интерфейса)
+        // 2. Настройка файла конфигурации (интерфейс)
         Console.WriteLine("[2/4] Patching loginusers.vdf...");
         PatchVdf(steamPath, targetUser);
 
-        // 3. Обновляем Реестр (для авто-входа)
-        Console.WriteLine("[3/4] Updating Registry for AutoLogin...");
+        // 3. Настройка реестра (авто-вход и снятие галочки "Спрашивать аккаунт")
+        Console.WriteLine("[3/4] Configuring Registry...");
         SetRegistry(targetUser);
 
-        // 4. Запускаем Steam
+        // 4. Запуск
         Console.WriteLine("[4/4] Launching Steam...");
         StartSteam(steamPath, gameId);
     }
@@ -66,10 +65,11 @@ public class Program
 
     static void KillSteam()
     {
+        // Убиваем все процессы, связанные со Steam, чтобы освободить файлы и реестр
         string[] procs = { "steam", "steamwebhelper", "GameOverlayUI", "steamservice" };
-        int maxRetries = 10; // Ждем до 10 секунд
+        int retries = 20; // Пытаемся закрыть в течение 20 циклов (около 5-6 секунд)
         
-        for (int i = 0; i < maxRetries; i++)
+        while (retries > 0)
         {
             bool anyAlive = false;
             foreach (string procName in procs)
@@ -80,14 +80,15 @@ public class Program
                     anyAlive = true;
                     foreach (Process proc in running)
                     {
-                        try { proc.Kill(); } catch { } // Пытаемся убить
+                        try { proc.Kill(); } catch { }
                     }
                 }
             }
-
-            if (!anyAlive) return; // Если все мертвы — выходим
-            Thread.Sleep(1000); // Ждем секунду
+            if (!anyAlive) break;
+            Thread.Sleep(300);
+            retries--;
         }
+        Thread.Sleep(1000); // Контрольная пауза
     }
 
     static void SetRegistry(string username)
@@ -95,19 +96,22 @@ public class Program
         string keyPath = "Software\\Valve\\Steam";
         try
         {
-            // 1. Основные ключи в HKCU
+            // Создаем или открываем ключ (CreateSubKey работает надежнее OpenSubKey для записи)
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
             {
                 if (key != null)
                 {
-                    // ЭТО САМОЕ ГЛАВНОЕ ДЛЯ АВТО-ВХОДА:
+                    // ЭТИ ПАРАМЕТРЫ СНИМАЮТ ГАЛОЧКУ "СПРАШИВАТЬ АККАУНТ":
                     key.SetValue("AutoLoginUser", username, RegistryValueKind.String);
                     key.SetValue("RememberPassword", 1, RegistryValueKind.DWord);
+                    
+                    // Дополнительные параметры для тихого запуска
                     key.SetValue("SkipOfflineModeWarning", 1, RegistryValueKind.DWord);
+                    key.SetValue("Language", "russian", RegistryValueKind.String); // Можно убрать, если не нужно
                 }
             }
 
-            // 2. Сброс активного пользователя (заставляет Steam перечитать AutoLoginUser)
+            // Сбрасываем "Активного пользователя", чтобы Steam перечитал AutoLoginUser
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath + "\\ActiveProcess"))
             {
                 if (key != null)
@@ -131,11 +135,12 @@ public class Program
         {
             string content = File.ReadAllText(vdfPath);
 
-            // Сбрасываем флаг MostRecent у всех
+            // 1. Глобально убираем флаг MostRecent у ВСЕХ пользователей
+            // Это гарантирует, что окно выбора аккаунта не появится из-за файла
             content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"      \"0\"");
 
-            // Ищем блок конкретного пользователя по AccountName
-            // Внимание: targetUsername должен быть ЛОГИНОМ
+            // 2. Ищем блок нужного пользователя и ставим ему правильные флаги
+            // Используем Regex.Escape, чтобы спецсимволы в логине не ломали поиск
             string userBlockPattern = "(\\\"" + "\\d{17}" + "\\\"\\s*\\{[^{}]*\\\"AccountName\\\"\\s*\\\"" + Regex.Escape(targetUsername) + "\\\"[^{}]*\\})";
             
             content = Regex.Replace(content, userBlockPattern, new MatchEvaluator(delegate(Match match)
@@ -145,7 +150,7 @@ public class Program
                 TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
                 int now = (int)t.TotalSeconds;
 
-                // Функция для замены или добавления параметра
+                // Функция EnsureKey проверяет наличие ключа: если есть - меняет, если нет - добавляет
                 block = EnsureKey(block, "MostRecent", "1");
                 block = EnsureKey(block, "Timestamp", now.ToString());
                 block = EnsureKey(block, "AllowAutoLogin", "1");
@@ -165,15 +170,15 @@ public class Program
 
     static string EnsureKey(string block, string key, string value)
     {
-        // Если ключ уже есть — заменяем значение
         string pattern = "\"" + key + "\"\\s+\"\\d+\"";
         if (Regex.IsMatch(block, pattern))
         {
+            // Замена существующего значения
             return Regex.Replace(block, pattern, "\"" + key + "\"      \"" + value + "\"");
         }
         else
         {
-            // Если ключа нет — вставляем его перед закрывающей скобкой }
+            // Добавление нового ключа перед закрывающей скобкой
             int lastBrace = block.LastIndexOf('}');
             if (lastBrace != -1)
             {

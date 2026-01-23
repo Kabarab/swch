@@ -4,6 +4,8 @@ import {models} from '../models';
 
 export function AddCustomGame(arg1:string,arg2:string):Promise<string>;
 
+export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
+
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
 export function GetLibrary():Promise<Array<models.LibraryGame>>;
@@ -12,4 +14,8 @@ export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Prom
 
 export function SelectExe():Promise<string>;
 
+export function SelectImage():Promise<string>;
+
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
+
+export function UpdateAccountData(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;

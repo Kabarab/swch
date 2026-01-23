@@ -16,7 +16,6 @@ type LibraryGame struct {
 	ExePath             string        `json:"exePath"`
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
 }
-
 type Account struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
@@ -24,6 +23,7 @@ type Account struct {
 	Platform    string `json:"platform"`
 	AvatarURL   string `json:"avatarUrl"`
 	OwnedGames  []Game `json:"ownedGames"`
+	Comment     string `json:"comment"`
 }
 
 type Game struct {

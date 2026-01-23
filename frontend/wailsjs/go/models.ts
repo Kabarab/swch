@@ -25,6 +25,7 @@ export namespace models {
 	    platform: string;
 	    avatarUrl: string;
 	    ownedGames: Game[];
+	    comment: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Account(source);
@@ -38,6 +39,7 @@ export namespace models {
 	        this.platform = source["platform"];
 	        this.avatarUrl = source["avatarUrl"];
 	        this.ownedGames = this.convertValues(source["ownedGames"], Game);
+	        this.comment = source["comment"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

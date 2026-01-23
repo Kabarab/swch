@@ -63,6 +63,26 @@
             </div>
         </div>
     </div>
+    <div id="edit-account-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Account</h3>
+                <span class="close" onclick="closeModal('edit-account-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <label style="color:#aaa; font-size:12px;">Comment:</label>
+                <input type="text" id="edit-comment" placeholder="Main account, smurf, etc..." class="input-field" style="width:100%; margin-bottom:15px; padding:10px; background:#333; border:none; color:white;">
+                
+                <label style="color:#aaa; font-size:12px;">Custom Avatar:</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="edit-avatar-path" placeholder="Path to image..." class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
+                    <button onclick="selectNewAvatar()" style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
+                </div>
+                
+                <button onclick="saveAccountChanges()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Save Changes</button>
+            </div>
+        </div>
+    </div>
 
     <script src="/wailsjs/go/app/App.js"></script>
     
@@ -195,7 +215,6 @@
 
     async function loadAccounts() {
         const container = document.getElementById('launchers-list');
-        // Показываем загрузку
         container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
         
         const launchers = await window['go']['app']['App']['GetLaunchers']();
@@ -207,14 +226,35 @@
             
             let accountsHtml = '';
             group.accounts.forEach(acc => {
-                // Добавили onclick и стили курсора
+                // Если есть аватарка, используем её, иначе заглушка с буквой
+                let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
+                if(acc.avatarUrl) {
+                    // Используем style для background-image чтобы не ломать верстку
+                    avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
+                }
+
+                const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
+
                 accountsHtml += `
                     <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
-                        <div class="acc-avatar">${acc.displayName.charAt(0)}</div>
+                        ${avatarHtml}
                         <div class="acc-details">
-                            <div class="acc-nick">${acc.displayName}</div>
+                            <div class="acc-nick">
+                                ${acc.displayName}
+                                ${commentHtml}
+                            </div>
                             <div class="acc-login">${acc.username}</div>
                         </div>
+                        
+                        <div class="acc-actions" onclick="event.stopPropagation()">
+                            <div class="action-icon-btn" title="Edit (Comment/Avatar)" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')">
+                                <i class="fa-solid fa-pen"></i>
+                            </div>
+                            <div class="action-icon-btn delete-btn" title="Remove from list" onclick="deleteAccount('${acc.username}', '${group.platform}')">
+                                <i class="fa-solid fa-trash"></i>
+                            </div>
+                        </div>
+
                         <div class="acc-action-icon">
                             <i class="fa-solid fa-arrow-right-to-bracket"></i>
                         </div>
@@ -233,6 +273,43 @@
             `;
             container.appendChild(section);
         });
+    }
+
+    // --- Управление аккаунтами ---
+
+    async function deleteAccount(username, platform) {
+        if(confirm(`Hide account ${username} from the list?`)) {
+            await window['go']['app']['App']['DeleteAccount'](username, platform);
+            loadAccounts(); // Перезагружаем список
+        }
+    }
+
+    let currentEdit = { username: '', platform: '' };
+
+    function openEditAccount(username, platform, currentComment) {
+        currentEdit = { username, platform };
+        // Заполняем модальное окно (нужно добавить его в HTML)
+        document.getElementById('edit-comment').value = currentComment;
+        document.getElementById('edit-account-modal').style.display = 'flex';
+    }
+
+    async function selectNewAvatar() {
+        const path = await window['go']['app']['App']['SelectImage']();
+        if(path) {
+            document.getElementById('edit-avatar-path').value = path;
+        }
+    }
+
+    async function saveAccountChanges() {
+        const comment = document.getElementById('edit-comment').value;
+        const avatar = document.getElementById('edit-avatar-path').value;
+        
+        await window['go']['app']['App']['UpdateAccountData'](currentEdit.username, currentEdit.platform, comment, avatar);
+        
+        closeModal('edit-account-modal');
+        // Очистка полей
+        document.getElementById('edit-avatar-path').value = '';
+        loadAccounts();
     }
 
         loadLibrary();

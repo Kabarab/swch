@@ -6,6 +6,10 @@ export function AddCustomGame(arg1, arg2) {
   return window['go']['app']['App']['AddCustomGame'](arg1, arg2);
 }
 
+export function DeleteAccount(arg1, arg2) {
+  return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
+}
+
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
 }
@@ -22,6 +26,14 @@ export function SelectExe() {
   return window['go']['app']['App']['SelectExe']();
 }
 
+export function SelectImage() {
+  return window['go']['app']['App']['SelectImage']();
+}
+
 export function SwitchToAccount(arg1, arg2) {
   return window['go']['app']['App']['SwitchToAccount'](arg1, arg2);
+}
+
+export function UpdateAccountData(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['UpdateAccountData'](arg1, arg2, arg3, arg4);
 }
