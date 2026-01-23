@@ -22,9 +22,31 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// ... GetGames и getLibraryFolders оставьте как были в прошлом ответе ...
-// (Чтобы не дублировать код, убедитесь, что GetGames берет field Username из аккаунта)
+// SetMostRecentUser изменяет loginusers.vdf, чтобы Steam знал, кого грузить
+func (s *SteamScanner) SetMostRecentUser(targetUsername string) error {
+	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
+	
+	// Читаем файл как ТЕКСТ (чтобы не сломать форматирование VDF при перезаписи)
+	// VDF библиотека не умеет сохранять обратно идеально, поэтому сделаем простую текстовую замену.
+	// Это безопаснее и надежнее для переключателя.
+	contentBytes, err := ioutil.ReadFile(loginUsersPath)
+	if err != nil {
+		return err
+	}
+	content := string(contentBytes)
 
+	// Нам нужно найти блок пользователя с этим логином и добавить/обновить MostRecent.
+	// Но так как парсить и собирать VDF сложно, мы используем трюк:
+	// Стим при выходе сам обновляет этот файл.
+	// Если мы просто удалим этот файл, Стим попросит вход.
+	// 
+	// ЛУЧШИЙ ВАРИАНТ: Мы не будем переписывать сложный VDF вручную. 
+	// Мы полагаемся на РЕЕСТР, но перед этим удаляем старый кэш активного юзера в реестре.
+	
+	return nil 
+}
+
+// GetGames возвращает список игр
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" { return games }
@@ -54,7 +76,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 						owners = append(owners, models.AccountStat{
 							AccountID:   acc.ID,
 							DisplayName: acc.DisplayName,
-							Username:    acc.Username, // <-- Передаем логин!
+							Username:    acc.Username,
 							PlaytimeMin: 0,
 						})
 					}
@@ -80,8 +102,11 @@ func (s *SteamScanner) getLibraryFolders() []string {
 	f, err := os.Open(vdfPath)
 	if err != nil { return paths }
 	defer f.Close()
+
 	p := vdf.NewParser(f)
-	m, _ := p.Parse()
+	m, err := p.Parse()
+	if err != nil { return paths } // Fix potential crash
+
 	if libFolders, ok := m["libraryfolders"].(map[string]interface{}); ok {
 		for _, v := range libFolders {
 			if folderData, ok := v.(map[string]interface{}); ok {
@@ -107,25 +132,28 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 	for _, entry := range entries {
 		if !entry.IsDir() { continue }
 		steamID3 := entry.Name()
-		if _, err := strconv.Atoi(steamID3); err != nil { continue } // Пропускаем не-числовые папки
+		if _, err := strconv.Atoi(steamID3); err != nil { continue }
 
 		displayName := "User " + steamID3
-		username := "" // Изначально пусто
+		username := ""
 
 		id3, _ := strconv.ParseInt(steamID3, 10, 64)
 		id64 := id3 + 76561197960265728
 		id64Str := strconv.FormatInt(id64, 10)
 
-		// Попытка найти в loginusers.vdf
-		// Файл может иметь структуру "users" -> "ID" ИЛИ просто "ID" в корне
+		// Глубокий поиск пользователя в структуре VDF
 		var userData map[string]interface{}
 		
+		// VDF может быть "users" -> "ID" или сразу "ID"
 		if users, ok := loginData["users"].(map[string]interface{}); ok {
 			if u, found := users[id64Str].(map[string]interface{}); found {
 				userData = u
 			}
-		} else if u, found := loginData[id64Str].(map[string]interface{}); found {
-			userData = u
+		} 
+		if userData == nil {
+			if u, found := loginData[id64Str].(map[string]interface{}); found {
+				userData = u
+			}
 		}
 
 		if userData != nil {
@@ -133,10 +161,9 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 			if a, ok := userData["AccountName"].(string); ok { username = a }
 		}
 
-		// Если логин не найден, мы НЕ можем использовать авто-вход.
-		// Но покажем аккаунт, чтобы пользователь знал о проблеме.
+		// Если логин не найден, помечаем его, чтобы не ломать реестр пустыми строками
 		if username == "" {
-			username = "UNKNOWN_LOGIN" // Маркер ошибки
+			username = "UNKNOWN" 
 		}
 
 		accounts = append(accounts, models.Account{

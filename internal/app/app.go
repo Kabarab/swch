@@ -124,6 +124,30 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 	return "Platform not supported for direct switching"
 }
 
+
+func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
+	if platform == "Steam" {
+		if accountName == "UNKNOWN" {
+			return "Error: Login not found. Please login manually once."
+		}
+
+		fmt.Println("Closing Steam...")
+		sys.KillSteam()
+		
+		if accountName != "" {
+			fmt.Printf("Switching registry to: %s\n", accountName)
+			err := sys.SetSteamUser(accountName)
+			if err != nil {
+				return "Registry Error: " + err.Error()
+			}
+		}
+		
+		fmt.Println("Launching...")
+		sys.StartGame("steam://run/" + gameID)
+		return "Launched on Steam"
+	}
+
+
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
 		fmt.Println("Closing Steam...")

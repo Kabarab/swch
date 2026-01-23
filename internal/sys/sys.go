@@ -11,64 +11,47 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// GetSteamPath находит путь к Steam
 func GetSteamPath() (string, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.QUERY_VALUE)
-	if err != nil {
-		return "", err
-	}
+	if err != nil { return "", err }
 	defer k.Close()
-
 	path, _, err := k.GetStringValue("SteamPath")
-	if err != nil {
-		return "", err
-	}
-	// Steam хранит пути с /, Windows любит \
+	if err != nil { return "", err }
 	return filepath.Clean(strings.ReplaceAll(path, "/", "\\")), nil
 }
 
-// KillSteam убивает процесс жестко и ждет
 func KillSteam() {
-	// Убиваем не только Steam, но и его "помощников", которые держат файлы
-	targetProcs := []string{"steam.exe", "steamwebhelper.exe"}
-	
-	for _, p := range targetProcs {
-		cmd := exec.Command("taskkill", "/F", "/IM", p)
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		cmd.Run()
-	}
-
-	// Ждем 3 секунды, чтобы Windows успела освободить файл реестра.
-	// Без этого Steam при закрытии перезапишет нашего пользователя!
-	time.Sleep(3 * time.Second)
+	// Убиваем дерево процессов
+	exec.Command("taskkill", "/F", "/IM", "steam.exe").Run()
+	exec.Command("taskkill", "/F", "/IM", "steamwebhelper.exe").Run()
+	// Даем время на запись файлов и освобождение реестра
+	time.Sleep(2 * time.Second)
 }
 
-// SetSteamUser меняет пользователя
 func SetSteamUser(username string) error {
-	if username == "" {
-		return fmt.Errorf("empty username")
+	if username == "" || username == "UNKNOWN" {
+		return fmt.Errorf("invalid username")
 	}
 
-	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.SET_VALUE)
-	if err != nil {
-		return err
-	}
+	keyPath := `Software\Valve\Steam`
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, keyPath, registry.SET_VALUE)
+	if err != nil { return err }
 	defer k.Close()
 
-	// 1. Устанавливаем логин
-	if err := k.SetStringValue("AutoLoginUser", username); err != nil {
-		return err
+	// 1. Устанавливаем целевого пользователя
+	if err := k.SetStringValue("AutoLoginUser", username); err != nil { return err }
+	if err := k.SetDWordValue("RememberPassword", 1); err != nil { return err }
+
+	// 2. КРИТИЧЕСКИ ВАЖНО ДЛЯ НОВОГО STEAM:
+	// Удаляем запись об активном пользователе, чтобы Steam не пытался возобновить прошлую сессию
+	// ActiveProcess хранит PID активного стима. Если его удалить, Steam думает что это чистый запуск.
+	activeKey, err := registry.OpenKey(registry.CURRENT_USER, keyPath+`\ActiveProcess`, registry.SET_VALUE)
+	if err == nil {
+		defer activeKey.Close()
+		// Сбрасываем ActiveUser, чтобы заставить Steam прочитать AutoLoginUser
+		activeKey.SetDWordValue("ActiveUser", 0) 
 	}
 
-	// 2. ВАЖНО: 1 должно быть числом (DWORD), иначе Steam попросит пароль
-	if err := k.SetDWordValue("RememberPassword", 1); err != nil {
-		return err
-	}
-	
-	// Дополнительный флаг для новых версий Steam
-	// Убирает предупреждение "Запускается в офлайн режиме" если нет сети
-	k.SetDWordValue("SkipOfflineModeWarning", 1) 
-	
 	return nil
 }
 
