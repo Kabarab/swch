@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"swch/internal/models"
@@ -10,7 +9,7 @@ import (
 
 type EpicManifest struct {
 	FormatVersion       int    `json:"FormatVersion"`
-	AppName             string `json:"AppName"` // Это ID игры
+	AppName             string `json:"AppName"`
 	DisplayName         string `json:"DisplayName"`
 	InstallLocation     string `json:"InstallLocation"`
 	MainGameAppName     string `json:"MainGameAppName"`
@@ -43,10 +42,8 @@ func ScanEpicGames() []models.LibraryGame {
 				ID:       manifest.AppName,
 				Name:     manifest.DisplayName,
 				Platform: "Epic",
-				// У Epic нет публичного API картинок по ID, используем заглушку или локальный файл если есть
 				IconURL:  "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg",
 				ExePath:  manifest.InstallLocation,
-				// Epic не хранит локальную статистику по аккаунтам в открытом виде так просто, как Steam
 				AvailableOnAccounts: []models.AccountStat{}, 
 			})
 		}
@@ -54,11 +51,7 @@ func ScanEpicGames() []models.LibraryGame {
 	return games
 }
 
-// ScanEpicAccounts - Epic хранит логин в зашифрованном файле, 
-// для оффлайн режима мы можем только предположить наличие аккаунтов 
-// или найти Config файлы. Для MVP вернем заглушку "Main Account".
 func ScanEpicAccounts() []models.Account {
-	// В будущем здесь можно парсить %LOCALAPPDATA%\EpicGamesLauncher\Saved\Config\Windows\GameUserSettings.ini
 	return []models.Account{
 		{
 			ID:          "EpicMain",
