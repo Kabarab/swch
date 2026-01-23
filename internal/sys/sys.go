@@ -21,42 +21,31 @@ func GetSteamPath() (string, error) {
 }
 
 func KillSteam() {
-	// Убиваем дерево процессов
 	exec.Command("taskkill", "/F", "/IM", "steam.exe").Run()
 	exec.Command("taskkill", "/F", "/IM", "steamwebhelper.exe").Run()
-	// Даем время на запись файлов и освобождение реестра
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 }
 
 func SetSteamUser(username string) error {
-	if username == "" || username == "UNKNOWN" {
-		return fmt.Errorf("invalid username")
-	}
-
-	keyPath := `Software\Valve\Steam`
-	k, _, err := registry.CreateKey(registry.CURRENT_USER, keyPath, registry.SET_VALUE)
+	if username == "" { return fmt.Errorf("empty username") }
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.SET_VALUE)
 	if err != nil { return err }
 	defer k.Close()
-
-	// 1. Устанавливаем целевого пользователя
+	
 	if err := k.SetStringValue("AutoLoginUser", username); err != nil { return err }
 	if err := k.SetDWordValue("RememberPassword", 1); err != nil { return err }
-
-	// 2. КРИТИЧЕСКИ ВАЖНО ДЛЯ НОВОГО STEAM:
-	// Удаляем запись об активном пользователе, чтобы Steam не пытался возобновить прошлую сессию
-	// ActiveProcess хранит PID активного стима. Если его удалить, Steam думает что это чистый запуск.
-	activeKey, err := registry.OpenKey(registry.CURRENT_USER, keyPath+`\ActiveProcess`, registry.SET_VALUE)
-	if err == nil {
-		defer activeKey.Close()
-		// Сбрасываем ActiveUser, чтобы заставить Steam прочитать AutoLoginUser
-		activeKey.SetDWordValue("ActiveUser", 0) 
-	}
-
+	k.SetDWordValue("SkipOfflineModeWarning", 1) 
 	return nil
 }
 
 func StartGame(pathOrUrl string) {
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.Start()
+}
+
+func StartGameWithArgs(exePath string, args ...string) {
+	cmd := exec.Command(exePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
