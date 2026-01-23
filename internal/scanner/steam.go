@@ -27,50 +27,40 @@ func NewSteamScanner() *SteamScanner {
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	
-	// 1. Читаем файл
 	contentBytes, err := ioutil.ReadFile(loginUsersPath)
 	if err != nil {
 		return err
 	}
 	content := string(contentBytes)
 
-	// 2. Сначала сбрасываем "MostRecent" "1" у ВСЕХ пользователей на "0"
-	// Это гарантирует, что двух активных пользователей не будет
+	// 1. Сбрасываем флаг "MostRecent" у всех
 	reReset := regexp.MustCompile(`"MostRecent"\s+"1"`)
 	content = reReset.ReplaceAllString(content, `"MostRecent"		"0"`)
 
-	// 3. Теперь ищем нашего целевого пользователя
-	// Нам нужно найти блок, где есть "AccountName" "targetUsername"
-	// И внутри этого блока (или рядом) поменять MostRecent на 1.
-	
-	// Поиск позиции имени пользователя
-	targetPattern := fmt.Sprintf(`"(?i)%s"`, regexp.QuoteMeta(targetUsername)) // (?i) - регистронезависимый поиск
+	// 2. Ищем нашего пользователя (регистронезависимо)
+	targetPattern := fmt.Sprintf(`"(?i)%s"`, regexp.QuoteMeta(targetUsername))
 	loc := regexp.MustCompile(targetPattern).FindStringIndex(content)
 	
 	if loc != nil {
-		// Мы нашли имя пользователя. Теперь ищем "MostRecent" "0" ПОСЛЕ этого имени
-		// (обычно параметр идет ниже имени аккаунта в блоке)
+		// Ищем параметр MostRecent ПОСЛЕ имени пользователя
 		restOfFile := content[loc[1]:]
-		
-		// Ищем ближайший MostRecent
 		reMostRecent := regexp.MustCompile(`"MostRecent"\s+"0"`)
 		locRecent := reMostRecent.FindStringIndex(restOfFile)
 		
 		if locRecent != nil {
-			// Вычисляем точные координаты для замены
 			startPos := loc[1] + locRecent[0]
 			endPos := loc[1] + locRecent[1]
 			
-			// Заменяем на "1"
+			// Ставим 1
 			content = content[:startPos] + `"MostRecent"		"1"` + content[endPos:]
 			
-			// Сохраняем файл обратно
-			err = ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
-			return err
+			return ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
 		}
 	}
 	
-	return fmt.Errorf("could not find user block in VDF")
+	// Если не нашли, не страшно, полагаемся на реестр
+	fmt.Println("Warning: User not found in VDF for patching")
+	return nil
 }
 
 // GetGames сканирует игры

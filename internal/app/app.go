@@ -24,10 +24,11 @@ func NewApp() *App {
 	}
 }
 
-func (a *App) Startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) Startup(ctx context.Context) {
+	a.ctx = ctx
+}
 
-// --- Остальные методы (GetLibrary, SelectExe, AddCustomGame) без изменений ---
-// (Скопируйте их из предыдущего app.go или оставьте как есть)
+// ... (методы GetLibrary, GetLaunchers, SelectExe, AddCustomGame оставляем без изменений) ...
 
 func (a *App) GetLibrary() []models.LibraryGame {
 	var library []models.LibraryGame
@@ -71,20 +72,19 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 	return "Success"
 }
 
-// SwitchToAccount (Просто смена аккаунта)
+// SwitchToAccount
 func (a *App) SwitchToAccount(accountName string, platform string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Login not found." }
+		if accountName == "UNKNOWN" { return "Error: Unknown Login" }
 
 		sys.KillSteam()
 
-		// 1. Патчим файл VDF (Критично для работы)
+		// Патчим файл
 		_ = a.steam.SetUserActive(accountName)
 
-		// 2. Меняем Реестр
-		if accountName != "" {
-			err := sys.SetSteamUser(accountName)
-			if err != nil { return "Registry Error: " + err.Error() }
+		// Чистим реестр и ставим юзера
+		if err := sys.SetSteamUser(accountName); err != nil {
+			return "Registry Error: " + err.Error()
 		}
 
 		steamDir, err := sys.GetSteamPath()
@@ -97,30 +97,31 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 	return "Platform not supported"
 }
 
-// LaunchGame (Запуск игры с переключением)
+// LaunchGame
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Login not found." }
+		if accountName == "UNKNOWN" { return "Error: Unknown Login" }
 
 		fmt.Println("Closing Steam...")
 		sys.KillSteam()
 		
-		// 1. Патчим VDF (Это заставит Steam думать, что этот юзер был последним)
+		// 1. Патчим VDF
 		_ = a.steam.SetUserActive(accountName)
 
-		// 2. Реестр
+		// 2. Реестр (с очисткой ActiveProcess!)
 		if accountName != "" {
-			fmt.Printf("Switching registry to: %s\n", accountName)
-			err := sys.SetSteamUser(accountName)
-			if err != nil { return "Registry Error: " + err.Error() }
+			fmt.Printf("Switching to: %s\n", accountName)
+			if err := sys.SetSteamUser(accountName); err != nil {
+				return "Error: " + err.Error()
+			}
 		}
 		
 		fmt.Println("Launching...")
 		
-		// 3. Запуск через steam.exe -applaunch
 		steamDir, _ := sys.GetSteamPath()
 		steamExe := filepath.Join(steamDir, "steam.exe")
 		
+		// Запуск через аргумент -applaunch гарантирует, что Steam сначала прогрузится, а потом запустит игру
 		sys.StartGameWithArgs(steamExe, "-applaunch", gameID)
 		
 		return "Launched on Steam"
