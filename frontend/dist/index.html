@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>swch</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" crossorigin href="/assets/main-DNBZTpxF.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo"><i class="fa-solid fa-repeat"></i> SWCH</div>
+            <div class="nav-item active"><i class="fa-solid fa-layer-group"></i> Library</div>
+            <div class="nav-item"><i class="fa-solid fa-download"></i> Downloads</div>
+            <div class="nav-item"><i class="fa-solid fa-gear"></i> Settings</div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header">
+                <div class="title">Library</div>
+            </div>
+
+            <div class="grid" id="games-list">
+                </div>
+        </main>
+    </div>
+
+    <script src="/wailsjs/go/app/App.js"></script>
+    
+    <script>
+        async function init() {
+            const list = document.getElementById('games-list');
+            
+            // Запрашиваем аккаунты у Go
+            const accounts = await window['go']['app']['App']['GetAccounts']();
+            
+            list.innerHTML = '';
+            
+            if (!accounts || accounts.length === 0) {
+                list.innerHTML = '<div style="padding:20px; color:#aaa">No Steam accounts found. Ensure Steam is installed and you have logged in.</div>';
+                return;
+            }
+
+            accounts.forEach(acc => {
+                acc.ownedGames.forEach(game => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.onclick = () => launch(acc.displayName, game.id);
+                    
+                    card.innerHTML = `
+                        <img src="${game.imageUrl}" class="card-img" onerror="this.src='https://via.placeholder.com/300x169?text=Game'">
+                        <div class="play-overlay">
+                            <div class="play-btn"><i class="fa-solid fa-play"></i></div>
+                        </div>
+                        <div class="card-info">
+                            <div class="game-title">${game.name}</div>
+                            <div class="account-name"><i class="fa-brands fa-steam"></i> ${acc.displayName}</div>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            });
+        }
+
+        async function launch(accountName, gameId) {
+            console.log("Launching", gameId, "on", accountName);
+            await window['go']['app']['App']['LaunchGame'](accountName, gameId);
+        }
+
+        init();
+    </script>
+</body>
+</html>
