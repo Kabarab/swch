@@ -1,15 +1,13 @@
 package models
 
-// AccountStat - статистика игры на конкретном аккаунте
 type AccountStat struct {
 	AccountID   string `json:"accountId"`
-	DisplayName string `json:"displayName"` // Ник (для отображения)
-	Username    string `json:"username"`    // Логин (для переключения) <--- НОВОЕ ПОЛЕ
+	DisplayName string `json:"displayName"`
+	Username    string `json:"username"`
 	PlaytimeMin int    `json:"playtimeMin"`
 	LastPlayed  int64  `json:"lastPlayed"`
 }
 
-// LibraryGame - игра, установленная на ПК
 type LibraryGame struct {
 	ID                  string        `json:"id"`
 	Name                string        `json:"name"`
@@ -19,7 +17,6 @@ type LibraryGame struct {
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
 }
 
-// Account - сущность аккаунта для меню "Аккаунты"
 type Account struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
