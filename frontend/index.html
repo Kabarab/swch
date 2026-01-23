@@ -45,7 +45,8 @@
                 acc.ownedGames.forEach(game => {
                     const card = document.createElement('div');
                     card.className = 'card';
-                    card.onclick = () => launch(acc.displayName, game.id);
+                    // Используем acc.username (логин) для переключения, это надежнее
+                    card.onclick = () => launch(acc.username, game.id);
                     
                     card.innerHTML = `
                         <img src="${game.imageUrl}" class="card-img" onerror="this.src='https://via.placeholder.com/300x169?text=Game'">
@@ -54,7 +55,15 @@
                         </div>
                         <div class="card-info">
                             <div class="game-title">${game.name}</div>
-                            <div class="account-name"><i class="fa-brands fa-steam"></i> ${acc.displayName}</div>
+                            
+                            <div class="account-info">
+                                <div class="account-nick">
+                                    <i class="fa-brands fa-steam"></i> ${acc.displayName}
+                                </div>
+                                <div class="account-login">
+                                    (${acc.username})
+                                </div>
+                            </div>
                         </div>
                     `;
                     list.appendChild(card);

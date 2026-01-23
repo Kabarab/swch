@@ -9,7 +9,8 @@ type Game struct {
 
 type Account struct {
 	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"displayName"` // Steam Persona Name (Никнейм)
+	Username    string `json:"username"`    // Steam Account Name (Логин)
 	AvatarURL   string `json:"avatarUrl"`
 	Platform    string `json:"platform"`
 	OwnedGames  []Game `json:"ownedGames"`

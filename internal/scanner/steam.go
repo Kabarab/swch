@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"swch/internal/models"
 	"swch/internal/sys"
@@ -21,21 +22,23 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// Scan находит аккаунты и их игры
+// Константа для конвертации SteamID3 -> SteamID64
+const steamID64Identifier = 76561197960265728
+
 func (s *SteamScanner) Scan() []models.Account {
 	var accounts []models.Account
 	if s.Path == "" {
 		return accounts
 	}
 
-	// 1. Находим установленные игры (читаем appmanifest_*.acf)
+	// 1. Ищем установленные игры
 	installedGames := s.scanInstalledGames()
 
-	// 2. Читаем список пользователей из config/loginusers.vdf
+	// 2. Читаем файл с пользователями (loginusers.vdf)
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
-	loginData := parseVdf(loginUsersPath)
+	loginData := parseVdf(loginUsersPath) // Возвращает map[string]interface{} где ключи - SteamID64
 
-	// 3. Сканируем папку userdata для поиска локальных конфигов
+	// 3. Идем по папкам userdata (названия папок - это SteamID3)
 	userDataPath := filepath.Join(s.Path, "userdata")
 	entries, _ := os.ReadDir(userDataPath)
 
@@ -43,50 +46,67 @@ func (s *SteamScanner) Scan() []models.Account {
 		if !entry.IsDir() {
 			continue
 		}
-		steamID3 := entry.Name()
-		if steamID3 == "0" || steamID3 == "anonymous" {
+		steamID3Str := entry.Name()
+		
+		// Пропускаем системные папки
+		if steamID3Str == "0" || steamID3Str == "anonymous" || steamID3Str == "ac" {
 			continue
 		}
 
-		// Определяем имя пользователя
-		displayName := "User " + steamID3
-		loginName := ""
+		// --- ЛОГИКА ОПРЕДЕЛЕНИЯ ИМЕН ---
+		
+		// По умолчанию
+		displayName := "User " + steamID3Str
+		username := ""
 
-		// Простой поиск имени в loginusers.vdf
-		for _, info := range loginData {
-			if m, ok := info.(map[string]interface{}); ok {
-				// В реальном проекте здесь нужна конвертация ID, но для MVP ищем по совпадению
-				if name, ok := m["PersonaName"]; ok {
-					// Если бы мы конвертировали ID, мы бы точно знали имя.
-					// Тут мы просто берем имя, если это единственный юзер, или оставляем ID
-					_ = name 
+		// Пытаемся конвертировать ID3 (папка) в ID64 (ключ в файле)
+		// ID64 = ID3 + 76561197960265728
+		id3, err := strconv.ParseInt(steamID3Str, 10, 64)
+		if err == nil {
+			id64 := id3 + steamID64Identifier
+			id64Str := strconv.FormatInt(id64, 10)
+
+			// Ищем этот ID64 в данных loginusers.vdf
+			// Структура VDF: "users" -> { "7656..." : { "AccountName": "...", "PersonaName": "..." } }
+			if users, ok := loginData["users"].(map[string]interface{}); ok {
+				if userData, found := users[id64Str].(map[string]interface{}); found {
+					// Нашли! Берем данные
+					if pName, ok := userData["PersonaName"].(string); ok {
+						displayName = pName
+					}
+					if accName, ok := userData["AccountName"].(string); ok {
+						username = accName
+					}
 				}
-				if acc, ok := m["AccountName"]; ok {
-					loginName = acc.(string)
+			} else {
+				// Если структура файла плоская (иногда бывает без "users")
+				if userData, found := loginData[id64Str].(map[string]interface{}); found {
+					if pName, ok := userData["PersonaName"].(string); ok {
+						displayName = pName
+					}
+					if accName, ok := userData["AccountName"].(string); ok {
+						username = accName
+					}
 				}
 			}
 		}
-		
-		// Если нашли логин (AccountName), используем его для отображения, если нет PersonaName
-		if loginName != "" {
-			displayName = loginName
-		} else {
-			// Пытаемся вычитать имя из localconfig.vdf (иногда оно там есть)
-			// Но для простоты оставим ID, если не нашли.
+
+		// Если логин так и не нашли, используем ID как заглушку
+		if username == "" {
+			username = steamID3Str
 		}
 
-		// 4. Фильтруем игры для этого аккаунта
-		myGames := s.filterGamesForAccount(steamID3, installedGames)
+		// 4. Фильтруем игры
+		myGames := s.filterGamesForAccount(steamID3Str, installedGames)
 
-		acc := models.Account{
-			ID:          steamID3,
-			DisplayName: displayName,
-			Platform:    "Steam",
-			OwnedGames:  myGames,
-		}
-		
-		// Добавляем аккаунт, если нашли игры
 		if len(myGames) > 0 {
+			acc := models.Account{
+				ID:          steamID3Str,
+				DisplayName: displayName, // Никнейм (NazarSlayer)
+				Username:    username,    // Логин (nazarn2008)
+				Platform:    "Steam",
+				OwnedGames:  myGames,
+			}
 			accounts = append(accounts, acc)
 		}
 	}
@@ -106,9 +126,11 @@ func (s *SteamScanner) scanInstalledGames() map[string]string {
 			data := parseVdf(fullPath)
 			
 			if appState, ok := data["AppState"].(map[string]interface{}); ok {
-				name := appState["name"].(string)
-				appid := appState["appid"].(string)
-				games[appid] = name
+				name, _ := appState["name"].(string)
+				appid, _ := appState["appid"].(string)
+				if appid != "" {
+					games[appid] = name
+				}
 			}
 		}
 	}
@@ -119,13 +141,11 @@ func (s *SteamScanner) filterGamesForAccount(steamID3 string, installedGames map
 	var myGames []models.Game
 	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
 	
-	// Читаем файл как текст для быстрого поиска
 	contentBytes, err := ioutil.ReadFile(localConfigPath)
 	if err != nil { return myGames }
 	content := string(contentBytes)
 
 	for appID, name := range installedGames {
-		// Если ID игры встречается в конфиге пользователя, считаем, что игра его
 		if strings.Contains(content, fmt.Sprintf(`"%s"`, appID)) {
 			myGames = append(myGames, models.Game{
 				ID:       appID,
