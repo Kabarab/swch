@@ -22,27 +22,10 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// SetMostRecentUser изменяет loginusers.vdf, чтобы Steam знал, кого грузить
+// SetMostRecentUser - заглушка.
+// Мы используем сброс ActiveUser в реестре (sys.go), это надежнее патчинга VDF.
 func (s *SteamScanner) SetMostRecentUser(targetUsername string) error {
-	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
-	
-	// Читаем файл как ТЕКСТ (чтобы не сломать форматирование VDF при перезаписи)
-	// VDF библиотека не умеет сохранять обратно идеально, поэтому сделаем простую текстовую замену.
-	// Это безопаснее и надежнее для переключателя.
-	contentBytes, err := ioutil.ReadFile(loginUsersPath)
-	if err != nil {
-		return err
-	}
-	content := string(contentBytes)
-
-	// Нам нужно найти блок пользователя с этим логином и добавить/обновить MostRecent.
-	// Но так как парсить и собирать VDF сложно, мы используем трюк:
-	// Стим при выходе сам обновляет этот файл.
-	// Если мы просто удалим этот файл, Стим попросит вход.
-	// 
-	// ЛУЧШИЙ ВАРИАНТ: Мы не будем переписывать сложный VDF вручную. 
-	// Мы полагаемся на РЕЕСТР, но перед этим удаляем старый кэш активного юзера в реестре.
-	
+	// Логика перенесена в sys.SetSteamUser
 	return nil 
 }
 
@@ -105,7 +88,7 @@ func (s *SteamScanner) getLibraryFolders() []string {
 
 	p := vdf.NewParser(f)
 	m, err := p.Parse()
-	if err != nil { return paths } // Fix potential crash
+	if err != nil { return paths }
 
 	if libFolders, ok := m["libraryfolders"].(map[string]interface{}); ok {
 		for _, v := range libFolders {
@@ -141,10 +124,8 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 		id64 := id3 + 76561197960265728
 		id64Str := strconv.FormatInt(id64, 10)
 
-		// Глубокий поиск пользователя в структуре VDF
 		var userData map[string]interface{}
 		
-		// VDF может быть "users" -> "ID" или сразу "ID"
 		if users, ok := loginData["users"].(map[string]interface{}); ok {
 			if u, found := users[id64Str].(map[string]interface{}); found {
 				userData = u
@@ -161,7 +142,6 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 			if a, ok := userData["AccountName"].(string); ok { username = a }
 		}
 
-		// Если логин не найден, помечаем его, чтобы не ломать реестр пустыми строками
 		if username == "" {
 			username = "UNKNOWN" 
 		}
