@@ -15,32 +15,34 @@ public class Program
             return;
         }
 
-        string targetUser = args[0];
+        string targetUser = args[0]; // ВАЖНО: Это должен быть ЛОГИН (AccountName), а не никнейм!
         string gameId = (args.Length > 1) ? args[1] : null;
 
         string steamPath = GetSteamPath();
         if (string.IsNullOrEmpty(steamPath))
         {
-             if (Directory.Exists("C:\\Program Files (x86)\\Steam"))
-                 steamPath = "C:\\Program Files (x86)\\Steam";
-             else if (Directory.Exists("C:\\Program Files\\Steam"))
-                 steamPath = "C:\\Program Files\\Steam";
-             else
-             {
-                 Console.WriteLine("Error: Steam path not found.");
-                 return;
-             }
+             // Стандартные пути, если реестр пуст
+             if (Directory.Exists("C:\\Program Files (x86)\\Steam")) steamPath = "C:\\Program Files (x86)\\Steam";
+             else if (Directory.Exists("C:\\Program Files\\Steam")) steamPath = "C:\\Program Files\\Steam";
+             else { Console.WriteLine("Error: Steam path not found."); return; }
         }
 
-        Console.WriteLine("[1/4] Closing Steam processes...");
+        Console.WriteLine("--- STEAM ACCOUNT SWITCHER ---");
+        Console.WriteLine("Target Login: " + targetUser);
+
+        // 1. Закрываем Steam (Критически важно!)
+        Console.WriteLine("[1/4] Killing Steam processes...");
         KillSteam();
 
+        // 2. Обновляем файл loginusers.vdf (для интерфейса)
         Console.WriteLine("[2/4] Patching loginusers.vdf...");
         PatchVdf(steamPath, targetUser);
 
-        Console.WriteLine("[3/4] Setting Registry keys for " + targetUser + "...");
+        // 3. Обновляем Реестр (для авто-входа)
+        Console.WriteLine("[3/4] Updating Registry for AutoLogin...");
         SetRegistry(targetUser);
 
+        // 4. Запускаем Steam
         Console.WriteLine("[4/4] Launching Steam...");
         StartSteam(steamPath, gameId);
     }
@@ -64,10 +66,10 @@ public class Program
 
     static void KillSteam()
     {
-        string[] procs = { "steam", "steamwebhelper", "GameOverlayUI" };
-        int retries = 5;
+        string[] procs = { "steam", "steamwebhelper", "GameOverlayUI", "steamservice" };
+        int maxRetries = 10; // Ждем до 10 секунд
         
-        while (retries > 0)
+        for (int i = 0; i < maxRetries; i++)
         {
             bool anyAlive = false;
             foreach (string procName in procs)
@@ -78,18 +80,14 @@ public class Program
                     anyAlive = true;
                     foreach (Process proc in running)
                     {
-                        try { proc.Kill(); } catch { }
+                        try { proc.Kill(); } catch { } // Пытаемся убить
                     }
                 }
             }
 
-            if (!anyAlive) break;
-            
-            Thread.Sleep(1000);
-            retries--;
+            if (!anyAlive) return; // Если все мертвы — выходим
+            Thread.Sleep(1000); // Ждем секунду
         }
-        // Extra wait to ensure file locks are released
-        Thread.Sleep(1000);
     }
 
     static void SetRegistry(string username)
@@ -97,23 +95,23 @@ public class Program
         string keyPath = "Software\\Valve\\Steam";
         try
         {
-            // Force create/open main key
+            // 1. Основные ключи в HKCU
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
             {
                 if (key != null)
                 {
+                    // ЭТО САМОЕ ГЛАВНОЕ ДЛЯ АВТО-ВХОДА:
                     key.SetValue("AutoLoginUser", username, RegistryValueKind.String);
                     key.SetValue("RememberPassword", 1, RegistryValueKind.DWord);
                     key.SetValue("SkipOfflineModeWarning", 1, RegistryValueKind.DWord);
                 }
             }
 
-            // Force create/open ActiveProcess key
+            // 2. Сброс активного пользователя (заставляет Steam перечитать AutoLoginUser)
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath + "\\ActiveProcess"))
             {
                 if (key != null)
                 {
-                    // Setting this to 0 tells Steam "The last user logged out safely, please use AutoLoginUser"
                     key.SetValue("ActiveUser", 0, RegistryValueKind.DWord);
                 }
             }
@@ -133,10 +131,11 @@ public class Program
         {
             string content = File.ReadAllText(vdfPath);
 
-            // 1. Reset "MostRecent" globally
+            // Сбрасываем флаг MostRecent у всех
             content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"      \"0\"");
 
-            // 2. Find and update the specific user block
+            // Ищем блок конкретного пользователя по AccountName
+            // Внимание: targetUsername должен быть ЛОГИНОМ
             string userBlockPattern = "(\\\"" + "\\d{17}" + "\\\"\\s*\\{[^{}]*\\\"AccountName\\\"\\s*\\\"" + Regex.Escape(targetUsername) + "\\\"[^{}]*\\})";
             
             content = Regex.Replace(content, userBlockPattern, new MatchEvaluator(delegate(Match match)
@@ -146,12 +145,12 @@ public class Program
                 TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
                 int now = (int)t.TotalSeconds;
 
-                // Helper to replace or insert key-value pair
-                block = UpdateOrInsert(block, "MostRecent", "1");
-                block = UpdateOrInsert(block, "Timestamp", now.ToString());
-                block = UpdateOrInsert(block, "AllowAutoLogin", "1");
-                block = UpdateOrInsert(block, "RememberPassword", "1"); // CRITICAL for auto-login
-                block = UpdateOrInsert(block, "WantsOfflineMode", "0"); // Ensure we don't start offline
+                // Функция для замены или добавления параметра
+                block = EnsureKey(block, "MostRecent", "1");
+                block = EnsureKey(block, "Timestamp", now.ToString());
+                block = EnsureKey(block, "AllowAutoLogin", "1");
+                block = EnsureKey(block, "RememberPassword", "1"); 
+                block = EnsureKey(block, "WantsOfflineMode", "0");
 
                 return block;
             }), RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -164,9 +163,9 @@ public class Program
         }
     }
 
-    // Helper method to safely update VDF string block
-    static string UpdateOrInsert(string block, string key, string value)
+    static string EnsureKey(string block, string key, string value)
     {
+        // Если ключ уже есть — заменяем значение
         string pattern = "\"" + key + "\"\\s+\"\\d+\"";
         if (Regex.IsMatch(block, pattern))
         {
@@ -174,7 +173,7 @@ public class Program
         }
         else
         {
-            // Insert before the closing brace
+            // Если ключа нет — вставляем его перед закрывающей скобкой }
             int lastBrace = block.LastIndexOf('}');
             if (lastBrace != -1)
             {

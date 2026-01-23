@@ -49,6 +49,9 @@ func runCSharpSwitcher(username string, gameID string) string {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	output, err := cmd.CombinedOutput()
+
+	fmt.Println("Switcher Log:\n", string(output))
+
 	if err != nil {
 		fmt.Println("Switcher Error:", string(output))
 		return "Error switching: " + err.Error()
@@ -81,7 +84,7 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 
 func (a *App) SelectExe() string {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Game Executable",
+		Title:   "Select Game Executable",
 		Filters: []runtime.FileFilter{{DisplayName: "Executables (*.exe)", Pattern: "*.exe"}},
 	})
 	if err != nil {
@@ -95,11 +98,11 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 		return "Error: empty fields"
 	}
 	newGame := models.LibraryGame{
-		ID:      fmt.Sprintf("custom_%d", time.Now().Unix()),
-		Name:    name,
+		ID:       fmt.Sprintf("custom_%d", time.Now().Unix()),
+		Name:     name,
 		Platform: "Custom",
-		ExePath: exePath,
-		IconURL: "",
+		ExePath:  exePath,
+		IconURL:  "",
 	}
 	err := scanner.SaveCustomGame(newGame)
 	if err != nil {
