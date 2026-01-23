@@ -10,7 +10,7 @@ import (
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
-	"syscall" // Обязательно нужен для скрытия черного окна
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -31,10 +31,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ЗАПУСКА C# ---
 func runCSharpSwitcher(username string, gameID string) string {
 	cwd, _ := os.Getwd()
-	// Путь к F:\swch\tools\switcher.exe
 	switcherPath := filepath.Join(cwd, "tools", "switcher.exe")
 
 	if _, err := os.Stat(switcherPath); os.IsNotExist(err) {
@@ -43,27 +41,22 @@ func runCSharpSwitcher(username string, gameID string) string {
 
 	var cmd *exec.Cmd
 	if gameID != "" {
-		// Запуск игры: switcher.exe login gameID
 		cmd = exec.Command(switcherPath, username, gameID)
 	} else {
-		// Просто смена: switcher.exe login
 		cmd = exec.Command(switcherPath, username)
 	}
 
-	// Скрываем консольное окно при запуске
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	
-	// Запускаем и ждем выполнения
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("Switcher Error:", string(output))
 		return "Error switching: " + err.Error()
 	}
-	
+
 	return "Success"
 }
 
-// GetLibrary возвращает список игр
 func (a *App) GetLibrary() []models.LibraryGame {
 	var library []models.LibraryGame
 	library = append(library, a.steam.GetGames()...)
@@ -91,26 +84,36 @@ func (a *App) SelectExe() string {
 		Title: "Select Game Executable",
 		Filters: []runtime.FileFilter{{DisplayName: "Executables (*.exe)", Pattern: "*.exe"}},
 	})
-	if err != nil { return "" }
+	if err != nil {
+		return ""
+	}
 	return path
 }
 
 func (a *App) AddCustomGame(name string, exePath string) string {
-	if name == "" || exePath == "" { return "Error: empty fields" }
+	if name == "" || exePath == "" {
+		return "Error: empty fields"
+	}
 	newGame := models.LibraryGame{
-		ID: fmt.Sprintf("custom_%d", time.Now().Unix()),
-		Name: name, Platform: "Custom", ExePath: exePath, IconURL: "",
+		ID:      fmt.Sprintf("custom_%d", time.Now().Unix()),
+		Name:    name,
+		Platform: "Custom",
+		ExePath: exePath,
+		IconURL: "",
 	}
 	err := scanner.SaveCustomGame(newGame)
-	if err != nil { return err.Error() }
+	if err != nil {
+		return err.Error()
+	}
 	return "Success"
 }
 
-// SwitchToAccount - Кнопка во вкладке Accounts
 func (a *App) SwitchToAccount(accountName string, platform string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Login not found." }
-		
+		if accountName == "UNKNOWN" {
+			return "Error: Login not found."
+		}
+
 		res := runCSharpSwitcher(accountName, "")
 		if res == "Success" {
 			return "Switched to " + accountName
@@ -120,10 +123,11 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 	return "Platform not supported"
 }
 
-// LaunchGame - Кнопка Play
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
-		if accountName == "UNKNOWN" { return "Error: Login not found." }
+		if accountName == "UNKNOWN" {
+			return "Error: Login not found."
+		}
 
 		res := runCSharpSwitcher(accountName, gameID)
 		if res == "Success" {

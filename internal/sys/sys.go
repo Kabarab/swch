@@ -11,7 +11,6 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// GetSteamPath получает путь к Steam
 func GetSteamPath() (string, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.QUERY_VALUE)
 	if err != nil {
@@ -26,38 +25,45 @@ func GetSteamPath() (string, error) {
 	return filepath.Clean(strings.ReplaceAll(path, "/", "\\")), nil
 }
 
-// KillSteam убивает процессы (Аналог TcNo Processes.cs)
 func KillSteam() {
-	processes := []string{
-		"steam.exe",
-		"steamwebhelper.exe",
-		"GameOverlayUI.exe",
-	}
+	processes := []string{"steam.exe", "steamwebhelper.exe", "GameOverlayUI.exe"}
 
-	for _, proc := range processes {
-		cmd := exec.Command("taskkill", "/F", "/IM", proc)
+	for _, p := range processes {
+		cmd := exec.Command("taskkill", "/F", "/IM", p)
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		_ = cmd.Run()
 	}
 
-	// TcNo использует небольшую паузу для гарантии освобождения файлов
-	time.Sleep(1 * time.Second)
+	for i := 0; i < 20; i++ {
+		stillAlive := false
+		cmd := exec.Command("tasklist")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		output, _ := cmd.Output()
+		outStr := string(output)
+
+		if strings.Contains(outStr, "steam.exe") {
+			stillAlive = true
+		}
+
+		if !stillAlive {
+			time.Sleep(500 * time.Millisecond)
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
-// SetSteamUser пишет в реестр (Аналог TcNo Registry.cs)
 func SetSteamUser(username string) error {
 	if username == "" {
-		return fmt.Errorf("username empty")
+		return fmt.Errorf("username is empty")
 	}
 
-	keyPath := `Software\Valve\Steam`
-	k, _, err := registry.CreateKey(registry.CURRENT_USER, keyPath, registry.SET_VALUE)
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.SET_VALUE)
 	if err != nil {
 		return err
 	}
 	defer k.Close()
 
-	// 1. Устанавливаем пользователя
 	if err := k.SetStringValue("AutoLoginUser", username); err != nil {
 		return err
 	}
@@ -65,12 +71,7 @@ func SetSteamUser(username string) error {
 		return err
 	}
 
-	// 2. Сбрасываем флаг Offline (как в TcNo)
-	_ = k.SetDWordValue("Offline", 0)
-
-	// 3. Очищаем ActiveProcess. Это заставляет Steam перечитать конфиг.
-	// TcNo делает это, чтобы Steam "забыл" предыдущую сессию.
-	activeKey, err := registry.OpenKey(registry.CURRENT_USER, keyPath+`\ActiveProcess`, registry.SET_VALUE)
+	activeKey, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam\ActiveProcess`, registry.SET_VALUE)
 	if err == nil {
 		defer activeKey.Close()
 		_ = activeKey.SetDWordValue("ActiveUser", 0)

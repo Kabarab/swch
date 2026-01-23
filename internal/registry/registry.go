@@ -7,7 +7,6 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// ExpandRegistryAbbreviation преобразует сокращение (HKCU, HKLM) в ключ.
 func ExpandRegistryAbbreviation(abv string) registry.Key {
 	switch abv {
 	case "HKCR":
@@ -21,8 +20,6 @@ func ExpandRegistryAbbreviation(abv string) registry.Key {
 	}
 }
 
-// GetStringValue читает строковое значение.
-// path пример: "HKCU\Software\Valve\Steam"
 func GetStringValue(fullPath, valueName string) (string, error) {
 	root, subPath := splitRootAndPath(fullPath)
 	k, err := registry.OpenKey(root, subPath, registry.QUERY_VALUE)
@@ -35,7 +32,6 @@ func GetStringValue(fullPath, valueName string) (string, error) {
 	return val, err
 }
 
-// SetStringValue устанавливает строковое значение (например, AutoLoginUser).
 func SetStringValue(fullPath, valueName, value string) error {
 	root, subPath := splitRootAndPath(fullPath)
 	k, _, err := registry.CreateKey(root, subPath, registry.SET_VALUE)
@@ -47,11 +43,10 @@ func SetStringValue(fullPath, valueName, value string) error {
 	return k.SetStringValue(valueName, value)
 }
 
-// Вспомогательная функция для разбора пути
 func splitRootAndPath(p string) (registry.Key, string) {
 	parts := strings.SplitN(p, "\\", 2)
 	if len(parts) < 2 {
-		return registry.CURRENT_USER, p // Fallback
+		return registry.CURRENT_USER, p
 	}
 	return ExpandRegistryAbbreviation(parts[0]), parts[1]
 }

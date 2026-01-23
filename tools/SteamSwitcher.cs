@@ -17,13 +17,11 @@ public class Program
 
         string targetUser = args[0];
         string gameId = (args.Length > 1) ? args[1] : null;
-        
-        // Получаем путь к Steam
+
         string steamPath = GetSteamPath();
         if (string.IsNullOrEmpty(steamPath))
         {
              Console.WriteLine("Error: Steam path not found in Registry.");
-             // Пытаемся угадать стандартный путь, если реестр пуст
              if (Directory.Exists("C:\\Program Files (x86)\\Steam"))
                  steamPath = "C:\\Program Files (x86)\\Steam";
              else
@@ -70,7 +68,7 @@ public class Program
                 try { proc.Kill(); } catch { }
             }
         }
-        Thread.Sleep(2000); // Ждем 2 секунды
+        Thread.Sleep(2000);
     }
 
     static void SetRegistry(string username)
@@ -88,7 +86,6 @@ public class Program
                 }
             }
 
-            // Очистка ActiveUser
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath + "\\ActiveProcess", true))
             {
                 if (key != null)
@@ -116,27 +113,22 @@ public class Program
         {
             string content = File.ReadAllText(vdfPath);
 
-            // 1. Сбрасываем MostRecent
-            content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"		\"0\"");
+            content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"     \"0\"");
 
-            // 2. Ищем пользователя
             int userIndex = content.IndexOf("\"" + username + "\"", StringComparison.OrdinalIgnoreCase);
             
             if (userIndex != -1)
             {
-                // Ищем конец блока
                 int blockEnd = content.IndexOf('}', userIndex);
                 if (blockEnd != -1)
                 {
                     string block = content.Substring(userIndex, blockEnd - userIndex);
                     
-                    // Меняем MostRecent на 1
-                    string newBlock = Regex.Replace(block, "\"MostRecent\"\\s+\"0\"", "\"MostRecent\"		\"1\"");
+                    string newBlock = Regex.Replace(block, "\"MostRecent\"\\s+\"0\"", "\"MostRecent\"       \"1\"");
                     
-                    // Обновляем Timestamp на текущий (Unix время)
                     TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
                     int secondsSinceEpoch = (int)t.TotalSeconds;
-                    newBlock = Regex.Replace(newBlock, "\"Timestamp\"\\s+\"\\d+\"", "\"Timestamp\"		\"" + secondsSinceEpoch + "\"");
+                    newBlock = Regex.Replace(newBlock, "\"Timestamp\"\\s+\"\\d+\"", "\"Timestamp\"      \"" + secondsSinceEpoch + "\"");
 
                     content = content.Remove(userIndex, blockEnd - userIndex).Insert(userIndex, newBlock);
                 }
