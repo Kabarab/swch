@@ -177,19 +177,63 @@
             }
         }
 
-        async function loadAccounts() {
-            const container = document.getElementById('launchers-list');
-            const launchers = await window['go']['app']['App']['GetLaunchers']();
-            container.innerHTML = '';
-            launchers.forEach(group => {
-               container.innerHTML += `<div style="padding:15px; background:#222; margin-bottom:15px; border-radius:5px;">
-                   <h3 style="margin-top:0">${group.name}</h3>
-                   ${group.accounts.map(a => `<div style="padding:5px 0; border-bottom:1px solid #333;">
-                        <b>${a.displayName}</b> <span style="color:#888">(${a.username})</span>
-                   </div>`).join('')}
-               </div>`;
-            });
+        async function switchAccount(username, platform) {
+        if (platform !== 'Steam') {
+            alert("Direct switching is currently only supported for Steam.");
+            return;
         }
+        
+        // Визуальный эффект нажатия (опционально)
+        console.log("Switching to", username);
+        
+        // Вызов Go функции
+        const res = await window['go']['app']['App']['SwitchToAccount'](username, platform);
+        
+        // Можно показать уведомление
+        // alert(res); 
+    }
+
+    async function loadAccounts() {
+        const container = document.getElementById('launchers-list');
+        // Показываем загрузку
+        container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
+        
+        const launchers = await window['go']['app']['App']['GetLaunchers']();
+        container.innerHTML = '';
+
+        launchers.forEach(group => {
+            const section = document.createElement('div');
+            section.className = 'launcher-section';
+            
+            let accountsHtml = '';
+            group.accounts.forEach(acc => {
+                // Добавили onclick и стили курсора
+                accountsHtml += `
+                    <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
+                        <div class="acc-avatar">${acc.displayName.charAt(0)}</div>
+                        <div class="acc-details">
+                            <div class="acc-nick">${acc.displayName}</div>
+                            <div class="acc-login">${acc.username}</div>
+                        </div>
+                        <div class="acc-action-icon">
+                            <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                        </div>
+                    </div>
+                `;
+            });
+
+            section.innerHTML = `
+                <div class="launcher-header">
+                    <i class="fa-brands fa-${group.platform.toLowerCase()}"></i> ${group.name} 
+                    <span class="count">${group.accounts.length}</span>
+                </div>
+                <div class="launcher-accounts">
+                    ${accountsHtml}
+                </div>
+            `;
+            container.appendChild(section);
+        });
+    }
 
         loadLibrary();
     </script>
