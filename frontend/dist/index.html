@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>swch</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" crossorigin href="/assets/main-w5f2s9wm.css">
+  <link rel="stylesheet" crossorigin href="/assets/main-B6hzhAxa.css">
 </head>
 <body>
     <div class="app-container">
@@ -12,44 +12,55 @@
             <div class="logo"><i class="fa-solid fa-repeat"></i> SWCH</div>
             
             <div class="nav-item active" onclick="switchTab('library')">
-                <i class="fa-solid fa-gamepad"></i> Games Library
+                <i class="fa-solid fa-gamepad"></i> Library
             </div>
             <div class="nav-item" onclick="switchTab('accounts')">
                 <i class="fa-solid fa-users"></i> Accounts
             </div>
             
             <div class="nav-spacer"></div>
-            <div class="nav-item"><i class="fa-solid fa-gear"></i> Settings</div>
+            <div class="nav-item action-btn" onclick="openAddGameModal()">
+                <i class="fa-solid fa-plus"></i> Add Game
+            </div>
         </aside>
 
         <main class="main-content">
-            
             <div id="view-library" class="view-section">
-                <div class="header">
-                    <div class="title">Installed Games</div>
-                    <div class="subtitle">All launchers combined</div>
-                </div>
+                <div class="header"><div class="title">Library</div></div>
                 <div class="grid" id="games-grid"></div>
             </div>
 
             <div id="view-accounts" class="view-section" style="display: none;">
-                <div class="header">
-                    <div class="title">Accounts Manager</div>
-                </div>
+                <div class="header"><div class="title">Accounts</div></div>
                 <div id="launchers-list"></div>
             </div>
-
         </main>
     </div>
 
     <div id="account-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="modal-game-title">Select Account</h3>
-                <span class="close" onclick="closeModal()">&times;</span>
+                <h3 id="modal-game-title">Launch</h3>
+                <span class="close" onclick="closeModal('account-modal')">&times;</span>
             </div>
-            <div id="modal-accounts-list" class="modal-list">
+            <div id="modal-accounts-list" class="modal-list"></div>
+        </div>
+    </div>
+
+    <div id="add-game-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Game (Torrent/Other)</h3>
+                <span class="close" onclick="closeModal('add-game-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <input type="text" id="custom-name" placeholder="Game Name" class="input-field" style="width:100%; margin-bottom:10px; padding:8px; background:#333; border:none; color:white;">
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="custom-path" placeholder="Path to .exe" class="input-field" style="flex:1; padding:8px; background:#333; border:none; color:white;" readonly>
+                    <button onclick="browseFile()" style="padding:8px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
                 </div>
+                <button onclick="saveCustomGame()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Add to Library</button>
+            </div>
         </div>
     </div>
 
@@ -58,52 +69,42 @@
     <script>
         let globalGames = [];
 
-        // --- TABS LOGIC ---
-        function switchTab(tabName) {
-            document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            
-            if (tabName === 'library') {
+        function switchTab(tab) {
+            document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
+            if(tab === 'library') {
                 document.getElementById('view-library').style.display = 'block';
-                document.querySelector('.nav-item:nth-child(2)').classList.add('active');
                 loadLibrary();
             } else {
                 document.getElementById('view-accounts').style.display = 'block';
-                document.querySelector('.nav-item:nth-child(3)').classList.add('active');
                 loadAccounts();
             }
         }
 
-        // --- LIBRARY LOGIC ---
         async function loadLibrary() {
             const list = document.getElementById('games-grid');
-            list.innerHTML = '<div class="loading">Scanning games...</div>';
-            
+            list.innerHTML = 'Loading...';
             const games = await window['go']['app']['App']['GetLibrary']();
             globalGames = games;
             list.innerHTML = '';
-
-            if (!games || games.length === 0) {
-                list.innerHTML = '<div class="empty">No games found.</div>';
-                return;
-            }
 
             games.forEach(game => {
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.onclick = () => openGameModal(game.id);
                 
-                // Platform Badge color
                 let platColor = '#0074e4';
                 if(game.platform === 'Steam') platColor = '#1b2838';
                 if(game.platform === 'Epic') platColor = '#333';
+                if(game.platform === 'Custom') platColor = '#2d8c58';
+
+                // Используем заглушку если нет иконки
+                const img = game.iconUrl || 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
 
                 card.innerHTML = `
                     <div class="platform-badge" style="background:${platColor}">${game.platform}</div>
-                    <img src="${game.iconUrl}" class="card-img" onerror="this.src='https://via.placeholder.com/300x169?text=Game'">
+                    <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
                     <div class="card-info">
-                        <div class="game-title">${game.name}</div>
-                        <div class="account-count">Available on ${game.availableOn ? game.availableOn.length : 0} accounts</div>
+                        <div class="game-title" style="font-weight:bold;">${game.name}</div>
                     </div>
                 `;
                 list.appendChild(card);
@@ -114,80 +115,71 @@
             const game = globalGames.find(g => g.id === gameId);
             if(!game) return;
 
+            // Если игра Custom или нет аккаунтов — запускаем напрямую
+            if (game.platform === 'Custom' || !game.availableOn || game.availableOn.length === 0) {
+                // Передаем exePath для запуска
+                launch('', game.id, game.platform, game.exePath); 
+                return; 
+            }
+
             document.getElementById('modal-game-title').innerText = "Launch " + game.name;
             const list = document.getElementById('modal-accounts-list');
             list.innerHTML = '';
 
-            if (!game.availableOn || game.availableOn.length === 0) {
-                list.innerHTML = `<div class="modal-item" onclick="launch('', '${game.id}', '${game.platform}')">
-                    <div class="acc-name">Launch without switching</div>
-                    <div class="acc-meta">Just runs the exe/url</div>
-                </div>`;
-            } else {
-                game.availableOn.forEach(acc => {
-                    const item = document.createElement('div');
-                    item.className = 'modal-item';
-                    item.onclick = () => launch(acc.displayName, game.id, game.platform); // Note: using displayName as username for MVP
-                    item.innerHTML = `
-                        <div class="acc-name">${acc.displayName}</div>
-                        <div class="acc-meta">Playtime: ${acc.playtimeMin} min</div>
-                    `;
-                    list.appendChild(item);
-                });
-            }
-
+            game.availableOn.forEach(acc => {
+                const item = document.createElement('div');
+                item.className = 'modal-item';
+                // ВАЖНО: передаем acc.username (логин), который нужен для реестра
+                item.onclick = () => launch(acc.username, game.id, game.platform, ''); 
+                item.innerHTML = `
+                    <div class="acc-name" style="font-weight:bold;">${acc.displayName}</div>
+                    <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
+                `;
+                list.appendChild(item);
+            });
             document.getElementById('account-modal').style.display = 'flex';
         }
 
-        function closeModal() {
-            document.getElementById('account-modal').style.display = 'none';
+        async function launch(account, gameId, platform, exePath) {
+            closeModal('account-modal');
+            await window['go']['app']['App']['LaunchGame'](account, gameId, platform, exePath);
         }
 
-        // --- ACCOUNTS LOGIC ---
+        // --- CUSTOM GAME FUNC ---
+        function openAddGameModal() { document.getElementById('add-game-modal').style.display = 'flex'; }
+        
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        async function browseFile() {
+            const path = await window['go']['app']['App']['SelectExe']();
+            if(path) document.getElementById('custom-path').value = path;
+        }
+
+        async function saveCustomGame() {
+            const name = document.getElementById('custom-name').value;
+            const path = document.getElementById('custom-path').value;
+            const res = await window['go']['app']['App']['AddCustomGame'](name, path);
+            if(res === 'Success') {
+                closeModal('add-game-modal');
+                loadLibrary(); // Обновляем список
+            } else {
+                alert(res);
+            }
+        }
+
         async function loadAccounts() {
+            // (Логика загрузки списка аккаунтов для вкладки Accounts - можно взять из прошлого ответа)
             const container = document.getElementById('launchers-list');
-            container.innerHTML = 'Loading...';
-            
             const launchers = await window['go']['app']['App']['GetLaunchers']();
             container.innerHTML = '';
-
             launchers.forEach(group => {
-                const section = document.createElement('div');
-                section.className = 'launcher-section';
-                
-                let accountsHtml = '';
-                group.accounts.forEach(acc => {
-                    accountsHtml += `
-                        <div class="account-row">
-                            <div class="acc-avatar">${acc.displayName.charAt(0)}</div>
-                            <div class="acc-details">
-                                <div class="acc-nick">${acc.displayName}</div>
-                                <div class="acc-login">${acc.username}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                section.innerHTML = `
-                    <div class="launcher-header">
-                        <i class="fa-solid fa-layer-group"></i> ${group.name} 
-                        <span class="count">${group.accounts.length}</span>
-                    </div>
-                    <div class="launcher-accounts">
-                        ${accountsHtml}
-                    </div>
-                `;
-                container.appendChild(section);
+               container.innerHTML += `<div style="padding:10px; background:#222; margin-bottom:10px; border-radius:5px;">
+                   <h3>${group.name}</h3>
+                   ${group.accounts.map(a => `<div>${a.displayName} <small>(${a.username})</small></div>`).join('')}
+               </div>`;
             });
         }
 
-        async function launch(account, gameId, platform) {
-            closeModal();
-            console.log("Launching", gameId, account, platform);
-            await window['go']['app']['App']['LaunchGame'](account, gameId, platform);
-        }
-
-        // Init
         loadLibrary();
     </script>
 </body>

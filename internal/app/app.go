@@ -27,18 +27,20 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// GetLibrary объединяет Steam, Epic и Свои игры
 func (a *App) GetLibrary() []models.LibraryGame {
 	var library []models.LibraryGame
 
-	// 1. Steam
+	// 1. Сканируем Steam
 	library = append(library, a.steam.GetGames()...)
 
-	// 2. Epic Games
+	// 2. Сканируем Epic
 	library = append(library, scanner.ScanEpicGames()...)
 
-	// 3. Custom Games (Добавленные вручную)
+	// 3. Загружаем добавленные вручную
 	library = append(library, scanner.LoadCustomGames()...)
 
+	// Сортируем по имени
 	sort.Slice(library, func(i, j int) bool {
 		return library[i].Name < library[j].Name
 	})
@@ -52,46 +54,42 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	steamAccs := a.steam.GetAccounts()
 	if len(steamAccs) > 0 {
 		groups = append(groups, models.LauncherGroup{
-			Name:     "Steam",
-			Platform: "Steam",
-			Accounts: steamAccs,
+			Name: "Steam", Platform: "Steam", Accounts: steamAccs,
 		})
 	}
 
 	epicAccs := scanner.ScanEpicAccounts()
 	if len(epicAccs) > 0 {
 		groups = append(groups, models.LauncherGroup{
-			Name:     "Epic Games",
-			Platform: "Epic",
-			Accounts: epicAccs,
+			Name: "Epic Games", Platform: "Epic", Accounts: epicAccs,
 		})
 	}
 
 	return groups
 }
 
-// SelectExe открывает диалог выбора файла
+// SelectExe открывает окно выбора .exe файла
 func (a *App) SelectExe() string {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Game Executable",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Executables", Pattern: "*.exe"},
+			{DisplayName: "Executables (*.exe)", Pattern: "*.exe"},
 		},
 	})
 	if err != nil { return "" }
 	return path
 }
 
-// AddCustomGame сохраняет игру
+// AddCustomGame принимает данные с фронтенда и сохраняет
 func (a *App) AddCustomGame(name string, exePath string) string {
-	if name == "" || exePath == "" { return "Invalid data" }
+	if name == "" || exePath == "" { return "Error: Empty fields" }
 	
 	newGame := models.LibraryGame{
-		ID:       fmt.Sprintf("custom_%d", time.Now().Unix()),
+		ID:       fmt.Sprintf("custom_%d", time.Now().Unix()), // Генерируем ID
 		Name:     name,
 		Platform: "Custom",
 		ExePath:  exePath,
-		IconURL:  "", // Можно добавить выбор иконки позже
+		IconURL:  "", 
 	}
 	
 	err := scanner.SaveCustomGame(newGame)
@@ -103,9 +101,8 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	if platform == "Steam" {
 		sys.KillSteam()
 		if accountName != "" {
-			// Здесь accountName должен быть логином (username)
-			err := sys.SetSteamUser(accountName)
-			if err != nil { return "Error registry" }
+			// accountName здесь — это логин (username)
+			sys.SetSteamUser(accountName)
 		}
 		sys.StartGame("steam://run/" + gameID)
 		return "Launched on Steam"
@@ -117,12 +114,12 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	}
 
 	if platform == "Custom" {
+		// Просто запускаем EXE файл
 		if exePath != "" {
-			// Запускаем EXE напрямую
 			sys.StartGame(exePath)
 			return "Launched Custom Game"
 		}
 	}
 
-	return "Platform not supported"
+	return "Unknown Platform"
 }

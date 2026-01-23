@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// GetSteamPath находит путь к Steam в реестре
+// GetSteamPath находит путь к Steam
 func GetSteamPath() (string, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.QUERY_VALUE)
 	if err != nil {
@@ -23,15 +23,15 @@ func GetSteamPath() (string, error) {
 	return filepath.Clean(path), nil
 }
 
-// KillSteam убивает процесс Steam
+// KillSteam убивает процесс
 func KillSteam() {
-	// Используем taskkill для надежности
+	// /F - принудительно, /IM - по имени
 	cmd := exec.Command("taskkill", "/F", "/IM", "steam.exe")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Run()
 }
 
-// SetSteamUser меняет пользователя авто-логина в реестре
+// SetSteamUser меняет пользователя (ИСПРАВЛЕНО)
 func SetSteamUser(username string) error {
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.SET_VALUE)
 	if err != nil {
@@ -39,18 +39,24 @@ func SetSteamUser(username string) error {
 	}
 	defer k.Close()
 
+	// 1. Устанавливаем логин (строка)
 	if err := k.SetStringValue("AutoLoginUser", username); err != nil {
 		return err
 	}
-	if err := k.SetStringValue("RememberPassword", "1"); err != nil {
+
+	// 2. ВАЖНО: Устанавливаем "Запомнить пароль" как ЧИСЛО (DWORD), а не строку!
+	// Без этого Steam будет просить пароль при каждом переключении.
+	if err := k.SetDWordValue("RememberPassword", 1); err != nil {
 		return err
 	}
+	
 	return nil
 }
 
-// StartGame запускает игру через steam:// протокол
-func StartGame(appID string) {
-	cmd := exec.Command("cmd", "/C", "start", "steam://run/"+appID)
+// StartGame запускает EXE или URL
+func StartGame(pathOrUrl string) {
+	// Используем cmd /C start, чтобы запускать и файлы, и ссылки (steam://)
+	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
