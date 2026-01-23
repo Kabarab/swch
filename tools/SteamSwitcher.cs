@@ -21,7 +21,6 @@ public class Program
         string steamPath = GetSteamPath();
         if (string.IsNullOrEmpty(steamPath))
         {
-             // Fallback paths
              if (Directory.Exists("C:\\Program Files (x86)\\Steam"))
                  steamPath = "C:\\Program Files (x86)\\Steam";
              else if (Directory.Exists("C:\\Program Files\\Steam"))
@@ -33,16 +32,16 @@ public class Program
              }
         }
 
-        Console.WriteLine("[1/4] Switching to: " + targetUser);
+        Console.WriteLine("[1/4] Closing Steam processes...");
         KillSteam();
 
         Console.WriteLine("[2/4] Patching loginusers.vdf...");
         PatchVdf(steamPath, targetUser);
 
-        Console.WriteLine("[3/4] Updating Registry...");
+        Console.WriteLine("[3/4] Setting Registry keys for " + targetUser + "...");
         SetRegistry(targetUser);
 
-        Console.WriteLine("[4/4] Starting Steam...");
+        Console.WriteLine("[4/4] Launching Steam...");
         StartSteam(steamPath, gameId);
     }
 
@@ -66,14 +65,31 @@ public class Program
     static void KillSteam()
     {
         string[] procs = { "steam", "steamwebhelper", "GameOverlayUI" };
-        foreach (string procName in procs)
+        int retries = 5;
+        
+        while (retries > 0)
         {
-            foreach (Process proc in Process.GetProcessesByName(procName))
+            bool anyAlive = false;
+            foreach (string procName in procs)
             {
-                try { proc.Kill(); } catch { }
+                Process[] running = Process.GetProcessesByName(procName);
+                if (running.Length > 0)
+                {
+                    anyAlive = true;
+                    foreach (Process proc in running)
+                    {
+                        try { proc.Kill(); } catch { }
+                    }
+                }
             }
+
+            if (!anyAlive) break;
+            
+            Thread.Sleep(1000);
+            retries--;
         }
-        Thread.Sleep(1500);
+        // Extra wait to ensure file locks are released
+        Thread.Sleep(1000);
     }
 
     static void SetRegistry(string username)
@@ -81,7 +97,8 @@ public class Program
         string keyPath = "Software\\Valve\\Steam";
         try
         {
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath, true))
+            // Force create/open main key
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
             {
                 if (key != null)
                 {
@@ -91,10 +108,12 @@ public class Program
                 }
             }
 
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath + "\\ActiveProcess", true))
+            // Force create/open ActiveProcess key
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath + "\\ActiveProcess"))
             {
                 if (key != null)
                 {
+                    // Setting this to 0 tells Steam "The last user logged out safely, please use AutoLoginUser"
                     key.SetValue("ActiveUser", 0, RegistryValueKind.DWord);
                 }
             }
@@ -114,37 +133,25 @@ public class Program
         {
             string content = File.ReadAllText(vdfPath);
 
-            // 1. Reset ALL "MostRecent" to "0" globally first
+            // 1. Reset "MostRecent" globally
             content = Regex.Replace(content, "\"MostRecent\"\\s+\"1\"", "\"MostRecent\"      \"0\"");
 
-            // 2. Find the specific user block using Regex
+            // 2. Find and update the specific user block
             string userBlockPattern = "(\\\"" + "\\d{17}" + "\\\"\\s*\\{[^{}]*\\\"AccountName\\\"\\s*\\\"" + Regex.Escape(targetUsername) + "\\\"[^{}]*\\})";
             
             content = Regex.Replace(content, userBlockPattern, new MatchEvaluator(delegate(Match match)
             {
                 string block = match.Value;
                 
-                // Calculate timestamp
                 TimeSpan t = DateTime.UtcNow - new DateTime(1970, 1, 1);
                 int now = (int)t.TotalSeconds;
 
-                // Update or Add "MostRecent"
-                if (block.Contains("\"MostRecent\""))
-                    block = Regex.Replace(block, "\"MostRecent\"\\s+\"0\"", "\"MostRecent\"      \"1\"");
-                else
-                    block = block.Insert(block.LastIndexOf('}'), "\t\"MostRecent\"      \"1\"\n\t");
-
-                // Update or Add "Timestamp"
-                if (block.Contains("\"Timestamp\""))
-                    block = Regex.Replace(block, "\"Timestamp\"\\s+\"\\d+\"", "\"Timestamp\"      \"" + now + "\"");
-                else
-                    block = block.Insert(block.LastIndexOf('}'), "\t\"Timestamp\"      \"" + now + "\"\n\t");
-
-                // Update or Add "AllowAutoLogin"
-                if (block.Contains("\"AllowAutoLogin\""))
-                    block = Regex.Replace(block, "\"AllowAutoLogin\"\\s+\"0\"", "\"AllowAutoLogin\"      \"1\"");
-                else if (!block.Contains("\"AllowAutoLogin\""))
-                    block = block.Insert(block.LastIndexOf('}'), "\t\"AllowAutoLogin\"      \"1\"\n\t");
+                // Helper to replace or insert key-value pair
+                block = UpdateOrInsert(block, "MostRecent", "1");
+                block = UpdateOrInsert(block, "Timestamp", now.ToString());
+                block = UpdateOrInsert(block, "AllowAutoLogin", "1");
+                block = UpdateOrInsert(block, "RememberPassword", "1"); // CRITICAL for auto-login
+                block = UpdateOrInsert(block, "WantsOfflineMode", "0"); // Ensure we don't start offline
 
                 return block;
             }), RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -155,6 +162,26 @@ public class Program
         {
             Console.WriteLine("VDF Patch Error: " + ex.Message);
         }
+    }
+
+    // Helper method to safely update VDF string block
+    static string UpdateOrInsert(string block, string key, string value)
+    {
+        string pattern = "\"" + key + "\"\\s+\"\\d+\"";
+        if (Regex.IsMatch(block, pattern))
+        {
+            return Regex.Replace(block, pattern, "\"" + key + "\"      \"" + value + "\"");
+        }
+        else
+        {
+            // Insert before the closing brace
+            int lastBrace = block.LastIndexOf('}');
+            if (lastBrace != -1)
+            {
+                return block.Insert(lastBrace, "\t\"" + key + "\"      \"" + value + "\"\n\t");
+            }
+        }
+        return block;
     }
 
     static void StartSteam(string steamPath, string appId)
