@@ -407,3 +407,23 @@ body {
 .btn-smurf { background: var(--accent); }
 .btn-vac { background: var(--danger); }
 .btn-clear { background: #444; margin-top: 10px; width: 100%; }
+
+.modal-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 10px;
+            align-items: center;
+        }
+        .modal-btn-icon {
+            color: #555;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .modal-btn-icon:hover { color: white; background: rgba(255,255,255,0.1); }
+        .modal-btn-del:hover { color: #ff6b6b; background: rgba(255,0,0,0.1); }
+        
+        /* Скрываем кнопки по умолчанию, показываем при наведении на строку */
+        .modal-actions { opacity: 0; transition: opacity 0.2s; }
+        .modal-item:hover .modal-actions { opacity: 1;}

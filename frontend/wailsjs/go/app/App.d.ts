@@ -6,13 +6,13 @@ export function AddCustomGame(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
-export function DeleteAccountFromGame(arg1:string,arg2:string,arg3:string):Promise<string>;
-
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
 export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function SaveEpicAccount(arg1:string):Promise<string>;
 
 export function SelectExe():Promise<string>;
 

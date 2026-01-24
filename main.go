@@ -2,7 +2,7 @@ package main
 
 import (
 	"embed"
-	"swch/internal/app" // Импортируем без алиаса scanner
+	"swch/internal/app"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
