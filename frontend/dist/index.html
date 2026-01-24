@@ -121,9 +121,7 @@
     <script>
         // --- GLOBAL STATE ---
         let globalGames = [];
-        // Для редактирования тега (стикера) игры
         let editingTagTarget = { username: '', platform: '', gameId: '' };
-        // Для редактирования самого аккаунта
         let editingAccountTarget = { username: '', platform: '' };
 
         function switchTab(tab) {
@@ -156,7 +154,7 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 
-                // Проверка на установку (для визуализации)
+                // Проверка на установку
                 let overlay = '';
                 if (!game.isInstalled) {
                     card.classList.add('game-not-installed');
@@ -184,7 +182,6 @@
             });
         }
 
-        // Открытие окна запуска/установки игры
         function openGameModal(gameId) {
             const game = globalGames.find(g => g.id === gameId);
             if(!game) return;
@@ -194,7 +191,6 @@
                 return;
             }
 
-            // Меняем заголовок: Launch или Install
             const actionVerb = game.isInstalled ? "Launch" : "Install";
             const actionIcon = game.isInstalled ? "fa-play" : "fa-download";
             
@@ -203,7 +199,6 @@
             list.innerHTML = '';
 
             if (!game.availableOn || game.availableOn.length === 0) {
-                // Если аккаунтов нет, просто кнопка действия
                 list.innerHTML = `<div class="modal-item" onclick="launch('', '${game.id}', '${game.platform}', '')">
                     <div class="acc-name">${actionVerb} Game</div><div class="acc-meta">Current Account</div>
                 </div>`;
@@ -212,7 +207,7 @@
                     const item = document.createElement('div');
                     item.className = 'modal-item';
                     
-                    // Рендер стикеров
+                    // Стикеры
                     let noteHtml = '';
                     if (acc.note === 'Main') {
                         noteHtml = `<span class="badge badge-main"><i class="fa-solid fa-crown"></i> MAIN</span>`;
@@ -233,8 +228,14 @@
                             </div>
                             <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
                         </div>
-                        <div class="edit-note-btn" onclick="openNoteSelector('${acc.username}', '${game.platform}', '${game.id}', '${acc.note || ''}')" title="Tag Account">
-                            <i class="fa-solid fa-tag"></i>
+                        
+                        <div class="modal-actions">
+                            <div class="modal-btn-icon" onclick="openNoteSelector('${acc.username}', '${game.platform}', '${game.id}', '${acc.note || ''}')" title="Tag Account">
+                                <i class="fa-solid fa-tag"></i>
+                            </div>
+                            <div class="modal-btn-icon modal-btn-del" onclick="deleteAccountFromGame('${acc.username}', '${game.platform}', '${game.id}')" title="Hide from this game">
+                                <i class="fa-solid fa-trash"></i>
+                            </div>
                         </div>
                     `;
                     list.appendChild(item);
@@ -248,12 +249,25 @@
             await window['go']['app']['App']['LaunchGame'](account, gameId, platform, exePath);
         }
 
+        async function deleteAccountFromGame(username, platform, gameId) {
+            if(confirm("Remove this account from the launch list for this game?")) {
+                await window['go']['app']['App']['DeleteAccountFromGame'](username, platform, gameId);
+                
+                // Обновляем локально (фильтруем массив)
+                const game = globalGames.find(g => g.id === gameId);
+                if(game) {
+                    game.availableOn = game.availableOn.filter(acc => acc.username !== username);
+                    // Перерисовываем модалку
+                    openGameModal(gameId); 
+                }
+            }
+        }
+
         // ========================
         // STICKERS / TAGS LOGIC
         // ========================
         function openNoteSelector(username, platform, gameId, currentNote) {
             editingTagTarget = { username, platform, gameId };
-            // Если заметка стандартная, поле ввода пустое, иначе показываем текст
             const isPredefined = ['Main','Smurf','VAC'].includes(currentNote);
             document.getElementById('custom-note-input').value = isPredefined ? '' : currentNote;
             document.getElementById('note-select-modal').style.display = 'flex';
@@ -273,7 +287,7 @@
             // Сохраняем в Go
             await window['go']['app']['App']['UpdateGameNote'](username, platform, gameId, noteText);
             
-            // Обновляем локальные данные, чтобы не перегружать всю библиотеку
+            // Обновляем локальные данные
             const game = globalGames.find(g => g.id === gameId);
             if(game) {
                 const acc = game.availableOn.find(a => a.username === username);
@@ -281,7 +295,7 @@
             }
 
             closeModal('note-select-modal');
-            openGameModal(gameId); // Перерисовываем модалку запуска
+            openGameModal(gameId);
         }
 
         // ========================
@@ -300,7 +314,6 @@
                 
                 let accountsHtml = '';
                 group.accounts.forEach(acc => {
-                    // Аватарка
                     let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
                     if(acc.avatarUrl) {
                         avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
@@ -322,7 +335,7 @@
                                 <div class="action-icon-btn" title="Edit details" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')">
                                     <i class="fa-solid fa-pen"></i>
                                 </div>
-                                <div class="action-icon-btn delete-btn" title="Hide form list" onclick="deleteAccount('${acc.username}', '${group.platform}')">
+                                <div class="action-icon-btn delete-btn" title="Hide from list" onclick="deleteAccount('${acc.username}', '${group.platform}')">
                                     <i class="fa-solid fa-trash"></i>
                                 </div>
                             </div>
@@ -352,7 +365,6 @@
                 alert("Direct switching is currently only supported for Steam.");
                 return;
             }
-            // Вызов свитчера
             await window['go']['app']['App']['SwitchToAccount'](username, platform);
         }
 
@@ -369,7 +381,7 @@
         function openEditAccount(username, platform, currentComment) {
             editingAccountTarget = { username, platform };
             document.getElementById('edit-comment').value = currentComment;
-            document.getElementById('edit-avatar-path').value = ''; // Сбрасываем поле пути
+            document.getElementById('edit-avatar-path').value = '';
             document.getElementById('edit-account-modal').style.display = 'flex';
         }
 
@@ -394,6 +406,10 @@
             closeModal('edit-account-modal');
             loadAccounts();
         }
+
+        // ========================
+        // CUSTOM GAME LOGIC
+        // ========================
         function openAddGameModal() { document.getElementById('add-game-modal').style.display = 'flex'; }
         
         async function browseFile() {

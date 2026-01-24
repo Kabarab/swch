@@ -10,6 +10,10 @@ export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
 
+export function DeleteAccountFromGame(arg1, arg2, arg3) {
+  return window['go']['app']['App']['DeleteAccountFromGame'](arg1, arg2, arg3);
+}
+
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
 }

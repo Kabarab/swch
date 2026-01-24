@@ -1,9 +1,17 @@
 {
+  "Epic:Main Profile": {
+    "comment": "Yash daun",
+    "avatarPath": "",
+    "hidden": false,
+    "gameNotes": null,
+    "hiddenGames": null
+  },
   "Steam:UNKNOWN": {
     "comment": "",
     "avatarPath": "",
     "hidden": true,
-    "gameNotes": null
+    "gameNotes": null,
+    "hiddenGames": null
   },
   "Steam:cepud33": {
     "comment": "",
@@ -12,7 +20,8 @@
     "gameNotes": {
       "1422450": "Main",
       "730": ""
-    }
+    },
+    "hiddenGames": null
   },
   "Steam:itzm3g4": {
     "comment": "",
@@ -21,7 +30,8 @@
     "gameNotes": {
       "291550": "",
       "730": "VAC"
-    }
+    },
+    "hiddenGames": null
   },
   "Steam:youcef16152": {
     "comment": "",
@@ -30,6 +40,9 @@
     "gameNotes": {
       "1422450": "Smurf",
       "730": "VAC"
+    },
+    "hiddenGames": {
+      "730": true
     }
   }
 }
