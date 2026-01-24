@@ -6,6 +6,7 @@ type AccountStat struct {
 	Username    string `json:"username"`
 	PlaytimeMin int    `json:"playtimeMin"`
 	LastPlayed  int64  `json:"lastPlayed"`
+	Note        string `json:"note"`
 }
 
 type LibraryGame struct {
@@ -15,7 +16,10 @@ type LibraryGame struct {
 	IconURL             string        `json:"iconUrl"`
 	ExePath             string        `json:"exePath"`
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
+	// Новое поле: установлена игра или нет
+	IsInstalled bool `json:"isInstalled"`
 }
+
 type Account struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`

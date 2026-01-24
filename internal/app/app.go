@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"encoding/json" // <--- ДОБАВЛЕН ИМПОРТ
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,11 +22,11 @@ type App struct {
 	steam *scanner.SteamScanner
 }
 
-// Структура для хранения настроек в JSON файле
 type AccountSettings struct {
-	Comment    string `json:"comment"`
-	AvatarPath string `json:"avatarPath"`
-	Hidden     bool   `json:"hidden"`
+	Comment    string            `json:"comment"`
+	AvatarPath string            `json:"avatarPath"`
+	Hidden     bool              `json:"hidden"`
+	GameNotes  map[string]string `json:"gameNotes"`
 }
 
 var accountSettingsMap = make(map[string]AccountSettings)
@@ -47,48 +47,6 @@ func saveSettings() {
 
 func makeKey(platform, username string) string {
 	return platform + ":" + username
-}
-
-// --- Методы для вызова из JS ---
-
-func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) string {
-	loadSettings()
-	key := makeKey(platform, username)
-
-	settings := accountSettingsMap[key]
-	settings.Comment = comment
-	if avatarPath != "" {
-		settings.AvatarPath = avatarPath
-	}
-	accountSettingsMap[key] = settings
-
-	saveSettings()
-	return "Saved"
-}
-
-func (a *App) DeleteAccount(username, platform string) string {
-	loadSettings()
-	key := makeKey(platform, username)
-
-	settings := accountSettingsMap[key]
-	settings.Hidden = true
-	accountSettingsMap[key] = settings
-
-	saveSettings()
-	return "Account removed from list"
-}
-
-func (a *App) SelectImage() string {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Avatar",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico"},
-		},
-	})
-	if err != nil {
-		return ""
-	}
-	return path
 }
 
 func NewApp() *App {
@@ -130,34 +88,75 @@ func runCSharpSwitcher(username string, gameID string) string {
 	return "Success"
 }
 
+// GetLibrary собирает библиотеку.
+// ВНИМАНИЕ: Текущий сканер (scanner.SteamScanner) находит только установленные игры.
+// Чтобы добавить неустановленные игры, нужно обновить scanner, чтобы он парсил localconfig.vdf
 func (a *App) GetLibrary() []models.LibraryGame {
+	loadSettings()
+
 	var library []models.LibraryGame
-	library = append(library, a.steam.GetGames()...)
-	library = append(library, scanner.ScanEpicGames()...)
-	library = append(library, scanner.LoadCustomGames()...)
+
+	// 1. Получаем установленные игры Steam
+	steamGames := a.steam.GetGames()
+	for i := range steamGames {
+		steamGames[i].IsInstalled = true // Явно помечаем как установленные
+	}
+	library = append(library, steamGames...)
+
+	// 2. Epic Games (обычно только установленные)
+	epicGames := scanner.ScanEpicGames()
+	for i := range epicGames {
+		epicGames[i].IsInstalled = true
+	}
+	library = append(library, epicGames...)
+
+	// 3. Custom Games (всегда считаем установленными, т.к. мы указываем путь к exe)
+	customGames := scanner.LoadCustomGames()
+	for i := range customGames {
+		customGames[i].IsInstalled = true
+	}
+	library = append(library, customGames...)
+
+	// --- МЕСТО ДЛЯ РАСШИРЕНИЯ ---
+	// Здесь можно вызвать функцию (например, a.steam.GetUninstalledGames()),
+	// которая вернет игры с IsInstalled = false.
+	// ---------------------------
+
+	// Применяем заметки к играм
+	for i := range library {
+		game := &library[i]
+		for j := range game.AvailableOnAccounts {
+			acc := &game.AvailableOnAccounts[j]
+			key := makeKey(game.Platform, acc.Username)
+			if settings, ok := accountSettingsMap[key]; ok {
+				if settings.GameNotes != nil {
+					if note, found := settings.GameNotes[game.ID]; found {
+						acc.Note = note
+					}
+				}
+			}
+		}
+	}
+
 	sort.Slice(library, func(i, j int) bool { return library[i].Name < library[j].Name })
 	return library
 }
 
-// ВАЖНО: Обновленный метод GetLaunchers
 func (a *App) GetLaunchers() []models.LauncherGroup {
-	loadSettings() // Загружаем настройки перед чтением аккаунтов
+	loadSettings()
 
 	var groups []models.LauncherGroup
 
-	// Функция-хелпер для фильтрации и обогащения данных
 	processAccounts := func(accs []models.Account) []models.Account {
 		var result []models.Account
 		for _, acc := range accs {
 			key := makeKey(acc.Platform, acc.Username)
 			settings, exists := accountSettingsMap[key]
 
-			// Если аккаунт скрыт - пропускаем его
 			if exists && settings.Hidden {
 				continue
 			}
 
-			// Если есть настройки, применяем их
 			if exists {
 				acc.Comment = settings.Comment
 				if settings.AvatarPath != "" {
@@ -188,6 +187,61 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	return groups
 }
 
+func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	settings.Comment = comment
+	if avatarPath != "" {
+		settings.AvatarPath = avatarPath
+	}
+	accountSettingsMap[key] = settings
+
+	saveSettings()
+	return "Saved"
+}
+
+func (a *App) DeleteAccount(username, platform string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	settings.Hidden = true
+	accountSettingsMap[key] = settings
+
+	saveSettings()
+	return "Account removed from list"
+}
+
+func (a *App) UpdateGameNote(username, platform, gameID, note string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	if settings.GameNotes == nil {
+		settings.GameNotes = make(map[string]string)
+	}
+	settings.GameNotes[gameID] = note
+	accountSettingsMap[key] = settings
+
+	saveSettings()
+	return "Saved"
+}
+
+func (a *App) SelectImage() string {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Avatar",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico"},
+		},
+	})
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
 func (a *App) SelectExe() string {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:   "Select Game Executable",
@@ -204,11 +258,12 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 		return "Error: empty fields"
 	}
 	newGame := models.LibraryGame{
-		ID:       fmt.Sprintf("custom_%d", time.Now().Unix()),
-		Name:     name,
-		Platform: "Custom",
-		ExePath:  exePath,
-		IconURL:  "",
+		ID:          fmt.Sprintf("custom_%d", time.Now().Unix()),
+		Name:        name,
+		Platform:    "Custom",
+		ExePath:     exePath,
+		IconURL:     "",
+		IsInstalled: true, // Кастомные игры считаем установленными
 	}
 	err := scanner.SaveCustomGame(newGame)
 	if err != nil {
@@ -222,7 +277,6 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		if accountName == "UNKNOWN" {
 			return "Error: Login not found."
 		}
-
 		res := runCSharpSwitcher(accountName, "")
 		if res == "Success" {
 			return "Switched to " + accountName
@@ -237,7 +291,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		if accountName == "UNKNOWN" {
 			return "Error: Login not found."
 		}
-
+		// Запуск свитчера. Если игра не установлена, Steam сам предложит установку при попытке запуска (steam://run/ID)
 		res := runCSharpSwitcher(accountName, gameID)
 		if res == "Success" {
 			return "Launched on Steam"

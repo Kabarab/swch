@@ -37,3 +37,7 @@ export function SwitchToAccount(arg1, arg2) {
 export function UpdateAccountData(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['UpdateAccountData'](arg1, arg2, arg3, arg4);
 }
+
+export function UpdateGameNote(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['UpdateGameNote'](arg1, arg2, arg3, arg4);
+}

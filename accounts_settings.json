@@ -1,0 +1,35 @@
+{
+  "Steam:UNKNOWN": {
+    "comment": "",
+    "avatarPath": "",
+    "hidden": true,
+    "gameNotes": null
+  },
+  "Steam:cepud33": {
+    "comment": "",
+    "avatarPath": "",
+    "hidden": false,
+    "gameNotes": {
+      "1422450": "Main",
+      "730": ""
+    }
+  },
+  "Steam:itzm3g4": {
+    "comment": "",
+    "avatarPath": "",
+    "hidden": false,
+    "gameNotes": {
+      "291550": "",
+      "730": "VAC"
+    }
+  },
+  "Steam:youcef16152": {
+    "comment": "",
+    "avatarPath": "",
+    "hidden": false,
+    "gameNotes": {
+      "1422450": "Smurf",
+      "730": "VAC"
+    }
+  }
+}
