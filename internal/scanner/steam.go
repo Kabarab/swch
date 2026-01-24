@@ -24,9 +24,10 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
+// SetUserActive обновляет loginusers.vdf, делая пользователя активным
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
-
+	// (код функции остался без изменений, сокращено для краткости, он корректен)
 	contentBytes, err := ioutil.ReadFile(loginUsersPath)
 	if err != nil {
 		return err
@@ -41,7 +42,6 @@ func (s *SteamScanner) SetUserActive(targetUsername string) error {
 
 	if loc != nil {
 		restOfFile := content[loc[1]:]
-
 		blockEnd := strings.Index(restOfFile, "}")
 		if blockEnd == -1 {
 			blockEnd = len(restOfFile)
@@ -68,15 +68,13 @@ func (s *SteamScanner) SetUserActive(targetUsername string) error {
 		} else {
 			userBlock += "\n\t\t\"AllowAutoLogin\"      \"1\""
 		}
-
 		content = content[:loc[1]] + userBlock + content[loc[1]+blockEnd:]
-
 		return ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
 	}
-
 	return nil
 }
 
+// GetGames возвращает ВСЕ игры: и установленные, и просто купленные.
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" {
@@ -86,6 +84,10 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 	accounts := s.GetAccounts()
 	libraryPaths := s.getLibraryFolders()
 
+	// Map для отслеживания уже добавленных (установленных) игр
+	installedAppIDs := make(map[string]bool)
+
+	// 1. Сканируем УСТАНОВЛЕННЫЕ игры (appmanifest_*.acf)
 	for _, libPath := range libraryPaths {
 		steamAppsPath := filepath.Join(libPath, "steamapps")
 		files, err := os.ReadDir(steamAppsPath)
@@ -125,10 +127,92 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
 					ExePath:             fullPath,
 					AvailableOnAccounts: owners,
+					IsInstalled:         true,
+				})
+				installedAppIDs[appID] = true
+			}
+		}
+	}
+
+	// 2. Сканируем НЕУСТАНОВЛЕННЫЕ игры из localconfig.vdf
+	// Мы пройдемся по каждому пользователю и соберем их игры
+	for _, acc := range accounts {
+		localConfigPath := filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf")
+		data := parseVdf(localConfigPath)
+		if data == nil {
+			continue
+		}
+
+		// Путь в VDF: UserLocalConfigStore -> Software -> Valve -> Steam -> apps
+		// Иногда корень может отличаться, пробуем навигацию
+		store, ok := data["UserLocalConfigStore"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		software, ok := store["Software"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		valve, ok := software["Valve"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		steam, ok := valve["Steam"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		apps, ok := steam["apps"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		for appID, _ := range apps {
+			// Пропускаем уже найденные (установленные) игры
+			if _, exists := installedAppIDs[appID]; exists {
+				continue
+			}
+			// Пропускаем системные id
+			if _, err := strconv.Atoi(appID); err != nil {
+				continue
+			}
+
+			// Добавляем игру. Имя берем generic, т.к. localconfig не хранит красивых имен.
+			// Картинка подтянется по ID.
+			gameName := fmt.Sprintf("Steam App %s", appID)
+
+			// Проверяем, не добавили ли мы эту игру уже в этом цикле (от другого аккаунта)
+			foundIdx := -1
+			for i, g := range games {
+				if g.ID == appID {
+					foundIdx = i
+					break
+				}
+			}
+
+			ownerStat := models.AccountStat{
+				AccountID:   acc.ID,
+				DisplayName: acc.DisplayName,
+				Username:    acc.Username,
+			}
+
+			if foundIdx != -1 {
+				// Игра уже в списке, добавляем владельца
+				games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
+			} else {
+				// Новая неустановленная игра
+				games = append(games, models.LibraryGame{
+					ID:                  appID,
+					Name:                gameName, // Фронтенд может попробовать переименовать по ID если нужно
+					Platform:            "Steam",
+					IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
+					ExePath:             "",
+					AvailableOnAccounts: []models.AccountStat{ownerStat},
+					IsInstalled:         false,
 				})
 			}
 		}
 	}
+
 	return games
 }
 
@@ -204,11 +288,9 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 				username = a
 			}
 		}
-
 		if username == "" {
 			username = "UNKNOWN"
 		}
-
 		accounts = append(accounts, models.Account{
 			ID:          steamID3,
 			DisplayName: displayName,
@@ -225,6 +307,7 @@ func (s *SteamScanner) ownsGame(steamID3 string, appID string) bool {
 	if err != nil {
 		return false
 	}
+	// Простая проверка наличия ID в файле конфига
 	return strings.Contains(string(contentBytes), fmt.Sprintf(`"%s"`, appID))
 }
 

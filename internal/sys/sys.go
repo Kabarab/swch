@@ -26,31 +26,10 @@ func GetSteamPath() (string, error) {
 }
 
 func KillSteam() {
-	processes := []string{"steam.exe", "steamwebhelper.exe", "GameOverlayUI.exe"}
-
-	for _, p := range processes {
-		cmd := exec.Command("taskkill", "/F", "/IM", p)
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		_ = cmd.Run()
-	}
-
-	for i := 0; i < 20; i++ {
-		stillAlive := false
-		cmd := exec.Command("tasklist")
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		output, _ := cmd.Output()
-		outStr := string(output)
-
-		if strings.Contains(outStr, "steam.exe") {
-			stillAlive = true
-		}
-
-		if !stillAlive {
-			time.Sleep(500 * time.Millisecond)
-			return
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	killProcess("steam.exe")
+	killProcess("steamwebhelper.exe")
+	killProcess("GameOverlayUI.exe")
+	waitForExit("steam.exe")
 }
 
 func SetSteamUser(username string) error {
@@ -81,14 +60,82 @@ func SetSteamUser(username string) error {
 	return nil
 }
 
+// --- EPIC GAMES UTILS ---
+
+func KillEpic() {
+	killProcess("EpicGamesLauncher.exe")
+	waitForExit("EpicGamesLauncher.exe")
+}
+
+func GetEpicAccountId() (string, error) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Epic Games\Unreal Engine\Identifiers`, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+	val, _, err := k.GetStringValue("AccountId")
+	return val, err
+}
+
+func SetEpicAccountId(accountId string) error {
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Epic Games\Unreal Engine\Identifiers`, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	return k.SetStringValue("AccountId", accountId)
+}
+
+// --- LAUNCHER UTILS ---
+
 func StartGame(pathOrUrl string) {
+	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
+	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
+		RunExecutable(pathOrUrl)
+		return
+	}
+	// Иначе (например, steam:// или URL) запускаем через оболочку
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
+// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
+// Это критично для многих игр (пираток, сторонних сборок).
+func RunExecutable(path string) error {
+	workDir := filepath.Dir(path)
+	cmd := exec.Command(path)
+	cmd.Dir = workDir
+	// Отвязываем процесс, чтобы он не закрывался вместе с лаунчером
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		HideWindow:    false,
+	}
+	return cmd.Start()
+}
+
 func StartGameWithArgs(exePath string, args ...string) {
 	cmd := exec.Command(exePath, args...)
+	cmd.Dir = filepath.Dir(exePath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
+}
+
+// Вспомогательные функции
+func killProcess(name string) {
+	cmd := exec.Command("taskkill", "/F", "/IM", name)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd.Run()
+}
+
+func waitForExit(processName string) {
+	for i := 0; i < 20; i++ {
+		cmd := exec.Command("tasklist")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		output, _ := cmd.Output()
+		if !strings.Contains(string(output), processName) {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
