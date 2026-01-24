@@ -82,11 +82,9 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 
 	accounts := s.GetAccounts()
 	libraryPaths := s.getLibraryFolders()
-
-	// Map для отслеживания уже добавленных (установленных) игр
 	installedAppIDs := make(map[string]bool)
 
-	// 1. Сканируем УСТАНОВЛЕННЫЕ игры (appmanifest_*.acf)
+	// 1. Сначала сканируем УСТАНОВЛЕННЫЕ игры (самые точные названия)
 	for _, libPath := range libraryPaths {
 		steamAppsPath := filepath.Join(libPath, "steamapps")
 		files, err := os.ReadDir(steamAppsPath)
@@ -117,7 +115,6 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 							AccountID:   acc.ID,
 							DisplayName: acc.DisplayName,
 							Username:    acc.Username,
-							PlaytimeMin: 0,
 						})
 					}
 				}
@@ -136,79 +133,100 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 		}
 	}
 
-	// 2. Сканируем НЕУСТАНОВЛЕННЫЕ игры из localconfig.vdf
+	// 2. Сканируем НЕУСТАНОВЛЕННЫЕ игры из конфигов пользователей
 	for _, acc := range accounts {
-		localConfigPath := filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf")
-		data := parseVdf(localConfigPath)
-		if data == nil {
-			continue
+		// Проверяем сразу два файла, где может лежать название
+		configFiles := []string{
+			filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf"),
+			filepath.Join(s.Path, "userdata", acc.ID, "7", "remote", "sharedconfig.vdf"),
 		}
 
-		// Навигация: UserLocalConfigStore -> Software -> Valve -> Steam -> apps
-		store, _ := data["UserLocalConfigStore"].(map[string]interface{})
-		software, _ := store["Software"].(map[string]interface{})
-		valve, _ := software["Valve"].(map[string]interface{})
-		steam, _ := valve["Steam"].(map[string]interface{})
-		apps, ok := steam["apps"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		for appID, appData := range apps {
-			if _, exists := installedAppIDs[appID]; exists {
-				continue
-			}
-			if _, err := strconv.Atoi(appID); err != nil {
+		for _, path := range configFiles {
+			data := parseVdf(path)
+			if data == nil {
 				continue
 			}
 
-			// Попытка найти реальное имя игры в кеше localconfig
-			gameName := ""
-			if details, ok := appData.(map[string]interface{}); ok {
-				// В некоторых версиях VDF имя лежит в ключе "name" или внутри "common"
-				if name, ok := details["name"].(string); ok && name != "" {
-					gameName = name
-				} else if common, ok := details["common"].(map[string]interface{}); ok {
-					if cName, ok := common["name"].(string); ok && cName != "" {
-						gameName = cName
+			// Пытаемся найти корень с играми (в разных файлах он разный)
+			var apps map[string]interface{}
+			if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
+				// Путь для localconfig.vdf
+				if soft, ok := store["Software"].(map[string]interface{}); ok {
+					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
+						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
+							apps, _ = steam["apps"].(map[string]interface{})
+						}
+					}
+				}
+			} else if root, ok := data["UserRoamableConfigStore"].(map[string]interface{}); ok {
+				// Путь для sharedconfig.vdf
+				if soft, ok := root["Software"].(map[string]interface{}); ok {
+					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
+						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
+							apps, _ = steam["Apps"].(map[string]interface{})
+						}
 					}
 				}
 			}
 
-			if gameName == "" {
-				gameName = fmt.Sprintf("Steam App %s", appID)
+			if apps == nil {
+				continue
 			}
 
-			ownerStat := models.AccountStat{
-				AccountID:   acc.ID,
-				DisplayName: acc.DisplayName,
-				Username:    acc.Username,
-			}
-
-			foundIdx := -1
-			for i, g := range games {
-				if g.ID == appID {
-					foundIdx = i
-					break
+			for appID, appData := range apps {
+				if _, exists := installedAppIDs[appID]; exists {
+					continue
 				}
-			}
-
-			if foundIdx != -1 {
-				games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
-				// Если у уже добавленной игры было "заглушечное" имя, а сейчас нашли нормальное — обновляем
-				if strings.HasPrefix(games[foundIdx].Name, "Steam App") && !strings.HasPrefix(gameName, "Steam App") {
-					games[foundIdx].Name = gameName
+				if _, err := strconv.Atoi(appID); err != nil {
+					continue
 				}
-			} else {
-				games = append(games, models.LibraryGame{
-					ID:                  appID,
-					Name:                gameName,
-					Platform:            "Steam",
-					IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
-					ExePath:             "",
-					AvailableOnAccounts: []models.AccountStat{ownerStat},
-					IsInstalled:         false,
-				})
+
+				// Извлекаем название игры
+				gameName := ""
+				if details, ok := appData.(map[string]interface{}); ok {
+					if n, ok := details["name"].(string); ok && n != "" {
+						gameName = n
+					} else if common, ok := details["common"].(map[string]interface{}); ok {
+						if cn, ok := common["name"].(string); ok && cn != "" {
+							gameName = cn
+						}
+					}
+				}
+
+				ownerStat := models.AccountStat{
+					AccountID:   acc.ID,
+					DisplayName: acc.DisplayName,
+					Username:    acc.Username,
+				}
+
+				foundIdx := -1
+				for i, g := range games {
+					if g.ID == appID {
+						foundIdx = i
+						break
+					}
+				}
+
+				if foundIdx != -1 {
+					games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
+					// Если у найденной ранее игры не было имени, а сейчас нашли — обновляем
+					if (games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")) && gameName != "" {
+						games[foundIdx].Name = gameName
+					}
+				} else {
+					if gameName == "" {
+						gameName = fmt.Sprintf("Steam App %s", appID)
+					}
+					games = append(games, models.LibraryGame{
+						ID:                  appID,
+						Name:                gameName,
+						Platform:            "Steam",
+						IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
+						ExePath:             "",
+						AvailableOnAccounts: []models.AccountStat{ownerStat},
+						IsInstalled:         false,
+					})
+				}
 			}
 		}
 	}
