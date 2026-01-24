@@ -2,7 +2,7 @@ package main
 
 import (
 	"embed"
-	"swch/internal/app"
+	"swch/internal/app" // Импортируем без алиаса scanner
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -13,7 +13,8 @@ import (
 var assets embed.FS
 
 func main() {
-	myApp := app.NewApp()
+	// Создаем экземпляр приложения
+	mainApp := app.NewApp()
 
 	err := wails.Run(&options.App{
 		Title:  "swch",
@@ -22,10 +23,10 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 18, G: 18, B: 18, A: 255},
-		OnStartup:        myApp.Startup,
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 56, A: 1},
+		OnStartup:        mainApp.Startup,
 		Bind: []interface{}{
-			myApp,
+			mainApp, // Привязываем методы для доступа из JS
 		},
 	})
 
