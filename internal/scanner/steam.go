@@ -1,8 +1,10 @@
 package scanner
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,10 +12,20 @@ import (
 	"strings"
 	"swch/internal/models"
 	"swch/internal/sys"
+	"sync"
 	"time"
 
 	"github.com/andygrunwald/vdf"
 )
+
+// Глобальный кэш и мьютекс для безопасности
+var (
+	appNameCache map[string]string
+	cacheMutex   sync.RWMutex
+	cacheLoaded  bool
+)
+
+const cacheFileName = "steam_cache.json"
 
 type SteamScanner struct {
 	Path string
@@ -24,7 +36,7 @@ func NewSteamScanner() *SteamScanner {
 	return &SteamScanner{Path: path}
 }
 
-// SetUserActive обновляет loginusers.vdf, делая пользователя активным
+// SetUserActive обновляет loginusers.vdf
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
 	contentBytes, err := ioutil.ReadFile(loginUsersPath)
@@ -73,18 +85,135 @@ func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	return nil
 }
 
-// GetGames возвращает ВСЕ игры: и установленные, и просто купленные.
+// Структура ответа Steam API
+type steamAppListResponse struct {
+	Applist struct {
+		Apps []struct {
+			AppID int    `json:"appid"`
+			Name  string `json:"name"`
+		} `json:"apps"`
+	} `json:"applist"`
+}
+
+// Загрузка кэша из локального файла
+func loadCacheFromFile() {
+	if _, err := os.Stat(cacheFileName); err == nil {
+		data, err := ioutil.ReadFile(cacheFileName)
+		if err == nil {
+			var loadedMap map[string]string
+			if json.Unmarshal(data, &loadedMap) == nil && len(loadedMap) > 0 {
+				cacheMutex.Lock()
+				appNameCache = loadedMap
+				cacheLoaded = true
+				cacheMutex.Unlock()
+				fmt.Printf("Loaded %d game names from local cache file.\n", len(loadedMap))
+			}
+		}
+	}
+}
+
+// Сохранение кэша в файл
+func saveCacheToFile() {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+	if len(appNameCache) == 0 {
+		return
+	}
+	data, err := json.Marshal(appNameCache)
+	if err == nil {
+		_ = ioutil.WriteFile(cacheFileName, data, 0644)
+		fmt.Println("Game names cached to disk successfully.")
+	}
+}
+
+// Функция инициализации названий игр
+func ensureGameNamesLoaded() {
+	if cacheLoaded {
+		return
+	}
+
+	// 1. Пробуем загрузить с диска
+	loadCacheFromFile()
+	if cacheLoaded {
+		// Если файл есть и он старый (старше 7 дней), можно попробовать обновить в фоне,
+		// но пока просто вернем то, что есть.
+		return
+	}
+
+	cacheMutex.Lock()
+	appNameCache = make(map[string]string)
+	cacheMutex.Unlock()
+
+	// 2. Если файла нет, качаем из интернета
+	urls := []string{
+		"https://cdn.jsdelivr.net/gh/SteamDatabase/SteamAppList@master/apps.json",       // Самый надежный CDN
+		"https://api.steampowered.com/ISteamApps/GetAppList/v2/",                        // Официальный API
+		"https://raw.githubusercontent.com/SteamDatabase/SteamAppList/master/apps.json", // Оригинал
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	var success bool
+
+	fmt.Println("Downloading Steam App List...")
+
+	for _, u := range urls {
+		req, _ := http.NewRequest("GET", u, nil)
+		req.Header.Set("User-Agent", "Valve/Steam HTTP Client 1.0") // Притворяемся клиентом Steam
+
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		// Читаем начало тела, чтобы проверить, не HTML ли это
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			continue
+		}
+
+		// Если ответ пустой или начинается с < (HTML ошибка), пропускаем
+		if len(bodyBytes) == 0 || bodyBytes[0] == '<' {
+			continue
+		}
+
+		var result steamAppListResponse
+		if err := json.Unmarshal(bodyBytes, &result); err == nil && len(result.Applist.Apps) > 0 {
+			cacheMutex.Lock()
+			for _, app := range result.Applist.Apps {
+				appNameCache[strconv.Itoa(app.AppID)] = app.Name
+			}
+			cacheLoaded = true
+			cacheMutex.Unlock()
+			success = true
+			fmt.Printf("Successfully downloaded %d game names from %s\n", len(result.Applist.Apps), u)
+
+			// Сохраняем на диск для следующего раза
+			saveCacheToFile()
+			break
+		}
+	}
+
+	if !success {
+		fmt.Println("Warning: Could not fetch game list from web. Uninstalled games will show IDs.")
+	}
+}
+
+// GetGames возвращает игры
 func (s *SteamScanner) GetGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	if s.Path == "" {
 		return games
 	}
 
+	// Запускаем загрузку имен (если еще не загружены)
+	ensureGameNamesLoaded()
+
 	accounts := s.GetAccounts()
 	libraryPaths := s.getLibraryFolders()
 	installedAppIDs := make(map[string]bool)
 
-	// 1. Сначала сканируем УСТАНОВЛЕННЫЕ игры (самые точные названия)
+	// 1. Установленные игры
 	for _, libPath := range libraryPaths {
 		steamAppsPath := filepath.Join(libPath, "steamapps")
 		files, err := os.ReadDir(steamAppsPath)
@@ -133,9 +262,8 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 		}
 	}
 
-	// 2. Сканируем НЕУСТАНОВЛЕННЫЕ игры из конфигов пользователей
+	// 2. Неустановленные игры
 	for _, acc := range accounts {
-		// Проверяем сразу два файла, где может лежать название
 		configFiles := []string{
 			filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf"),
 			filepath.Join(s.Path, "userdata", acc.ID, "7", "remote", "sharedconfig.vdf"),
@@ -147,10 +275,8 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 				continue
 			}
 
-			// Пытаемся найти корень с играми (в разных файлах он разный)
 			var apps map[string]interface{}
 			if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
-				// Путь для localconfig.vdf
 				if soft, ok := store["Software"].(map[string]interface{}); ok {
 					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
 						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
@@ -159,7 +285,6 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					}
 				}
 			} else if root, ok := data["UserRoamableConfigStore"].(map[string]interface{}); ok {
-				// Путь для sharedconfig.vdf
 				if soft, ok := root["Software"].(map[string]interface{}); ok {
 					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
 						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
@@ -181,8 +306,8 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					continue
 				}
 
-				// Извлекаем название игры
 				gameName := ""
+				// Пытаемся найти имя в VDF (иногда оно там есть)
 				if details, ok := appData.(map[string]interface{}); ok {
 					if n, ok := details["name"].(string); ok && n != "" {
 						gameName = n
@@ -191,6 +316,15 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 							gameName = cn
 						}
 					}
+				}
+
+				// Если имени нет, берем из нашего Web-кэша
+				if gameName == "" {
+					cacheMutex.RLock()
+					if name, found := appNameCache[appID]; found {
+						gameName = name
+					}
+					cacheMutex.RUnlock()
 				}
 
 				ownerStat := models.AccountStat{
@@ -209,8 +343,9 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 
 				if foundIdx != -1 {
 					games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
-					// Если у найденной ранее игры не было имени, а сейчас нашли — обновляем
-					if (games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")) && gameName != "" {
+					// Обновляем имя, если нашли лучшее
+					isGenericName := games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")
+					if isGenericName && gameName != "" {
 						games[foundIdx].Name = gameName
 					}
 				} else {
