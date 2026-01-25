@@ -4,7 +4,43 @@
     <meta charset="UTF-8">
     <title>swch</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" crossorigin href="/assets/main-C29l7bPt.css">
+    <style>
+        /* Дополнительные стили для новых функций */
+        .pin-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.6);
+            color: #777;
+            border-radius: 4px;
+            padding: 5px 8px;
+            cursor: pointer;
+            z-index: 10;
+            transition: color 0.2s, background 0.2s;
+        }
+        .pin-btn:hover { color: white; background: rgba(0,0,0,0.8); }
+        .pin-btn.active { color: #ffd700; opacity: 1; }
+
+        .acc-hidden-row { opacity: 0.5; background: #2a2020; }
+        .toggle-hidden-btn {
+            margin-left: 10px;
+            color: #d9534f;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+        .toggle-hidden-btn:hover { opacity: 1; }
+        .toggle-restore-btn { color: #5cb85c; }
+        
+        .modal-footer-options {
+            padding: 10px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+  <link rel="stylesheet" crossorigin href="/assets/main-WGMfFthn.css">
 </head>
 <body>
     <div class="app-container">
@@ -33,7 +69,7 @@
             <div id="view-accounts" class="view-section" style="display: none;">
                 <div class="header"><div class="title">Accounts</div></div>
                 <div id="launchers-list"></div>
-                </div>
+            </div>
         </main>
     </div>
 
@@ -44,6 +80,12 @@
                 <span class="close" onclick="closeModal('account-modal')">&times;</span>
             </div>
             <div id="modal-accounts-list" class="modal-list"></div>
+            <div class="modal-footer-options">
+                <label style="cursor:pointer; display:flex; align-items:center;">
+                    <input type="checkbox" id="show-hidden-accs" onchange="refreshGameModal()" style="margin-right:8px;"> 
+                    Show removed accounts
+                </label>
+            </div>
         </div>
     </div>
 
@@ -55,25 +97,15 @@
             </div>
             <div style="padding: 20px;">
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <button class="sticker-btn btn-main" onclick="savePredefinedNote('Main')">
-                        <i class="fa-solid fa-crown"></i> MAIN
-                    </button>
-                    <button class="sticker-btn btn-smurf" onclick="savePredefinedNote('Smurf')">
-                        <i class="fa-solid fa-child"></i> SMURF
-                    </button>
-                    <button class="sticker-btn btn-vac" onclick="savePredefinedNote('VAC')">
-                        <i class="fa-solid fa-ban"></i> VAC
-                    </button>
+                    <button class="sticker-btn btn-main" onclick="savePredefinedNote('Main')"><i class="fa-solid fa-crown"></i> MAIN</button>
+                    <button class="sticker-btn btn-smurf" onclick="savePredefinedNote('Smurf')"><i class="fa-solid fa-child"></i> SMURF</button>
+                    <button class="sticker-btn btn-vac" onclick="savePredefinedNote('VAC')"><i class="fa-solid fa-ban"></i> VAC</button>
                 </div>
-                
                 <div style="border-top: 1px solid #444; padding-top: 15px;">
                     <input type="text" id="custom-note-input" placeholder="Or type custom note..." class="input-field" style="width:100%; box-sizing:border-box; padding:10px; background:#222; border:1px solid #444; color:white; margin-bottom:10px;">
                     <button onclick="saveCustomNote()" style="width:100%; padding:8px; background:#0074e4; border:none; color:white; cursor:pointer;">Save Text</button>
                 </div>
-
-                <button class="sticker-btn btn-clear" onclick="savePredefinedNote('')">
-                    <i class="fa-solid fa-eraser"></i> Clear Tag
-                </button>
+                <button class="sticker-btn btn-clear" onclick="savePredefinedNote('')"><i class="fa-solid fa-eraser"></i> Clear Tag</button>
             </div>
         </div>
     </div>
@@ -85,15 +117,13 @@
                 <span class="close" onclick="closeModal('edit-account-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <label style="color:#aaa; font-size:12px;">Comment (visible in Accounts tab):</label>
-                <input type="text" id="edit-comment" placeholder="e.g. My main account" class="input-field" style="width:100%; margin-bottom:15px; padding:10px; background:#333; border:none; color:white;">
-                
+                <label style="color:#aaa; font-size:12px;">Comment:</label>
+                <input type="text" id="edit-comment" class="input-field" style="width:100%; margin-bottom:15px; padding:10px; background:#333; border:none; color:white;">
                 <label style="color:#aaa; font-size:12px;">Custom Avatar:</label>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="edit-avatar-path" placeholder="Path to image..." class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
+                    <input type="text" id="edit-avatar-path" class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
                     <button onclick="selectNewAvatar()" style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
                 </div>
-                
                 <button onclick="saveAccountChanges()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Save Changes</button>
             </div>
         </div>
@@ -123,24 +153,19 @@
                 <span class="close" onclick="closeModal('save-epic-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
-                    Make sure you are currently logged into the Epic Games Launcher with the account you want to save.
-                </p>
-                <input type="text" id="epic-save-name" placeholder="Account Name (e.g. Main)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Epic.</p>
+                <input type="text" id="epic-save-name" placeholder="Account Name" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
                 <button onclick="doSaveEpic()" style="width:100%; margin-top:10px; padding:10px; background:#0074e4; border:none; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
             </div>
         </div>
     </div>
 
     <script src="/wailsjs/go/app/App.js"></script>
-    
     <script>
-        // ... (предыдущий JS код без изменений, добавляем только новые функции) ... 
-        
-        // --- UPDATED JS ---
         let globalGames = [];
         let editingTagTarget = { username: '', platform: '', gameId: '' };
         let editingAccountTarget = { username: '', platform: '' };
+        let currentModalGameId = '';
 
         function switchTab(tab) {
             document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
@@ -158,7 +183,7 @@
 
         async function loadLibrary() {
             const list = document.getElementById('games-grid');
-            list.innerHTML = 'Loading...';
+            // не стираем innerHTML сразу, чтобы не моргало слишком сильно, если возможно
             const games = await window['go']['app']['App']['GetLibrary']();
             globalGames = games;
             list.innerHTML = '';
@@ -168,13 +193,7 @@
             games.forEach(game => {
                 const card = document.createElement('div');
                 card.className = 'card';
-                
-                let overlay = '';
-                // Проверяем isInstalled. Если false - добавляем класс и иконку
-                if (!game.isInstalled) {
-                    card.classList.add('game-not-installed');
-                    overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
-                }
+                if (!game.isInstalled) card.classList.add('game-not-installed');
 
                 card.onclick = () => openGameModal(game.id);
                 
@@ -184,31 +203,57 @@
                 if(game.platform === 'Custom') platColor = '#2d8c58';
 
                 const img = game.iconUrl || 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
+                
+                // Кнопка закрепления
+                const pinClass = game.isPinned ? 'active' : '';
+                const pinBtn = `<div class="pin-btn ${pinClass}" onclick="togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
+                
+                let overlay = '';
+                if (!game.isInstalled) overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
 
                 card.innerHTML = `
                     <div class="platform-badge" style="background:${platColor}">${game.platform}</div>
+                    ${pinBtn}
                     ${overlay}
                     <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
-                    <div class="card-info">
-                        <div class="game-title" style="font-weight:bold;">${game.name}</div>
-                    </div>
+                    <div class="card-info"><div class="game-title" style="font-weight:bold;">${game.name}</div></div>
                 `;
                 list.appendChild(card);
             });
         }
 
+        async function togglePin(e, gameId) {
+            e.stopPropagation();
+            await window['go']['app']['App']['ToggleGamePin'](gameId);
+            loadLibrary();
+        }
+
         function openGameModal(gameId) {
+            currentModalGameId = gameId;
+            document.getElementById('show-hidden-accs').checked = false; // reset
+            renderGameModalContent(gameId);
+            document.getElementById('account-modal').style.display = 'flex';
+        }
+
+        function refreshGameModal() {
+            if(currentModalGameId) renderGameModalContent(currentModalGameId);
+        }
+
+        function renderGameModalContent(gameId) {
             const game = globalGames.find(g => g.id === gameId);
             if(!game) return;
-
+            
+            // Если Custom игра - сразу запускаем
             if (game.platform === 'Custom') {
                 launch('', game.id, game.platform, game.exePath);
+                document.getElementById('account-modal').style.display = 'none';
                 return;
             }
 
             const actionVerb = game.isInstalled ? "Launch" : "Install";
             const actionIcon = game.isInstalled ? "fa-play" : "fa-download";
-            
+            const showHidden = document.getElementById('show-hidden-accs').checked;
+
             document.getElementById('modal-game-title').innerText = `${actionVerb} ${game.name}`;
             const list = document.getElementById('modal-accounts-list');
             list.innerHTML = '';
@@ -219,14 +264,23 @@
                 </div>`;
             } else {
                 game.availableOn.forEach(acc => {
+                    // Фильтр скрытых
+                    if (acc.isHidden && !showHidden) return;
+
                     const item = document.createElement('div');
                     item.className = 'modal-item';
+                    if(acc.isHidden) item.classList.add('acc-hidden-row');
                     
                     let noteHtml = '';
                     if (acc.note === 'Main') noteHtml = `<span class="badge badge-main"><i class="fa-solid fa-crown"></i> MAIN</span>`;
                     else if (acc.note === 'Smurf') noteHtml = `<span class="badge badge-smurf"><i class="fa-solid fa-child"></i> SMURF</span>`;
                     else if (acc.note === 'VAC') noteHtml = `<span class="badge badge-vac"><i class="fa-solid fa-ban"></i> VAC BAN</span>`;
                     else if (acc.note) noteHtml = `<span class="badge badge-custom"><i class="fa-solid fa-note-sticky"></i> ${acc.note}</span>`;
+
+                    // Кнопка удаления/восстановления
+                    const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-trash";
+                    const hideClass = acc.isHidden ? "toggle-restore-btn" : "toggle-hidden-btn";
+                    const hideTitle = acc.isHidden ? "Restore account" : "Remove from list";
 
                     item.innerHTML = `
                         <div style="flex:1" onclick="launch('${acc.username}', '${game.id}', '${game.platform}', '')">
@@ -240,118 +294,30 @@
                         <div class="edit-note-btn" onclick="openNoteSelector('${acc.username}', '${game.platform}', '${game.id}', '${acc.note || ''}')" title="Tag Account">
                             <i class="fa-solid fa-tag"></i>
                         </div>
+                        <div class="toggle-hidden-btn ${hideClass}" onclick="toggleGameAccountHidden('${acc.username}', '${game.platform}', '${game.id}')" title="${hideTitle}">
+                            <i class="fa-solid ${hideIcon}"></i>
+                        </div>
                     `;
                     list.appendChild(item);
                 });
             }
-            document.getElementById('account-modal').style.display = 'flex';
         }
 
+        async function toggleGameAccountHidden(username, platform, gameId) {
+            await window['go']['app']['App']['ToggleGameAccountHidden'](username, platform, gameId);
+            // Нужно обновить данные библиотеки, чтобы получить актуальный статус isHidden
+            const games = await window['go']['app']['App']['GetLibrary']();
+            globalGames = games;
+            renderGameModalContent(gameId);
+        }
+
+        // Остальные функции без изменений
         async function launch(account, gameId, platform, exePath) {
-            closeModal('account-modal');
             const res = await window['go']['app']['App']['LaunchGame'](account, gameId, platform, exePath);
-            if(res && !res.startsWith("Launched") && !res.startsWith("Success")) {
-                 alert(res);
-            }
-        }
-        
-        // ... (функции NoteSelector и EditAccount без изменений) ...
-
-        async function loadAccounts() {
-            const container = document.getElementById('launchers-list');
-            container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
-            
-            const launchers = await window['go']['app']['App']['GetLaunchers']();
-            container.innerHTML = '';
-
-            launchers.forEach(group => {
-                const section = document.createElement('div');
-                section.className = 'launcher-section';
-                
-                let accountsHtml = '';
-                group.accounts.forEach(acc => {
-                    let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
-                    if(acc.avatarUrl) {
-                        avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
-                    }
-                    const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
-
-                    accountsHtml += `
-                        <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
-                            ${avatarHtml}
-                            <div class="acc-details">
-                                <div class="acc-nick">
-                                    ${acc.displayName}
-                                    ${commentHtml}
-                                </div>
-                                <div class="acc-login">${acc.username}</div>
-                            </div>
-                            
-                            <div class="acc-actions" onclick="event.stopPropagation()">
-                                <div class="action-icon-btn" title="Edit details" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')">
-                                    <i class="fa-solid fa-pen"></i>
-                                </div>
-                                <div class="action-icon-btn delete-btn" title="Hide form list" onclick="deleteAccount('${acc.username}', '${group.platform}')">
-                                    <i class="fa-solid fa-trash"></i>
-                                </div>
-                            </div>
-
-                            <div class="acc-action-icon">
-                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                // Добавляем кнопку добавления аккаунта для Epic
-                let footerHtml = '';
-                if(group.platform === 'Epic') {
-                    footerHtml = `
-                        <div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;">
-                            <button onclick="openSaveEpicModal()" style="background:transparent; border:1px dashed #444; color:#888; width:100%; padding:8px; cursor:pointer;">
-                                <i class="fa-solid fa-plus"></i> Save Current Epic Account
-                            </button>
-                        </div>
-                    `;
-                }
-
-                section.innerHTML = `
-                    <div class="launcher-header">
-                        <i class="fa-brands fa-${group.platform.toLowerCase()}"></i> ${group.name} 
-                        <span class="count">${group.accounts.length}</span>
-                    </div>
-                    <div class="launcher-accounts">
-                        ${accountsHtml}
-                    </div>
-                    ${footerHtml}
-                `;
-                container.appendChild(section);
-            });
+            if(res && !res.startsWith("Launched") && !res.startsWith("Success")) alert(res);
+            else closeModal('account-modal');
         }
 
-        async function switchAccount(username, platform) {
-            const res = await window['go']['app']['App']['SwitchToAccount'](username, platform);
-            alert(res);
-        }
-
-        // --- EPIC SAVE LOGIC ---
-        function openSaveEpicModal() {
-            document.getElementById('epic-save-name').value = '';
-            document.getElementById('save-epic-modal').style.display = 'flex';
-        }
-
-        async function doSaveEpic() {
-            const name = document.getElementById('epic-save-name').value;
-            if(!name) return;
-            const res = await window['go']['app']['App']['SaveEpicAccount'](name);
-            alert(res);
-            closeModal('save-epic-modal');
-            loadAccounts();
-        }
-
-        // ... (остальные функции без изменений) ...
-        
-        // Вставка функций из старого кода, чтобы не потерялись
         function openNoteSelector(username, platform, gameId, currentNote) {
             editingTagTarget = { username, platform, gameId };
             const isPredefined = ['Main','Smurf','VAC'].includes(currentNote);
@@ -363,53 +329,58 @@
         async function applyNote(noteText) {
             const { username, platform, gameId } = editingTagTarget;
             await window['go']['app']['App']['UpdateGameNote'](username, platform, gameId, noteText);
-            const game = globalGames.find(g => g.id === gameId);
-            if(game) {
-                const acc = game.availableOn.find(a => a.username === username);
-                if(acc) acc.note = noteText;
-            }
+            const games = await window['go']['app']['App']['GetLibrary']();
+            globalGames = games;
             closeModal('note-select-modal');
-            openGameModal(gameId);
+            renderGameModalContent(gameId);
         }
-        async function deleteAccount(username, platform) {
-            if(confirm(`Hide account ${username} from the list?`)) {
-                await window['go']['app']['App']['DeleteAccount'](username, platform);
-                loadAccounts();
-            }
+
+        async function loadAccounts() {
+            const container = document.getElementById('launchers-list');
+            container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
+            const launchers = await window['go']['app']['App']['GetLaunchers']();
+            container.innerHTML = '';
+            launchers.forEach(group => {
+                const section = document.createElement('div');
+                section.className = 'launcher-section';
+                let accountsHtml = '';
+                group.accounts.forEach(acc => {
+                    let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
+                    if(acc.avatarUrl) avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
+                    const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
+                    accountsHtml += `
+                        <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
+                            ${avatarHtml}
+                            <div class="acc-details">
+                                <div class="acc-nick">${acc.displayName}${commentHtml}</div>
+                                <div class="acc-login">${acc.username}</div>
+                            </div>
+                            <div class="acc-actions" onclick="event.stopPropagation()">
+                                <div class="action-icon-btn" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')"><i class="fa-solid fa-pen"></i></div>
+                                <div class="action-icon-btn delete-btn" onclick="deleteAccount('${acc.username}', '${group.platform}')"><i class="fa-solid fa-trash"></i></div>
+                            </div>
+                            <div class="acc-action-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
+                        </div>`;
+                });
+                let footerHtml = '';
+                if(group.platform === 'Epic') {
+                    footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="openSaveEpicModal()" style="background:transparent; border:1px dashed #444; color:#888; width:100%; padding:8px; cursor:pointer;"><i class="fa-solid fa-plus"></i> Save Current Epic Account</button></div>`;
+                }
+                section.innerHTML = `<div class="launcher-header"><i class="fa-brands fa-${group.platform.toLowerCase()}"></i> ${group.name} <span class="count">${group.accounts.length}</span></div><div class="launcher-accounts">${accountsHtml}</div>${footerHtml}`;
+                container.appendChild(section);
+            });
         }
-        function openEditAccount(username, platform, currentComment) {
-            editingAccountTarget = { username, platform };
-            document.getElementById('edit-comment').value = currentComment;
-            document.getElementById('edit-avatar-path').value = '';
-            document.getElementById('edit-account-modal').style.display = 'flex';
-        }
-        async function selectNewAvatar() {
-            const path = await window['go']['app']['App']['SelectImage']();
-            if(path) document.getElementById('edit-avatar-path').value = path;
-        }
-        async function saveAccountChanges() {
-            const comment = document.getElementById('edit-comment').value;
-            const avatar = document.getElementById('edit-avatar-path').value;
-            await window['go']['app']['App']['UpdateAccountData'](editingAccountTarget.username, editingAccountTarget.platform, comment, avatar);
-            closeModal('edit-account-modal');
-            loadAccounts();
-        }
+
+        async function switchAccount(username, platform) { alert(await window['go']['app']['App']['SwitchToAccount'](username, platform)); }
+        function openSaveEpicModal() { document.getElementById('epic-save-name').value = ''; document.getElementById('save-epic-modal').style.display = 'flex'; }
+        async function doSaveEpic() { const name = document.getElementById('epic-save-name').value; if(!name) return; alert(await window['go']['app']['App']['SaveEpicAccount'](name)); closeModal('save-epic-modal'); loadAccounts(); }
+        async function deleteAccount(username, platform) { if(confirm(`Hide account ${username}?`)) { await window['go']['app']['App']['DeleteAccount'](username, platform); loadAccounts(); } }
+        function openEditAccount(username, platform, currentComment) { editingAccountTarget = { username, platform }; document.getElementById('edit-comment').value = currentComment; document.getElementById('edit-avatar-path').value = ''; document.getElementById('edit-account-modal').style.display = 'flex'; }
+        async function selectNewAvatar() { const path = await window['go']['app']['App']['SelectImage'](); if(path) document.getElementById('edit-avatar-path').value = path; }
+        async function saveAccountChanges() { await window['go']['app']['App']['UpdateAccountData'](editingAccountTarget.username, editingAccountTarget.platform, document.getElementById('edit-comment').value, document.getElementById('edit-avatar-path').value); closeModal('edit-account-modal'); loadAccounts(); }
         function openAddGameModal() { document.getElementById('add-game-modal').style.display = 'flex'; }
-        async function browseFile() {
-            const path = await window['go']['app']['App']['SelectExe']();
-            if(path) document.getElementById('custom-path').value = path;
-        }
-        async function saveCustomGame() {
-            const name = document.getElementById('custom-name').value;
-            const path = document.getElementById('custom-path').value;
-            const res = await window['go']['app']['App']['AddCustomGame'](name, path);
-            if(res === 'Success') {
-                closeModal('add-game-modal');
-                loadLibrary();
-                document.getElementById('custom-name').value = ''; 
-                document.getElementById('custom-path').value = '';
-            } else { alert(res); }
-        }
+        async function browseFile() { const path = await window['go']['app']['App']['SelectExe'](); if(path) document.getElementById('custom-path').value = path; }
+        async function saveCustomGame() { const res = await window['go']['app']['App']['AddCustomGame'](document.getElementById('custom-name').value, document.getElementById('custom-path').value); if(res === 'Success') { closeModal('add-game-modal'); loadLibrary(); document.getElementById('custom-name').value=''; document.getElementById('custom-path').value=''; } else { alert(res); } }
 
         loadLibrary();
     </script>

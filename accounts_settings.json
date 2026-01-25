@@ -11,7 +11,9 @@
     "avatarPath": "",
     "hidden": true,
     "gameNotes": null,
-    "hiddenGames": null
+    "hiddenGames": {
+      "570": true
+    }
   },
   "Steam:cepud33": {
     "comment": "",

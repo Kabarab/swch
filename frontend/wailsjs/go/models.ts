@@ -67,6 +67,7 @@ export namespace models {
 	    playtimeMin: number;
 	    lastPlayed: number;
 	    note: string;
+	    isHidden: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AccountStat(source);
@@ -80,6 +81,7 @@ export namespace models {
 	        this.playtimeMin = source["playtimeMin"];
 	        this.lastPlayed = source["lastPlayed"];
 	        this.note = source["note"];
+	        this.isHidden = source["isHidden"];
 	    }
 	}
 	
@@ -125,6 +127,7 @@ export namespace models {
 	    exePath: string;
 	    availableOn: AccountStat[];
 	    isInstalled: boolean;
+	    isPinned: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LibraryGame(source);
@@ -139,6 +142,7 @@ export namespace models {
 	        this.exePath = source["exePath"];
 	        this.availableOn = this.convertValues(source["availableOn"], AccountStat);
 	        this.isInstalled = source["isInstalled"];
+	        this.isPinned = source["isPinned"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -431,14 +431,15 @@ body {
         .pin-btn {
             position: absolute;
             top: 5px;
-            right: 5px;
+            left: 5px; /* ПЕРЕМЕЩЕНО В ЛЕВЫЙ ВЕРХНИЙ УГОЛ */
             background: rgba(0,0,0,0.6);
             color: #777;
             border-radius: 4px;
             padding: 5px 8px;
             cursor: pointer;
-            z-index: 10;
+            z-index: 20; /* Повысил z-index, чтобы было поверх всего */
             transition: color 0.2s, background 0.2s;
+            width: 20px;
         }
         .pin-btn:hover { color: white; background: rgba(0,0,0,0.8); }
         .pin-btn.active { color: #ffd700; opacity: 1; }

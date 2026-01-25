@@ -20,6 +20,10 @@ export function SelectImage():Promise<string>;
 
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
 
+export function ToggleGameAccountHidden(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function ToggleGamePin(arg1:string):Promise<string>;
+
 export function UpdateAccountData(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function UpdateGameNote(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
