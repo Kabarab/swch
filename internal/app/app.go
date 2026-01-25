@@ -23,26 +23,43 @@ type App struct {
 }
 
 type AccountSettings struct {
-	Comment    string            `json:"comment"`
-	AvatarPath string            `json:"avatarPath"`
-	Hidden     bool              `json:"hidden"`
-	GameNotes  map[string]string `json:"gameNotes"`
+	Comment     string            `json:"comment"`
+	AvatarPath  string            `json:"avatarPath"`
+	Hidden      bool              `json:"hidden"`
+	GameNotes   map[string]string `json:"gameNotes"`
+	HiddenGames map[string]bool   `json:"hiddenGames"` // Список скрытых игр для аккаунта
+}
+
+type GameSettings struct {
+	Pinned bool `json:"pinned"`
 }
 
 var accountSettingsMap = make(map[string]AccountSettings)
+var gameSettingsMap = make(map[string]GameSettings)
 
 const settingsFile = "accounts_settings.json"
+const gameSettingsFile = "games_settings.json"
 
 func loadSettings() {
 	data, err := os.ReadFile(settingsFile)
 	if err == nil {
 		json.Unmarshal(data, &accountSettingsMap)
 	}
+
+	gData, gErr := os.ReadFile(gameSettingsFile)
+	if gErr == nil {
+		json.Unmarshal(gData, &gameSettingsMap)
+	}
 }
 
 func saveSettings() {
 	data, _ := json.MarshalIndent(accountSettingsMap, "", "  ")
 	os.WriteFile(settingsFile, data, 0644)
+}
+
+func saveGameSettings() {
+	data, _ := json.MarshalIndent(gameSettingsMap, "", "  ")
+	os.WriteFile(gameSettingsFile, data, 0644)
 }
 
 func makeKey(platform, username string) string {
@@ -93,12 +110,11 @@ func (a *App) GetLibrary() []models.LibraryGame {
 
 	var library []models.LibraryGame
 
-	// 1. Получаем ВСЕ игры Steam (и установленные, и нет)
-	// Логика объединения реализована внутри scanner/steam.go
+	// 1. Steam
 	steamGames := a.steam.GetGames()
 	library = append(library, steamGames...)
 
-	// 2. Epic Games (только установленные, т.к. сложно получить список купленных без API)
+	// 2. Epic Games
 	epicGames := scanner.ScanEpicGames()
 	library = append(library, epicGames...)
 
@@ -109,23 +125,42 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	}
 	library = append(library, customGames...)
 
-	// Применяем заметки к играм
+	// Применяем настройки (заметки, скрытие, закрепление)
 	for i := range library {
 		game := &library[i]
+
+		// Закрепление
+		if gSet, ok := gameSettingsMap[game.ID]; ok {
+			game.IsPinned = gSet.Pinned
+		}
+
 		for j := range game.AvailableOnAccounts {
 			acc := &game.AvailableOnAccounts[j]
 			key := makeKey(game.Platform, acc.Username)
 			if settings, ok := accountSettingsMap[key]; ok {
+				// Заметки
 				if settings.GameNotes != nil {
 					if note, found := settings.GameNotes[game.ID]; found {
 						acc.Note = note
+					}
+				}
+				// Скрытые аккаунты для этой игры
+				if settings.HiddenGames != nil {
+					if hidden, found := settings.HiddenGames[game.ID]; found && hidden {
+						acc.IsHidden = true
 					}
 				}
 			}
 		}
 	}
 
-	sort.Slice(library, func(i, j int) bool { return library[i].Name < library[j].Name })
+	// Сортировка: Сначала закрепленные, потом по имени
+	sort.Slice(library, func(i, j int) bool {
+		if library[i].IsPinned != library[j].IsPinned {
+			return library[i].IsPinned
+		}
+		return library[i].Name < library[j].Name
+	})
 	return library
 }
 
@@ -163,21 +198,44 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		}
 	}
 
-	// Epic теперь возвращает сохраненные аккаунты
 	epicAccs := scanner.ScanEpicAccounts()
-	// Если сохраненных нет, вернем хотя бы "Current", чтобы список не был пуст (опционально)
-	if len(epicAccs) == 0 {
-		// Можно оставить пустым, тогда пользователь должен сначала сохранить аккаунт
-	}
-
 	filtered := processAccounts(epicAccs)
-	// Всегда показываем группу Epic, чтобы была кнопка "Add Account" (в UI можно добавить)
 	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filtered})
 
 	return groups
 }
 
-// SaveEpicAccount сохраняет текущий залогиненный аккаунт Epic под указанным именем
+// Новая функция: Закрепить/Открепить игру
+func (a *App) ToggleGamePin(gameID string) string {
+	loadSettings()
+	settings := gameSettingsMap[gameID]
+	settings.Pinned = !settings.Pinned
+	gameSettingsMap[gameID] = settings
+	saveGameSettings()
+	return "Success"
+}
+
+// Новая функция: Скрыть/Показать аккаунт для конкретной игры
+func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string {
+	loadSettings()
+	key := makeKey(platform, username)
+
+	settings := accountSettingsMap[key]
+	if settings.HiddenGames == nil {
+		settings.HiddenGames = make(map[string]bool)
+	}
+
+	// Переключаем состояние
+	current := settings.HiddenGames[gameID]
+	settings.HiddenGames[gameID] = !current
+
+	accountSettingsMap[key] = settings
+	saveSettings()
+	return "Success"
+}
+
+// ... Остальные функции без изменений (SaveEpicAccount, UpdateAccountData, DeleteAccount, UpdateGameNote, SelectImage, SelectExe, AddCustomGame, SwitchToAccount, LaunchGame) ...
+
 func (a *App) SaveEpicAccount(name string) string {
 	err := scanner.SaveCurrentEpicAccount(name)
 	if err != nil {
@@ -202,10 +260,6 @@ func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) 
 }
 
 func (a *App) DeleteAccount(username, platform string) string {
-	if platform == "Epic" {
-		// Для Epic удаляем физически файлы конфига
-		// (реализация упрощена: просто скрываем, как и Steam, но файлы остаются)
-	}
 	loadSettings()
 	key := makeKey(platform, username)
 
@@ -311,21 +365,18 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	}
 
 	if platform == "Epic" {
-		// Сначала переключаем аккаунт, если указан конкретный
 		if accountName != "" && accountName != "Main Profile" {
 			err := scanner.SwitchEpicAccount(accountName)
 			if err != nil {
 				return "Error switching epic: " + err.Error()
 			}
 		}
-		// Запуск игры
 		sys.StartGame("com.epicgames.launcher://apps/" + gameID + "?action=launch&silent=true")
 		return "Launched on Epic"
 	}
 
 	if platform == "Custom" {
 		if exePath != "" {
-			// Используем новую функцию, которая ставит правильную Working Directory
 			err := sys.RunExecutable(exePath)
 			if err != nil {
 				return "Error launch: " + err.Error()

@@ -427,3 +427,37 @@ body {
         /* Скрываем кнопки по умолчанию, показываем при наведении на строку */
         .modal-actions { opacity: 0; transition: opacity 0.2s; }
         .modal-item:hover .modal-actions { opacity: 1;}
+
+        .pin-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.6);
+            color: #777;
+            border-radius: 4px;
+            padding: 5px 8px;
+            cursor: pointer;
+            z-index: 10;
+            transition: color 0.2s, background 0.2s;
+        }
+        .pin-btn:hover { color: white; background: rgba(0,0,0,0.8); }
+        .pin-btn.active { color: #ffd700; opacity: 1; }
+
+        .acc-hidden-row { opacity: 0.5; background: #2a2020; }
+        .toggle-hidden-btn {
+            margin-left: 10px;
+            color: #d9534f;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+        .toggle-hidden-btn:hover { opacity: 1; }
+        .toggle-restore-btn { color: #5cb85c; }
+        
+        .modal-footer-options {
+            padding: 10px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            align-items: center;
+        }

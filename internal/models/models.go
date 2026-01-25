@@ -7,6 +7,8 @@ type AccountStat struct {
 	PlaytimeMin int    `json:"playtimeMin"`
 	LastPlayed  int64  `json:"lastPlayed"`
 	Note        string `json:"note"`
+	// Новое поле: скрыт ли аккаунт для этой игры
+	IsHidden bool `json:"isHidden"`
 }
 
 type LibraryGame struct {
@@ -16,8 +18,9 @@ type LibraryGame struct {
 	IconURL             string        `json:"iconUrl"`
 	ExePath             string        `json:"exePath"`
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
-	// Новое поле: установлена игра или нет
-	IsInstalled bool `json:"isInstalled"`
+	IsInstalled         bool          `json:"isInstalled"`
+	// Новое поле: закреплена ли игра
+	IsPinned bool `json:"isPinned"`
 }
 
 type Account struct {
