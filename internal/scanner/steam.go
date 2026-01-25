@@ -3,7 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,7 +39,7 @@ func NewSteamScanner() *SteamScanner {
 // SetUserActive обновляет loginusers.vdf
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
-	contentBytes, err := ioutil.ReadFile(loginUsersPath)
+	contentBytes, err := os.ReadFile(loginUsersPath)
 	if err != nil {
 		return err
 	}
@@ -80,25 +80,40 @@ func (s *SteamScanner) SetUserActive(targetUsername string) error {
 			userBlock += "\n\t\t\"AllowAutoLogin\"      \"1\""
 		}
 		content = content[:loc[1]] + userBlock + content[loc[1]+blockEnd:]
-		return ioutil.WriteFile(loginUsersPath, []byte(content), 0644)
+		return os.WriteFile(loginUsersPath, []byte(content), 0644)
 	}
 	return nil
 }
 
-// Структура ответа Steam API
+// Структуры для парсинга ответов Steam API (поддержка разных форматов)
+type steamApp struct {
+	AppID int    `json:"appid"`
+	Name  string `json:"name"`
+}
+
 type steamAppListResponse struct {
 	Applist struct {
-		Apps []struct {
-			AppID int    `json:"appid"`
-			Name  string `json:"name"`
-		} `json:"apps"`
+		Apps []steamApp `json:"apps"`
 	} `json:"applist"`
+}
+
+type steamAppListFlat struct {
+	Apps []steamApp `json:"apps"`
+}
+
+// Получение пути к файлу кэша в папке конфигурации
+func getCacheFilePath() string {
+	configDir, _ := os.UserConfigDir()
+	path := filepath.Join(configDir, "swch")
+	_ = os.MkdirAll(path, 0755)
+	return filepath.Join(path, cacheFileName)
 }
 
 // Загрузка кэша из локального файла
 func loadCacheFromFile() {
-	if _, err := os.Stat(cacheFileName); err == nil {
-		data, err := ioutil.ReadFile(cacheFileName)
+	cachePath := getCacheFilePath()
+	if _, err := os.Stat(cachePath); err == nil {
+		data, err := os.ReadFile(cachePath)
 		if err == nil {
 			var loadedMap map[string]string
 			if json.Unmarshal(data, &loadedMap) == nil && len(loadedMap) > 0 {
@@ -106,7 +121,7 @@ func loadCacheFromFile() {
 				appNameCache = loadedMap
 				cacheLoaded = true
 				cacheMutex.Unlock()
-				fmt.Printf("Loaded %d game names from local cache file.\n", len(loadedMap))
+				fmt.Printf("Loaded %d game names from local cache file: %s\n", len(loadedMap), cachePath)
 			}
 		}
 	}
@@ -121,8 +136,9 @@ func saveCacheToFile() {
 	}
 	data, err := json.Marshal(appNameCache)
 	if err == nil {
-		_ = ioutil.WriteFile(cacheFileName, data, 0644)
-		fmt.Println("Game names cached to disk successfully.")
+		cachePath := getCacheFilePath()
+		_ = os.WriteFile(cachePath, data, 0644)
+		fmt.Printf("Game names cached to disk successfully: %s\n", cachePath)
 	}
 }
 
@@ -135,8 +151,6 @@ func ensureGameNamesLoaded() {
 	// 1. Пробуем загрузить с диска
 	loadCacheFromFile()
 	if cacheLoaded {
-		// Если файл есть и он старый (старше 7 дней), можно попробовать обновить в фоне,
-		// но пока просто вернем то, что есть.
 		return
 	}
 
@@ -146,12 +160,12 @@ func ensureGameNamesLoaded() {
 
 	// 2. Если файла нет, качаем из интернета
 	urls := []string{
-		"https://cdn.jsdelivr.net/gh/SteamDatabase/SteamAppList@master/apps.json",       // Самый надежный CDN
-		"https://api.steampowered.com/ISteamApps/GetAppList/v2/",                        // Официальный API
-		"https://raw.githubusercontent.com/SteamDatabase/SteamAppList/master/apps.json", // Оригинал
+		"https://api.steampowered.com/ISteamApps/GetAppList/v2/",                        // Официальный API (наиболее актуальный)
+		"https://cdn.jsdelivr.net/gh/SteamDatabase/SteamAppList@master/apps.json",       // Зеркало CDN
+		"https://raw.githubusercontent.com/SteamDatabase/SteamAppList/master/apps.json", // Оригинал GitHub
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	var success bool
 
 	fmt.Println("Downloading Steam App List...")
@@ -162,31 +176,52 @@ func ensureGameNamesLoaded() {
 
 		resp, err := client.Do(req)
 		if err != nil {
+			fmt.Printf("Error fetching %s: %v\n", u, err)
 			continue
 		}
 		defer resp.Body.Close()
 
-		// Читаем начало тела, чтобы проверить, не HTML ли это
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			continue
 		}
 
-		// Если ответ пустой или начинается с < (HTML ошибка), пропускаем
 		if len(bodyBytes) == 0 || bodyBytes[0] == '<' {
 			continue
 		}
 
-		var result steamAppListResponse
-		if err := json.Unmarshal(bodyBytes, &result); err == nil && len(result.Applist.Apps) > 0 {
+		var apps []steamApp
+
+		// Попытка парсинга формат 1 (Официальный: {applist: {apps: [...]}})
+		var resultStandard steamAppListResponse
+		if err := json.Unmarshal(bodyBytes, &resultStandard); err == nil && len(resultStandard.Applist.Apps) > 0 {
+			apps = resultStandard.Applist.Apps
+		} else {
+			// Попытка парсинга формат 2 (Плоский: {apps: [...]})
+			var resultFlat steamAppListFlat
+			if err := json.Unmarshal(bodyBytes, &resultFlat); err == nil && len(resultFlat.Apps) > 0 {
+				apps = resultFlat.Apps
+			} else {
+				// Попытка парсинга формат 3 (Простой массив: [...])
+				var resultArray []steamApp
+				if err := json.Unmarshal(bodyBytes, &resultArray); err == nil && len(resultArray) > 0 {
+					apps = resultArray
+				}
+			}
+		}
+
+		if len(apps) > 0 {
 			cacheMutex.Lock()
-			for _, app := range result.Applist.Apps {
-				appNameCache[strconv.Itoa(app.AppID)] = app.Name
+			for _, app := range apps {
+				// Сохраняем только если есть имя
+				if app.Name != "" {
+					appNameCache[strconv.Itoa(app.AppID)] = app.Name
+				}
 			}
 			cacheLoaded = true
 			cacheMutex.Unlock()
 			success = true
-			fmt.Printf("Successfully downloaded %d game names from %s\n", len(result.Applist.Apps), u)
+			fmt.Printf("Successfully downloaded %d game names from %s\n", len(apps), u)
 
 			// Сохраняем на диск для следующего раза
 			saveCacheToFile()
@@ -457,7 +492,7 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 
 func (s *SteamScanner) ownsGame(steamID3 string, appID string) bool {
 	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
-	contentBytes, err := ioutil.ReadFile(localConfigPath)
+	contentBytes, err := os.ReadFile(localConfigPath)
 	if err != nil {
 		return false
 	}

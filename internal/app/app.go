@@ -27,7 +27,7 @@ type AccountSettings struct {
 	AvatarPath  string            `json:"avatarPath"`
 	Hidden      bool              `json:"hidden"`
 	GameNotes   map[string]string `json:"gameNotes"`
-	HiddenGames map[string]bool   `json:"hiddenGames"`
+	HiddenGames map[string]bool   `json:"hiddenGames"` // Список скрытых игр для аккаунта
 }
 
 type GameSettings struct {
@@ -108,25 +108,10 @@ func runCSharpSwitcher(username string, gameID string) string {
 func (a *App) GetLibrary() []models.LibraryGame {
 	loadSettings()
 
-	// Подгружаем базу имен Steam (если её нет - скачиваем)
-	scanner.EnsureSteamNames()
-
 	var library []models.LibraryGame
 
 	// 1. Steam
 	steamGames := a.steam.GetGames()
-
-	// FIX: Проходим по играм Steam и исправляем имена для неустановленных игр
-	for i := range steamGames {
-		game := &steamGames[i]
-		// Если имя совпадает с ID или пустое - пробуем найти нормальное имя
-		if game.Name == "" || game.Name == game.ID {
-			realName := scanner.ResolveSteamName(game.ID)
-			if realName != "" {
-				game.Name = realName
-			}
-		}
-	}
 	library = append(library, steamGames...)
 
 	// 2. Epic Games
@@ -144,6 +129,7 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	for i := range library {
 		game := &library[i]
 
+		// Закрепление
 		if gSet, ok := gameSettingsMap[game.ID]; ok {
 			game.IsPinned = gSet.Pinned
 		}
@@ -152,11 +138,13 @@ func (a *App) GetLibrary() []models.LibraryGame {
 			acc := &game.AvailableOnAccounts[j]
 			key := makeKey(game.Platform, acc.Username)
 			if settings, ok := accountSettingsMap[key]; ok {
+				// Заметки
 				if settings.GameNotes != nil {
 					if note, found := settings.GameNotes[game.ID]; found {
 						acc.Note = note
 					}
 				}
+				// Скрытые аккаунты для этой игры
 				if settings.HiddenGames != nil {
 					if hidden, found := settings.HiddenGames[game.ID]; found && hidden {
 						acc.IsHidden = true
@@ -217,6 +205,7 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	return groups
 }
 
+// Новая функция: Закрепить/Открепить игру
 func (a *App) ToggleGamePin(gameID string) string {
 	loadSettings()
 	settings := gameSettingsMap[gameID]
@@ -226,6 +215,7 @@ func (a *App) ToggleGamePin(gameID string) string {
 	return "Success"
 }
 
+// Новая функция: Скрыть/Показать аккаунт для конкретной игры
 func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string {
 	loadSettings()
 	key := makeKey(platform, username)
@@ -235,6 +225,7 @@ func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string 
 		settings.HiddenGames = make(map[string]bool)
 	}
 
+	// Переключаем состояние
 	current := settings.HiddenGames[gameID]
 	settings.HiddenGames[gameID] = !current
 
@@ -242,6 +233,8 @@ func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string 
 	saveSettings()
 	return "Success"
 }
+
+// ... Остальные функции без изменений (SaveEpicAccount, UpdateAccountData, DeleteAccount, UpdateGameNote, SelectImage, SelectExe, AddCustomGame, SwitchToAccount, LaunchGame) ...
 
 func (a *App) SaveEpicAccount(name string) string {
 	err := scanner.SaveCurrentEpicAccount(name)
