@@ -18,6 +18,8 @@ export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 
 export function SaveEpicAccount(arg1:string):Promise<string>;
 
+export function SaveRiotAccount(arg1:string):Promise<string>;
+
 export function SelectExe():Promise<string>;
 
 export function SelectImage():Promise<string>;

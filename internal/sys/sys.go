@@ -99,15 +99,18 @@ func KillRiot() {
 // --- LAUNCHER UTILS ---
 
 func StartGame(pathOrUrl string) {
+	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
 	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
 		RunExecutable(pathOrUrl)
 		return
 	}
+	// Иначе (например, steam:// или URL) запускаем через оболочку
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
+// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
 func RunExecutable(path string) error {
 	cleanPath := filepath.Clean(path)
 	cmd := exec.Command("explorer", cleanPath)
@@ -115,6 +118,7 @@ func RunExecutable(path string) error {
 	return cmd.Start()
 }
 
+// StartGameWithArgs запускает exe с аргументами (для Riot)
 func StartGameWithArgs(exePath string, args ...string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Dir(exePath)
@@ -122,6 +126,7 @@ func StartGameWithArgs(exePath string, args ...string) error {
 	return cmd.Start()
 }
 
+// Вспомогательные функции
 func killProcess(name string) {
 	cmd := exec.Command("taskkill", "/F", "/IM", name)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

@@ -34,6 +34,10 @@ export function SaveEpicAccount(arg1) {
   return window['go']['app']['App']['SaveEpicAccount'](arg1);
 }
 
+export function SaveRiotAccount(arg1) {
+  return window['go']['app']['App']['SaveRiotAccount'](arg1);
+}
+
 export function SelectExe() {
   return window['go']['app']['App']['SelectExe']();
 }

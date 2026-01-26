@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"encoding/base64" // Добавлено: для кодирования картинок
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -41,13 +41,11 @@ var gameSettingsMap = make(map[string]GameSettings)
 const settingsFile = "accounts_settings.json"
 const gameSettingsFile = "games_settings.json"
 
-// Вспомогательная функция: читает файл и возвращает data URI (Base64)
 func fileToBase64(filePath string) string {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return "" // Если файл не найден или ошибка чтения, возвращаем пустоту
+		return ""
 	}
-
 	var mimeType string
 	switch filepath.Ext(filePath) {
 	case ".jpg", ".jpeg":
@@ -59,9 +57,8 @@ func fileToBase64(filePath string) string {
 	case ".ico":
 		mimeType = "image/x-icon"
 	default:
-		mimeType = "image/png" // Дефолт
+		mimeType = "image/png"
 	}
-
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
 }
 
@@ -70,7 +67,6 @@ func loadSettings() {
 	if err == nil {
 		json.Unmarshal(data, &accountSettingsMap)
 	}
-
 	gData, gErr := os.ReadFile(gameSettingsFile)
 	if gErr == nil {
 		json.Unmarshal(gData, &gameSettingsMap)
@@ -117,7 +113,6 @@ func runCSharpSwitcher(username string, gameID string) string {
 	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-
 	output, err := cmd.CombinedOutput()
 	fmt.Println("Switcher Log:\n", string(output))
 
@@ -125,14 +120,11 @@ func runCSharpSwitcher(username string, gameID string) string {
 		fmt.Println("Switcher Error:", string(output))
 		return "Error switching: " + err.Error()
 	}
-
 	return "Success"
 }
 
-// GetLibrary собирает все игры. Добавлена логика для Torrent игр.
 func (a *App) GetLibrary() []models.LibraryGame {
 	loadSettings()
-
 	var library []models.LibraryGame
 
 	// 1. Steam
@@ -143,27 +135,20 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	epicGames := scanner.ScanEpicGames()
 	library = append(library, epicGames...)
 
-	// 3. Custom & Torrent Games
+	// 3. Riot Games
+	riotGames := scanner.ScanRiotGames()
+	library = append(library, riotGames...)
+
+	// 4. Custom & Torrent Games
 	customGames := scanner.LoadCustomGames()
 	for i := range customGames {
 		customGames[i].IsInstalled = true
-
-		// ВАЖНО: Добавляем фейковый аккаунт для запуска без лаунчеров
 		if customGames[i].Platform == "Custom" || customGames[i].Platform == "Torrent" {
 			customGames[i].AvailableOnAccounts = []models.AccountStat{
-				{
-					AccountID:   "local_pc",
-					DisplayName: "Этот компьютер",
-					Username:    "Local",
-					IsHidden:    false,
-				},
+				{AccountID: "local_pc", DisplayName: "Этот компьютер", Username: "Local", IsHidden: false},
 			}
 		}
-
-		// === ИСПРАВЛЕНИЕ: Конвертируем локальный путь картинки в Base64 ===
 		if customGames[i].IconURL != "" {
-			// Проверяем, похож ли это на путь к файлу (содержит слэши или диск)
-			// и не является ли уже http ссылкой
 			if (len(customGames[i].IconURL) > 1 && customGames[i].IconURL[1] == ':') || filepath.IsAbs(customGames[i].IconURL) {
 				base64Img := fileToBase64(customGames[i].IconURL)
 				if base64Img != "" {
@@ -171,19 +156,15 @@ func (a *App) GetLibrary() []models.LibraryGame {
 				}
 			}
 		}
-		// ==================================================================
 	}
 	library = append(library, customGames...)
 
-	// Применяем настройки
+	// Применение настроек
 	for i := range library {
 		game := &library[i]
-
-		// Закрепление
 		if gSet, ok := gameSettingsMap[game.ID]; ok {
 			game.IsPinned = gSet.Pinned
 		}
-
 		for j := range game.AvailableOnAccounts {
 			acc := &game.AvailableOnAccounts[j]
 			key := makeKey(game.Platform, acc.Username)
@@ -202,26 +183,17 @@ func (a *App) GetLibrary() []models.LibraryGame {
 		}
 	}
 
-	// Сортировка: Закрепленные -> Установленные -> По имени
 	sort.Slice(library, func(i, j int) bool {
-		// 1. Закрепленные выше
 		if library[i].IsPinned != library[j].IsPinned {
 			return library[i].IsPinned
 		}
-		// 2. Установленные выше неустановленных
-		if library[i].IsInstalled != library[j].IsInstalled {
-			return library[i].IsInstalled
-		}
-		// 3. По алфавиту
 		return library[i].Name < library[j].Name
 	})
-
 	return library
 }
 
 func (a *App) GetLaunchers() []models.LauncherGroup {
 	loadSettings()
-
 	var groups []models.LauncherGroup
 
 	processAccounts := func(accs []models.Account) []models.Account {
@@ -229,7 +201,6 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		for _, acc := range accs {
 			key := makeKey(acc.Platform, acc.Username)
 			settings, exists := accountSettingsMap[key]
-
 			if exists && settings.Hidden {
 				continue
 			}
@@ -244,6 +215,7 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		return result
 	}
 
+	// Steam
 	steamAccs := a.steam.GetAccounts()
 	if len(steamAccs) > 0 {
 		filtered := processAccounts(steamAccs)
@@ -252,16 +224,121 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		}
 	}
 
+	// Epic
 	epicAccs := scanner.ScanEpicAccounts()
-	filtered := processAccounts(epicAccs)
-	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filtered})
+	filteredEpic := processAccounts(epicAccs)
+	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filteredEpic})
+
+	// Riot
+	riotAccs := scanner.ScanRiotAccounts()
+	filteredRiot := processAccounts(riotAccs)
+	groups = append(groups, models.LauncherGroup{Name: "Riot Games", Platform: "Riot", Accounts: filteredRiot})
 
 	return groups
 }
 
-// === НОВЫЕ ФУНКЦИИ ===
+func (a *App) SaveRiotAccount(name string) string {
+	err := scanner.SaveCurrentRiotAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
+}
 
-// AddTorrentGame добавляет игру с платформой "Torrent"
+func (a *App) SaveEpicAccount(name string) string {
+	err := scanner.SaveCurrentEpicAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
+}
+
+func (a *App) SwitchToAccount(accountName string, platform string) string {
+	if platform == "Steam" {
+		if accountName == "UNKNOWN" {
+			return "Error: Login not found."
+		}
+		res := runCSharpSwitcher(accountName, "")
+		if res == "Success" {
+			return "Switched to " + accountName
+		}
+		return res
+	}
+	if platform == "Epic" {
+		err := scanner.SwitchEpicAccount(accountName)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return "Switched to " + accountName + ". Please restart Epic Launcher."
+	}
+	if platform == "Riot" {
+		err := scanner.SwitchRiotAccount(accountName)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return "Switched to " + accountName + ". Please restart Riot Client."
+	}
+	return "Platform not supported"
+}
+
+func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
+	if platform == "Steam" {
+		if accountName == "UNKNOWN" {
+			return "Error: Login not found."
+		}
+		res := runCSharpSwitcher(accountName, gameID)
+		if res == "Success" {
+			return "Launched on Steam"
+		}
+		return res
+	}
+
+	if platform == "Epic" {
+		if accountName != "" && accountName != "Main Profile" {
+			err := scanner.SwitchEpicAccount(accountName)
+			if err != nil {
+				return "Error switching epic: " + err.Error()
+			}
+		}
+		sys.StartGame("com.epicgames.launcher://apps/" + gameID + "?action=launch&silent=true")
+		return "Launched on Epic"
+	}
+
+	if platform == "Riot" {
+		if accountName != "" {
+			err := scanner.SwitchRiotAccount(accountName)
+			if err != nil {
+				return "Error switching riot: " + err.Error()
+			}
+		}
+		// Пытаемся найти RiotClientServices.exe в стандартном месте
+		riotClientPath := "C:\\Riot Games\\Riot Client\\RiotClientServices.exe"
+		if _, err := os.Stat(riotClientPath); os.IsNotExist(err) {
+			return "Error: RiotClientServices.exe not found at default location"
+		}
+
+		err := sys.StartGameWithArgs(riotClientPath, "--launch-product="+gameID, "--launch-patchline=live")
+		if err != nil {
+			return "Error launching: " + err.Error()
+		}
+		return "Launched on Riot"
+	}
+
+	if platform == "Custom" || platform == "Torrent" {
+		if exePath != "" {
+			err := sys.RunExecutable(exePath)
+			if err != nil {
+				return "Error launch: " + err.Error()
+			}
+			return "Launched Game"
+		}
+	}
+
+	return "Platform not supported"
+}
+
+// --- СТАРЫЕ МЕТОДЫ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ---
+
 func (a *App) AddTorrentGame(name string, exePath string) string {
 	if name == "" || exePath == "" {
 		return "Error: empty fields"
@@ -269,9 +346,9 @@ func (a *App) AddTorrentGame(name string, exePath string) string {
 	newGame := models.LibraryGame{
 		ID:          fmt.Sprintf("torrent_%d", time.Now().Unix()),
 		Name:        name,
-		Platform:    "Torrent", // Специальная платформа
+		Platform:    "Torrent",
 		ExePath:     exePath,
-		IconURL:     "", // Картинку можно установить позже
+		IconURL:     "",
 		IsInstalled: true,
 	}
 	err := scanner.SaveCustomGame(newGame)
@@ -281,7 +358,6 @@ func (a *App) AddTorrentGame(name string, exePath string) string {
 	return "Success"
 }
 
-// RemoveGame удаляет игру (только для Custom и Torrent)
 func (a *App) RemoveGame(gameID string, platform string) string {
 	if platform == "Custom" || platform == "Torrent" {
 		err := scanner.RemoveCustomGame(gameID)
@@ -290,30 +366,23 @@ func (a *App) RemoveGame(gameID string, platform string) string {
 		}
 		return "Success"
 	}
-	return "Cannot remove Steam/Epic games via this method"
+	return "Cannot remove Steam/Epic/Riot games via this method"
 }
 
-// SetGameImage открывает диалог выбора картинки и устанавливает её для игры
 func (a *App) SetGameImage(gameID string, platform string) string {
-	// 1. Открываем диалог выбора файла
 	path := a.SelectImage()
 	if path == "" {
 		return "Cancelled"
 	}
-
-	// 2. Сохраняем путь к картинке
 	if platform == "Custom" || platform == "Torrent" {
 		err := scanner.UpdateCustomGameIcon(gameID, path)
 		if err != nil {
 			return "Error: " + err.Error()
 		}
-		return path // Возвращаем путь, чтобы фронтенд мог обновить картинку сразу
+		return path
 	}
-
 	return "Not supported for this platform"
 }
-
-// =====================
 
 func (a *App) ToggleGamePin(gameID string) string {
 	loadSettings()
@@ -335,14 +404,6 @@ func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string 
 	settings.HiddenGames[gameID] = !current
 	accountSettingsMap[key] = settings
 	saveSettings()
-	return "Success"
-}
-
-func (a *App) SaveEpicAccount(name string) string {
-	err := scanner.SaveCurrentEpicAccount(name)
-	if err != nil {
-		return "Error: " + err.Error()
-	}
 	return "Success"
 }
 
@@ -423,63 +484,4 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 		return err.Error()
 	}
 	return "Success"
-}
-
-func (a *App) SwitchToAccount(accountName string, platform string) string {
-	if platform == "Steam" {
-		if accountName == "UNKNOWN" {
-			return "Error: Login not found."
-		}
-		res := runCSharpSwitcher(accountName, "")
-		if res == "Success" {
-			return "Switched to " + accountName
-		}
-		return res
-	}
-	if platform == "Epic" {
-		err := scanner.SwitchEpicAccount(accountName)
-		if err != nil {
-			return "Error: " + err.Error()
-		}
-		return "Switched to " + accountName + ". Please restart Epic Launcher."
-	}
-	return "Platform not supported"
-}
-
-// LaunchGame обновлен для поддержки Torrent/Custom
-func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
-	if platform == "Steam" {
-		if accountName == "UNKNOWN" {
-			return "Error: Login not found."
-		}
-		res := runCSharpSwitcher(accountName, gameID)
-		if res == "Success" {
-			return "Launched on Steam"
-		}
-		return res
-	}
-
-	if platform == "Epic" {
-		if accountName != "" && accountName != "Main Profile" {
-			err := scanner.SwitchEpicAccount(accountName)
-			if err != nil {
-				return "Error switching epic: " + err.Error()
-			}
-		}
-		sys.StartGame("com.epicgames.launcher://apps/" + gameID + "?action=launch&silent=true")
-		return "Launched on Epic"
-	}
-
-	// Запуск Torrent и Custom игр напрямую
-	if platform == "Custom" || platform == "Torrent" {
-		if exePath != "" {
-			err := sys.RunExecutable(exePath)
-			if err != nil {
-				return "Error launch: " + err.Error()
-			}
-			return "Launched Game"
-		}
-	}
-
-	return "Platform not supported"
 }
