@@ -86,44 +86,42 @@ func SetEpicAccountId(accountId string) error {
 	return k.SetStringValue("AccountId", accountId)
 }
 
+// --- RIOT GAMES UTILS ---
+
+func KillRiot() {
+	killProcess("RiotClientServices.exe")
+	killProcess("LeagueClient.exe")
+	killProcess("VALORANT.exe")
+	killProcess("RiotClientUx.exe")
+	waitForExit("RiotClientServices.exe")
+}
+
 // --- LAUNCHER UTILS ---
 
 func StartGame(pathOrUrl string) {
-	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
 	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
 		RunExecutable(pathOrUrl)
 		return
 	}
-	// Иначе (например, steam:// или URL) запускаем через оболочку
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
-// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
-// Это критично для многих игр (пираток, сторонних сборок).
 func RunExecutable(path string) error {
-	// Приводим путь к нормальному системному виду (обратные слэши)
 	cleanPath := filepath.Clean(path)
-
-	// Команда "explorer <путь>" передает управление оболочке Windows.
-	// Оболочка сама определит правильную рабочую папку и запустит процесс независимо от нашей программы.
 	cmd := exec.Command("explorer", cleanPath)
-
-	// На всякий случай скрываем окно консоли, если оно создается оболочкой
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-
 	return cmd.Start()
 }
 
-func StartGameWithArgs(exePath string, args ...string) {
+func StartGameWithArgs(exePath string, args ...string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Dir(exePath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	cmd.Start()
+	return cmd.Start()
 }
 
-// Вспомогательные функции
 func killProcess(name string) {
 	cmd := exec.Command("taskkill", "/F", "/IM", name)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
