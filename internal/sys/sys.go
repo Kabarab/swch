@@ -104,13 +104,18 @@ func StartGame(pathOrUrl string) {
 // Это критично для многих игр (пираток, сторонних сборок).
 func RunExecutable(path string) error {
 	workDir := filepath.Dir(path)
-	cmd := exec.Command(path)
-	cmd.Dir = workDir
-	// Отвязываем процесс, чтобы он не закрывался вместе с лаунчером
+
+	// Используем 'cmd /C start' для запуска через оболочку Windows.
+	// Это критично для игр, так как start корректно обрабатывает права и GUI.
+	// /D "path" — явно задает рабочую директорию (важно для многих игр).
+	// "" — это пустой заголовок окна (обязательный аргумент для start перед путями в кавычках).
+	cmd := exec.Command("cmd", "/C", "start", "", "/D", workDir, path)
+
+	// Скрываем окно консоли CMD, чтобы оно не мелькало
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-		HideWindow:    false,
+		HideWindow: true,
 	}
+
 	return cmd.Start()
 }
 
