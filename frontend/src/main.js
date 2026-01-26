@@ -1,5 +1,5 @@
 // 1. Импорты ВСЕГДА должны быть в самом верху
-import { RemoveGame, GetLibrary, ToggleGamePin, LaunchGame, UpdateGameNote, ToggleGameAccountHidden, GetLaunchers, SwitchToAccount, SaveEpicAccount, DeleteAccount, SelectImage, UpdateAccountData, SelectExe, AddCustomGame } from '../wailsjs/go/app/App';
+import { RemoveGame, GetLibrary, ToggleGamePin, LaunchGame, UpdateGameNote, ToggleGameAccountHidden, GetLaunchers, SwitchToAccount, SaveEpicAccount, DeleteAccount, SelectImage, UpdateAccountData, SelectExe, AddCustomGame, SetGameImage } from '../wailsjs/go/app/App';
 
 // Глобальные переменные модуля
 let globalGames = [];
@@ -58,11 +58,14 @@ async function loadLibrary() {
         if (game.platform === 'Epic') platColor = '#333';
         if (game.platform === 'Custom') platColor = '#2d8c58';
 
-        const img = game.iconUrl || 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
+        // ИСПРАВЛЕНИЕ: Обработка пути к картинке
+        let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
+        if (game.iconUrl) {
+            // Заменяем обратные слеши на прямые, чтобы HTML понимал путь
+            img = game.iconUrl.replace(/\\/g, '/');
+        }
 
         const pinClass = game.isPinned ? 'active' : '';
-        // Обрати внимание: togglePin тоже должен быть доступен или передан как window.togglePin, 
-        // но здесь мы используем строковый onclick в HTML генерации, поэтому нужна глобальная функция.
         const pinBtn = `<div class="pin-btn ${pinClass}" onclick="window.togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
 
         let overlay = '';
@@ -245,6 +248,7 @@ window.saveCustomGame = async function() { const res = await AddCustomGame(docum
 
 const contextMenu = document.getElementById('context-menu');
 const deleteBtn = document.getElementById('ctx-delete');
+const changeIconBtn = document.getElementById('ctx-change-icon');
 
 document.addEventListener('click', () => {
     if (contextMenu) contextMenu.style.display = 'none';
@@ -261,8 +265,10 @@ document.addEventListener('contextmenu', (e) => {
 
         if (selectedPlatform !== 'Torrent' && selectedPlatform !== 'Custom') {
             deleteBtn.style.display = 'none';
+            if (changeIconBtn) changeIconBtn.style.display = 'none';
         } else {
             deleteBtn.style.display = 'block';
+            if (changeIconBtn) changeIconBtn.style.display = 'block';
         }
 
         contextMenu.style.top = `${e.pageY}px`;
@@ -288,6 +294,22 @@ if (deleteBtn) {
             }
         } catch (err) {
             console.error(err);
+        }
+    });
+}
+
+if (changeIconBtn) {
+    changeIconBtn.addEventListener('click', async () => {
+        if (!selectedGameId || !selectedPlatform) return;
+        
+        // Вызываем функцию бэкенда для выбора и установки картинки
+        const result = await SetGameImage(selectedGameId, selectedPlatform);
+        
+        // Если вернулся путь (не ошибка и не отмена), обновляем библиотеку
+        if (result && !result.startsWith("Error") && result !== "Cancelled" && result !== "Not supported for this platform") {
+            loadLibrary();
+        } else if (result && result.startsWith("Error")) {
+            alert(result);
         }
     });
 }

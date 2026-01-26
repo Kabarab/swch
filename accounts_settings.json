@@ -12,7 +12,17 @@
     "hidden": true,
     "gameNotes": null,
     "hiddenGames": {
-      "570": true
+      "1126320": true,
+      "1422450": true,
+      "1529710": true,
+      "1824220": true,
+      "291550": true,
+      "322330": true,
+      "3442220": true,
+      "493490": true,
+      "570": true,
+      "730": true,
+      "92": true
     }
   },
   "Steam:cepud33": {
@@ -44,7 +54,7 @@
       "730": "VAC"
     },
     "hiddenGames": {
-      "730": true
+      "730": false
     }
   }
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64" // Добавлено: для кодирования картинок
 	"encoding/json"
 	"fmt"
 	"os"
@@ -39,6 +40,30 @@ var gameSettingsMap = make(map[string]GameSettings)
 
 const settingsFile = "accounts_settings.json"
 const gameSettingsFile = "games_settings.json"
+
+// Вспомогательная функция: читает файл и возвращает data URI (Base64)
+func fileToBase64(filePath string) string {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "" // Если файл не найден или ошибка чтения, возвращаем пустоту
+	}
+
+	var mimeType string
+	switch filepath.Ext(filePath) {
+	case ".jpg", ".jpeg":
+		mimeType = "image/jpeg"
+	case ".png":
+		mimeType = "image/png"
+	case ".webp":
+		mimeType = "image/webp"
+	case ".ico":
+		mimeType = "image/x-icon"
+	default:
+		mimeType = "image/png" // Дефолт
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
+}
 
 func loadSettings() {
 	data, err := os.ReadFile(settingsFile)
@@ -134,6 +159,19 @@ func (a *App) GetLibrary() []models.LibraryGame {
 				},
 			}
 		}
+
+		// === ИСПРАВЛЕНИЕ: Конвертируем локальный путь картинки в Base64 ===
+		if customGames[i].IconURL != "" {
+			// Проверяем, похож ли это на путь к файлу (содержит слэши или диск)
+			// и не является ли уже http ссылкой
+			if (len(customGames[i].IconURL) > 1 && customGames[i].IconURL[1] == ':') || filepath.IsAbs(customGames[i].IconURL) {
+				base64Img := fileToBase64(customGames[i].IconURL)
+				if base64Img != "" {
+					customGames[i].IconURL = base64Img
+				}
+			}
+		}
+		// ==================================================================
 	}
 	library = append(library, customGames...)
 
