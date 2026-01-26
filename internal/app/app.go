@@ -27,7 +27,7 @@ type AccountSettings struct {
 	AvatarPath  string            `json:"avatarPath"`
 	Hidden      bool              `json:"hidden"`
 	GameNotes   map[string]string `json:"gameNotes"`
-	HiddenGames map[string]bool   `json:"hiddenGames"` // Список скрытых игр для аккаунта
+	HiddenGames map[string]bool   `json:"hiddenGames"`
 }
 
 type GameSettings struct {
@@ -94,7 +94,6 @@ func runCSharpSwitcher(username string, gameID string) string {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	output, err := cmd.CombinedOutput()
-
 	fmt.Println("Switcher Log:\n", string(output))
 
 	if err != nil {
@@ -105,6 +104,7 @@ func runCSharpSwitcher(username string, gameID string) string {
 	return "Success"
 }
 
+// GetLibrary собирает все игры. Добавлена логика для Torrent игр.
 func (a *App) GetLibrary() []models.LibraryGame {
 	loadSettings()
 
@@ -118,14 +118,26 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	epicGames := scanner.ScanEpicGames()
 	library = append(library, epicGames...)
 
-	// 3. Custom Games
+	// 3. Custom & Torrent Games
 	customGames := scanner.LoadCustomGames()
 	for i := range customGames {
 		customGames[i].IsInstalled = true
+
+		// ВАЖНО: Добавляем фейковый аккаунт для запуска без лаунчеров
+		if customGames[i].Platform == "Custom" || customGames[i].Platform == "Torrent" {
+			customGames[i].AvailableOnAccounts = []models.AccountStat{
+				{
+					AccountID:   "local_pc",
+					DisplayName: "Этот компьютер",
+					Username:    "Local",
+					IsHidden:    false,
+				},
+			}
+		}
 	}
 	library = append(library, customGames...)
 
-	// Применяем настройки (заметки, скрытие, закрепление)
+	// Применяем настройки
 	for i := range library {
 		game := &library[i]
 
@@ -138,13 +150,11 @@ func (a *App) GetLibrary() []models.LibraryGame {
 			acc := &game.AvailableOnAccounts[j]
 			key := makeKey(game.Platform, acc.Username)
 			if settings, ok := accountSettingsMap[key]; ok {
-				// Заметки
 				if settings.GameNotes != nil {
 					if note, found := settings.GameNotes[game.ID]; found {
 						acc.Note = note
 					}
 				}
-				// Скрытые аккаунты для этой игры
 				if settings.HiddenGames != nil {
 					if hidden, found := settings.HiddenGames[game.ID]; found && hidden {
 						acc.IsHidden = true
@@ -154,7 +164,6 @@ func (a *App) GetLibrary() []models.LibraryGame {
 		}
 	}
 
-	// Сортировка: Сначала закрепленные, потом по имени
 	sort.Slice(library, func(i, j int) bool {
 		if library[i].IsPinned != library[j].IsPinned {
 			return library[i].IsPinned
@@ -178,7 +187,6 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 			if exists && settings.Hidden {
 				continue
 			}
-
 			if exists {
 				acc.Comment = settings.Comment
 				if settings.AvatarPath != "" {
@@ -205,7 +213,62 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	return groups
 }
 
-// Новая функция: Закрепить/Открепить игру
+// === НОВЫЕ ФУНКЦИИ ===
+
+// AddTorrentGame добавляет игру с платформой "Torrent"
+func (a *App) AddTorrentGame(name string, exePath string) string {
+	if name == "" || exePath == "" {
+		return "Error: empty fields"
+	}
+	newGame := models.LibraryGame{
+		ID:          fmt.Sprintf("torrent_%d", time.Now().Unix()),
+		Name:        name,
+		Platform:    "Torrent", // Специальная платформа
+		ExePath:     exePath,
+		IconURL:     "", // Картинку можно установить позже
+		IsInstalled: true,
+	}
+	err := scanner.SaveCustomGame(newGame)
+	if err != nil {
+		return err.Error()
+	}
+	return "Success"
+}
+
+// RemoveGame удаляет игру (только для Custom и Torrent)
+func (a *App) RemoveGame(gameID string, platform string) string {
+	if platform == "Custom" || platform == "Torrent" {
+		err := scanner.RemoveCustomGame(gameID)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return "Success"
+	}
+	return "Cannot remove Steam/Epic games via this method"
+}
+
+// SetGameImage открывает диалог выбора картинки и устанавливает её для игры
+func (a *App) SetGameImage(gameID string, platform string) string {
+	// 1. Открываем диалог выбора файла
+	path := a.SelectImage()
+	if path == "" {
+		return "Cancelled"
+	}
+
+	// 2. Сохраняем путь к картинке
+	if platform == "Custom" || platform == "Torrent" {
+		err := scanner.UpdateCustomGameIcon(gameID, path)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return path // Возвращаем путь, чтобы фронтенд мог обновить картинку сразу
+	}
+
+	return "Not supported for this platform"
+}
+
+// =====================
+
 func (a *App) ToggleGamePin(gameID string) string {
 	loadSettings()
 	settings := gameSettingsMap[gameID]
@@ -215,26 +278,19 @@ func (a *App) ToggleGamePin(gameID string) string {
 	return "Success"
 }
 
-// Новая функция: Скрыть/Показать аккаунт для конкретной игры
 func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string {
 	loadSettings()
 	key := makeKey(platform, username)
-
 	settings := accountSettingsMap[key]
 	if settings.HiddenGames == nil {
 		settings.HiddenGames = make(map[string]bool)
 	}
-
-	// Переключаем состояние
 	current := settings.HiddenGames[gameID]
 	settings.HiddenGames[gameID] = !current
-
 	accountSettingsMap[key] = settings
 	saveSettings()
 	return "Success"
 }
-
-// ... Остальные функции без изменений (SaveEpicAccount, UpdateAccountData, DeleteAccount, UpdateGameNote, SelectImage, SelectExe, AddCustomGame, SwitchToAccount, LaunchGame) ...
 
 func (a *App) SaveEpicAccount(name string) string {
 	err := scanner.SaveCurrentEpicAccount(name)
@@ -247,14 +303,12 @@ func (a *App) SaveEpicAccount(name string) string {
 func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) string {
 	loadSettings()
 	key := makeKey(platform, username)
-
 	settings := accountSettingsMap[key]
 	settings.Comment = comment
 	if avatarPath != "" {
 		settings.AvatarPath = avatarPath
 	}
 	accountSettingsMap[key] = settings
-
 	saveSettings()
 	return "Saved"
 }
@@ -262,11 +316,9 @@ func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) 
 func (a *App) DeleteAccount(username, platform string) string {
 	loadSettings()
 	key := makeKey(platform, username)
-
 	settings := accountSettingsMap[key]
 	settings.Hidden = true
 	accountSettingsMap[key] = settings
-
 	saveSettings()
 	return "Account removed from list"
 }
@@ -274,23 +326,21 @@ func (a *App) DeleteAccount(username, platform string) string {
 func (a *App) UpdateGameNote(username, platform, gameID, note string) string {
 	loadSettings()
 	key := makeKey(platform, username)
-
 	settings := accountSettingsMap[key]
 	if settings.GameNotes == nil {
 		settings.GameNotes = make(map[string]string)
 	}
 	settings.GameNotes[gameID] = note
 	accountSettingsMap[key] = settings
-
 	saveSettings()
 	return "Saved"
 }
 
 func (a *App) SelectImage() string {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Avatar",
+		Title: "Select Image",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico"},
+			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico;*.webp"},
 		},
 	})
 	if err != nil {
@@ -301,7 +351,7 @@ func (a *App) SelectImage() string {
 
 func (a *App) SelectExe() string {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:   "Select Game Executable",
+		Title:   "Select Executable",
 		Filters: []runtime.FileFilter{{DisplayName: "Executables (*.exe)", Pattern: "*.exe"}},
 	})
 	if err != nil {
@@ -340,7 +390,6 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		}
 		return res
 	}
-
 	if platform == "Epic" {
 		err := scanner.SwitchEpicAccount(accountName)
 		if err != nil {
@@ -348,10 +397,10 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		}
 		return "Switched to " + accountName + ". Please restart Epic Launcher."
 	}
-
 	return "Platform not supported"
 }
 
+// LaunchGame обновлен для поддержки Torrent/Custom
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
 	if platform == "Steam" {
 		if accountName == "UNKNOWN" {
@@ -375,13 +424,14 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		return "Launched on Epic"
 	}
 
-	if platform == "Custom" {
+	// Запуск Torrent и Custom игр напрямую
+	if platform == "Custom" || platform == "Torrent" {
 		if exePath != "" {
 			err := sys.RunExecutable(exePath)
 			if err != nil {
 				return "Error launch: " + err.Error()
 			}
-			return "Launched Custom Game"
+			return "Launched Game"
 		}
 	}
 

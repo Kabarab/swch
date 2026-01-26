@@ -6,6 +6,10 @@ export function AddCustomGame(arg1, arg2) {
   return window['go']['app']['App']['AddCustomGame'](arg1, arg2);
 }
 
+export function AddTorrentGame(arg1, arg2) {
+  return window['go']['app']['App']['AddTorrentGame'](arg1, arg2);
+}
+
 export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
@@ -22,6 +26,10 @@ export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }
 
+export function RemoveGame(arg1, arg2) {
+  return window['go']['app']['App']['RemoveGame'](arg1, arg2);
+}
+
 export function SaveEpicAccount(arg1) {
   return window['go']['app']['App']['SaveEpicAccount'](arg1);
 }
@@ -32,6 +40,10 @@ export function SelectExe() {
 
 export function SelectImage() {
   return window['go']['app']['App']['SelectImage']();
+}
+
+export function SetGameImage(arg1, arg2) {
+  return window['go']['app']['App']['SetGameImage'](arg1, arg2);
 }
 
 export function SwitchToAccount(arg1, arg2) {
