@@ -11,6 +11,7 @@ import (
 	"swch/internal/sys"
 )
 
+// EpicManifest структура файла .item (манифест игры)
 type EpicManifest struct {
 	FormatVersion   int    `json:"FormatVersion"`
 	AppName         string `json:"AppName"`
@@ -19,13 +20,13 @@ type EpicManifest struct {
 	MainGameAppName string `json:"MainGameAppName"`
 }
 
-// EpicAccountData хранит данные для смены аккаунта
+// EpicAccountData хранит метаданные сохраненного аккаунта
 type EpicAccountData struct {
-	Name         string `json:"name"`
-	RegistryId   string `json:"registryId"`   // AccountId из реестра
-	ConfigBackup string `json:"configBackup"` // Путь к бэкапу GameUserSettings.ini
+	Name string `json:"name"`
+	// RegistryId удален, так как для метода подмены папки Data он не критичен
 }
 
+// getEpicConfigDir возвращает путь, где мы храним бэкапы аккаунтов
 func getEpicConfigDir() string {
 	configDir, _ := os.UserConfigDir()
 	path := filepath.Join(configDir, "swch", "epic_accounts")
@@ -33,83 +34,79 @@ func getEpicConfigDir() string {
 	return path
 }
 
-func getEpicGameUserSettingsPath() string {
+// getEpicAuthDataPath возвращает путь к папке Data (где Epic хранит токены сессии)
+func getEpicAuthDataPath() string {
 	localAppData := os.Getenv("LOCALAPPDATA")
-	return filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config", "Windows", "GameUserSettings.ini")
+	return filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
 }
 
-// SaveCurrentEpicAccount сохраняет текущий залогиненный аккаунт Epic
+// SaveCurrentEpicAccount сохраняет текущую сессию Epic (папку Data)
 func SaveCurrentEpicAccount(name string) error {
 	if name == "" {
 		return fmt.Errorf("name is empty")
 	}
 
-	// 1. Получаем ID из реестра
-	regId, err := sys.GetEpicAccountId()
-	if err != nil {
-		return fmt.Errorf("failed to get epic registry id: %v", err)
+	// 1. Проверяем наличие папки Data (значит пользователь логинился)
+	srcDataPath := getEpicAuthDataPath()
+	if _, err := os.Stat(srcDataPath); os.IsNotExist(err) {
+		return fmt.Errorf("Epic Data folder not found. Please login to Epic Games Launcher first.")
 	}
 
-	// 2. Копируем GameUserSettings.ini
-	srcPath := getEpicGameUserSettingsPath()
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		return fmt.Errorf("GameUserSettings.ini not found. Is Epic installed?")
-	}
-
+	// Создаем папку для хранения этого аккаунта
 	destDir := filepath.Join(getEpicConfigDir(), name)
-	os.MkdirAll(destDir, 0755)
-	destConfigPath := filepath.Join(destDir, "GameUserSettings.ini")
-
-	if err := copyFile(srcPath, destConfigPath); err != nil {
+	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
 
-	// 3. Сохраняем метаданные
+	// 2. Копируем папку Data (токены)
+	destDataPath := filepath.Join(destDir, "Data")
+	os.RemoveAll(destDataPath) // Удаляем старый бэкап если был
+
+	if err := copyDir(srcDataPath, destDataPath); err != nil {
+		return fmt.Errorf("failed to copy auth data: %v", err)
+	}
+
+	// 3. Сохраняем метаданные (имя аккаунта)
 	meta := EpicAccountData{
-		Name:       name,
-		RegistryId: regId,
+		Name: name,
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	return os.WriteFile(filepath.Join(destDir, "meta.json"), data, 0644)
 }
 
-// SwitchEpicAccount переключает аккаунт
+// SwitchEpicAccount переключает аккаунт путем подмены папки Data
 func SwitchEpicAccount(name string) error {
-	dir := filepath.Join(getEpicConfigDir(), name)
-	metaPath := filepath.Join(dir, "meta.json")
+	// Путь к сохраненному аккаунту
+	storedAccountDir := filepath.Join(getEpicConfigDir(), name)
+	metaPath := filepath.Join(storedAccountDir, "meta.json")
 
 	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
 		return fmt.Errorf("account not found")
 	}
 
-	var meta EpicAccountData
-	data, _ := os.ReadFile(metaPath)
-	json.Unmarshal(data, &meta)
-
-	// 1. Убиваем Epic
-	sys.KillEpic()
-
-	// 2. Восстанавливаем реестр
-	if err := sys.SetEpicAccountId(meta.RegistryId); err != nil {
-		return fmt.Errorf("registry error: %v", err)
+	// 1. Важно: Убиваем процесс Epic Games, иначе файлы будут заняты
+	if err := sys.KillEpic(); err != nil {
+		// Логируем ошибку, но пробуем продолжить (вдруг процесс уже мертв)
+		fmt.Printf("Warning killing epic: %v\n", err)
 	}
 
-	// 3. Восстанавливаем конфиг
-	configPath := getEpicGameUserSettingsPath()
-	storedConfig := filepath.Join(dir, "GameUserSettings.ini")
-
-	// Удаляем текущий конфиг (на всякий случай)
-	os.Remove(configPath)
-
-	if err := copyFile(storedConfig, configPath); err != nil {
-		return err
+	// 2. Очищаем текущую папку Data в системе
+	realDataPath := getEpicAuthDataPath()
+	if err := os.RemoveAll(realDataPath); err != nil {
+		return fmt.Errorf("failed to remove current session files: %v", err)
 	}
 
-	// 4. Запускаем Epic (опционально, или просто пользователь сам запустит игру)
-	// sys.StartGame("com.epicgames.launcher://")
+	// 3. Восстанавливаем папку Data из бэкапа
+	storedDataPath := filepath.Join(storedAccountDir, "Data")
+	if err := copyDir(storedDataPath, realDataPath); err != nil {
+		return fmt.Errorf("failed to restore session files: %v", err)
+	}
+
+	// Готово. При следующем запуске Epic подхватит эти файлы.
 	return nil
 }
 
+// ScanEpicGames сканирует установленные игры
 func ScanEpicGames() []models.LibraryGame {
 	var games []models.LibraryGame
 
@@ -150,6 +147,7 @@ func ScanEpicGames() []models.LibraryGame {
 	return games
 }
 
+// ScanEpicAccounts сканирует папку swch на наличие сохраненных аккаунтов
 func ScanEpicAccounts() []models.Account {
 	var accounts []models.Account
 	baseDir := getEpicConfigDir()
@@ -180,6 +178,42 @@ func ScanEpicAccounts() []models.Account {
 	return accounts
 }
 
+// Вспомогательные функции
+
+// copyDir рекурсивно копирует директорию
+func copyDir(src string, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// copyFile копирует один файл
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {

@@ -62,9 +62,12 @@ func SetSteamUser(username string) error {
 
 // --- EPIC GAMES UTILS ---
 
-func KillEpic() {
-	killProcess("EpicGamesLauncher.exe")
-	waitForExit("EpicGamesLauncher.exe")
+func KillEpic() error {
+	// taskkill /F /IM EpicGamesLauncher.exe
+	cmd := exec.Command("taskkill", "/F", "/IM", "EpicGamesLauncher.exe")
+	// Игнорируем ошибку, если процесс не запущен
+	_ = cmd.Run()
+	return nil
 }
 
 func GetEpicAccountId() (string, error) {

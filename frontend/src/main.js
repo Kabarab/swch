@@ -314,5 +314,28 @@ if (changeIconBtn) {
     });
 }
 
+// Функция добавления аккаунта
+function addEpicAccount() {
+    let accountName = prompt("Введите название для текущего аккаунта Epic Games:", "My Epic Main");
+    
+    if (accountName) {
+        // Вызов Go функции через Wails
+        window.go.app.App.SaveEpicAccount(accountName)
+            .then((result) => {
+                if (result === "Success") {
+                    alert("Аккаунт Epic успешно сохранен!");
+                    // Тут можно обновить список аккаунтов на странице
+                    // location.reload(); или вызвать функцию обновления стейта
+                } else {
+                    alert("Ошибка при сохранении: " + result);
+                }
+            })
+            .catch((err) => {
+                console.error(err);
+                alert("Системная ошибка: " + err);
+            });
+    }
+}
+
 // Запуск при старте
 loadLibrary();

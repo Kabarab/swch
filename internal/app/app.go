@@ -184,9 +184,15 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	}
 
 	sort.Slice(library, func(i, j int) bool {
+		// 1. Сначала закрепленные
 		if library[i].IsPinned != library[j].IsPinned {
 			return library[i].IsPinned
 		}
+		// 2. Затем установленные
+		if library[i].IsInstalled != library[j].IsInstalled {
+			return library[i].IsInstalled
+		}
+		// 3. Остальные по имени
 		return library[i].Name < library[j].Name
 	})
 	return library
