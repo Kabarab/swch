@@ -103,18 +103,15 @@ func StartGame(pathOrUrl string) {
 // RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
 // Это критично для многих игр (пираток, сторонних сборок).
 func RunExecutable(path string) error {
-	workDir := filepath.Dir(path)
+	// Приводим путь к нормальному системному виду (обратные слэши)
+	cleanPath := filepath.Clean(path)
 
-	// Используем 'cmd /C start' для запуска через оболочку Windows.
-	// Это критично для игр, так как start корректно обрабатывает права и GUI.
-	// /D "path" — явно задает рабочую директорию (важно для многих игр).
-	// "" — это пустой заголовок окна (обязательный аргумент для start перед путями в кавычках).
-	cmd := exec.Command("cmd", "/C", "start", "", "/D", workDir, path)
+	// Команда "explorer <путь>" передает управление оболочке Windows.
+	// Оболочка сама определит правильную рабочую папку и запустит процесс независимо от нашей программы.
+	cmd := exec.Command("explorer", cleanPath)
 
-	// Скрываем окно консоли CMD, чтобы оно не мелькало
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow: true,
-	}
+	// На всякий случай скрываем окно консоли, если оно создается оболочкой
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	return cmd.Start()
 }
