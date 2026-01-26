@@ -1,21 +1,48 @@
-// 1. Импорты ВСЕГДА должны быть в самом верху
-import { RemoveGame, GetLibrary, ToggleGamePin, LaunchGame, UpdateGameNote, ToggleGameAccountHidden, GetLaunchers, SwitchToAccount, SaveEpicAccount, DeleteAccount, SelectImage, UpdateAccountData, SelectExe, AddCustomGame, SetGameImage } from '../wailsjs/go/app/App';
+// 1. Импорты (все функции из Go)
+import { 
+    RemoveGame, 
+    GetLibrary, 
+    ToggleGamePin, 
+    LaunchGame, 
+    UpdateGameNote, 
+    ToggleGameAccountHidden, 
+    GetLaunchers, 
+    SwitchToAccount, 
+    SaveEpicAccount, 
+    DeleteAccount, 
+    SelectImage, 
+    UpdateAccountData, 
+    SelectExe, 
+    AddCustomGame, 
+    SetGameImage 
+} from '../wailsjs/go/app/App';
 
-// Глобальные переменные модуля
+// --- Глобальные переменные ---
 let globalGames = [];
 let editingTagTarget = { username: '', platform: '', gameId: '' };
 let editingAccountTarget = { username: '', platform: '' };
 let currentModalGameId = '';
+
 // Переменные для контекстного меню
 let selectedGameId = null;
 let selectedPlatform = null;
 
-// --- Функции интерфейса ---
+// --- Инициализация ---
 
-// 2. Делаем функции доступными для HTML (onclick), привязывая их к window
+// Запуск при старте страницы
+document.addEventListener("DOMContentLoaded", () => {
+    loadLibrary();
+});
+
+// --- Функции навигации и интерфейса ---
+
+// Переключение вкладок (Библиотека / Аккаунты)
 window.switchTab = function(tab) {
     document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+    
+    // Подсветка активной кнопки (предполагается, что у кнопок есть ID или классы)
+    // В данном случае просто переключаем видимость блоков
     if (tab === 'library') {
         document.getElementById('view-library').style.display = 'block';
         loadLibrary();
@@ -25,6 +52,7 @@ window.switchTab = function(tab) {
     }
 }
 
+// Управление модальными окнами
 window.closeModal = function(id) {
     document.getElementById(id).style.display = 'none';
 }
@@ -33,65 +61,84 @@ window.openAddGameModal = function() {
     document.getElementById('add-game-modal').style.display = 'flex';
 }
 
+// --- Логика Библиотеки (Library) ---
+
 async function loadLibrary() {
     const list = document.getElementById('games-grid');
-    // Используем импортированную функцию вместо window['go']...
-    const games = await GetLibrary();
-    globalGames = games;
-    list.innerHTML = '';
+    if (!list) return;
 
-    if (!games.length) list.innerHTML = "No games found.";
+    try {
+        const games = await GetLibrary();
+        globalGames = games;
+        list.innerHTML = '';
 
-    games.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        if (!game.isInstalled) card.classList.add('game-not-installed');
-
-        // 3. ВАЖНО: Добавляем data-атрибуты для работы контекстного меню
-        card.setAttribute('data-id', game.id);
-        card.setAttribute('data-platform', game.platform);
-
-        card.onclick = () => openGameModal(game.id);
-
-        let platColor = '#0074e4';
-        if (game.platform === 'Steam') platColor = '#1b2838';
-        if (game.platform === 'Epic') platColor = '#333';
-        if (game.platform === 'Custom') platColor = '#2d8c58';
-
-        // ИСПРАВЛЕНИЕ: Обработка пути к картинке
-        let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
-        if (game.iconUrl) {
-            // Заменяем обратные слеши на прямые, чтобы HTML понимал путь
-            img = game.iconUrl.replace(/\\/g, '/');
+        if (!games || games.length === 0) {
+            list.innerHTML = '<div style="color:#aaa; padding:20px;">Игры не найдены. Добавьте игру или сканируйте библиотеки.</div>';
+            return;
         }
 
-        const pinClass = game.isPinned ? 'active' : '';
-        const pinBtn = `<div class="pin-btn ${pinClass}" onclick="window.togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
+        games.forEach(game => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            if (!game.isInstalled) card.classList.add('game-not-installed');
 
-        let overlay = '';
-        if (!game.isInstalled) overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
+            // Атрибуты для контекстного меню
+            card.setAttribute('data-id', game.id);
+            card.setAttribute('data-platform', game.platform);
 
-        card.innerHTML = `
-            <div class="platform-badge" style="background:${platColor}">${game.platform}</div>
-            ${pinBtn}
-            ${overlay}
-            <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
-            <div class="card-info"><div class="game-title" style="font-weight:bold;">${game.name}</div></div>
-        `;
-        list.appendChild(card);
-    });
+            // Клик по карточке открывает детали
+            card.onclick = () => openGameModal(game.id);
+
+            // Цвет плашки платформы
+            let platColor = '#0074e4';
+            if (game.platform === 'Steam') platColor = '#1b2838';
+            if (game.platform === 'Epic') platColor = '#333';
+            if (game.platform === 'Riot') platColor = '#d13639';
+            if (game.platform === 'Custom' || game.platform === 'Torrent') platColor = '#2d8c58';
+
+            // Обработка картинки
+            let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
+            if (game.iconUrl) {
+                // Исправляем Windows пути на понятные браузеру
+                img = game.iconUrl.replace(/\\/g, '/');
+            }
+
+            const pinClass = game.isPinned ? 'active' : '';
+            // stopPropagation чтобы клик по пину не открывал игру
+            const pinBtn = `<div class="pin-btn ${pinClass}" onclick="window.togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
+
+            let overlay = '';
+            if (!game.isInstalled) overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
+
+            card.innerHTML = `
+                <div class="platform-badge" style="background:${platColor}">${game.platform}</div>
+                ${pinBtn}
+                ${overlay}
+                <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
+                <div class="card-info">
+                    <div class="game-title" style="font-weight:bold;">${game.name}</div>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    } catch (err) {
+        console.error("Ошибка загрузки библиотеки:", err);
+    }
 }
 
-// Привязываем к window, так как вызывается из сгенерированного HTML
+// Закрепление игры
 window.togglePin = async function(e, gameId) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     await ToggleGamePin(gameId);
     loadLibrary();
 }
 
+// Открытие модального окна игры
 window.openGameModal = function(gameId) {
     currentModalGameId = gameId;
-    document.getElementById('show-hidden-accs').checked = false;
+    const checkbox = document.getElementById('show-hidden-accs');
+    if (checkbox) checkbox.checked = false;
+    
     renderGameModalContent(gameId);
     document.getElementById('account-modal').style.display = 'flex';
 }
@@ -100,11 +147,13 @@ window.refreshGameModal = function() {
     if (currentModalGameId) renderGameModalContent(currentModalGameId);
 }
 
+// Рендер содержимого модального окна (список аккаунтов)
 function renderGameModalContent(gameId) {
     const game = globalGames.find(g => g.id === gameId);
     if (!game) return;
 
-    if (game.platform === 'Custom') {
+    // Если это Custom игра, сразу запускаем (там нет списка аккаунтов)
+    if (game.platform === 'Custom' || game.platform === 'Torrent') {
         launch('', game.id, game.platform, game.exePath);
         document.getElementById('account-modal').style.display = 'none';
         return;
@@ -112,37 +161,43 @@ function renderGameModalContent(gameId) {
 
     const actionVerb = game.isInstalled ? "Launch" : "Install";
     const actionIcon = game.isInstalled ? "fa-play" : "fa-download";
-    const showHidden = document.getElementById('show-hidden-accs').checked;
+    
+    // Проверяем галочку "Show Hidden"
+    const checkbox = document.getElementById('show-hidden-accs');
+    const showHidden = checkbox ? checkbox.checked : false;
 
     document.getElementById('modal-game-title').innerText = `${actionVerb} ${game.name}`;
     const list = document.getElementById('modal-accounts-list');
     list.innerHTML = '';
 
     if (!game.availableOn || game.availableOn.length === 0) {
-        list.innerHTML = `<div class="modal-item" onclick="launch('', '${game.id}', '${game.platform}', '')">
-            <div class="acc-name">${actionVerb} Game</div><div class="acc-meta">Current Account</div>
+        // Если аккаунтов нет, показываем кнопку запуска "Current Account"
+        list.innerHTML = `<div class="modal-item interactable" onclick="launch('', '${game.id}', '${game.platform}', '')">
+            <div class="acc-name">${actionVerb} Game</div>
+            <div class="acc-meta">Current Account (or not logged in)</div>
         </div>`;
     } else {
         game.availableOn.forEach(acc => {
+            // Фильтр скрытых
             if (acc.isHidden && !showHidden) return;
 
             const item = document.createElement('div');
             item.className = 'modal-item';
             if (acc.isHidden) item.classList.add('acc-hidden-row');
 
+            // Бейджики для заметок
             let noteHtml = '';
             if (acc.note === 'Main') noteHtml = `<span class="badge badge-main"><i class="fa-solid fa-crown"></i> MAIN</span>`;
             else if (acc.note === 'Smurf') noteHtml = `<span class="badge badge-smurf"><i class="fa-solid fa-child"></i> SMURF</span>`;
             else if (acc.note === 'VAC') noteHtml = `<span class="badge badge-vac"><i class="fa-solid fa-ban"></i> VAC BAN</span>`;
             else if (acc.note) noteHtml = `<span class="badge badge-custom"><i class="fa-solid fa-note-sticky"></i> ${acc.note}</span>`;
 
-            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-trash";
+            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-eye-slash"; // Иконка глаза или восстановления
             const hideClass = acc.isHidden ? "toggle-restore-btn" : "toggle-hidden-btn";
-            const hideTitle = acc.isHidden ? "Restore account" : "Remove from list";
+            const hideTitle = acc.isHidden ? "Restore account" : "Hide from this game";
 
-            // В onclick используем глобальные ссылки (window не обязательно писать в onclick, но функции должны быть в window)
             item.innerHTML = `
-                <div style="flex:1" onclick="launch('${acc.username}', '${game.id}', '${game.platform}', '')">
+                <div style="flex:1; cursor:pointer;" onclick="launch('${acc.username}', '${game.id}', '${game.platform}', '')">
                     <div class="acc-name" style="font-weight:bold; display:flex; align-items:center;">
                         <i class="fa-solid ${actionIcon}" style="margin-right:8px; font-size:12px; color:#aaa;"></i>
                         ${acc.displayName}
@@ -150,9 +205,11 @@ function renderGameModalContent(gameId) {
                     </div>
                     <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
                 </div>
+                
                 <div class="edit-note-btn" onclick="openNoteSelector('${acc.username}', '${game.platform}', '${game.id}', '${acc.note || ''}')" title="Tag Account">
                     <i class="fa-solid fa-tag"></i>
                 </div>
+                
                 <div class="toggle-hidden-btn ${hideClass}" onclick="toggleGameAccountHidden('${acc.username}', '${game.platform}', '${game.id}')" title="${hideTitle}">
                     <i class="fa-solid ${hideIcon}"></i>
                 </div>
@@ -162,19 +219,32 @@ function renderGameModalContent(gameId) {
     }
 }
 
+// Запуск игры
+window.launch = async function(account, gameId, platform, exePath) {
+    try {
+        const res = await LaunchGame(account, gameId, platform, exePath);
+        // Если вернулось не "Launched...", значит ошибка
+        if (res && !res.startsWith("Launched") && !res.startsWith("Success")) {
+            alert(res);
+        } else {
+            document.getElementById('account-modal').style.display = 'none';
+        }
+    } catch (e) {
+        alert("Launch error: " + e);
+    }
+}
+
+// Скрытие/Показ аккаунта для конкретной игры
 window.toggleGameAccountHidden = async function(username, platform, gameId) {
     await ToggleGameAccountHidden(username, platform, gameId);
+    // Обновляем данные глобально
     const games = await GetLibrary();
     globalGames = games;
+    // Перерисовываем модалку
     renderGameModalContent(gameId);
 }
 
-// Экспорт launch глобально
-window.launch = async function(account, gameId, platform, exePath) {
-    const res = await LaunchGame(account, gameId, platform, exePath);
-    if (res && !res.startsWith("Launched") && !res.startsWith("Success")) alert(res);
-    else document.getElementById('account-modal').style.display = 'none';
-}
+// --- Управление заметками (Notes) ---
 
 window.openNoteSelector = function(username, platform, gameId, currentNote) {
     editingTagTarget = { username, platform, gameId };
@@ -183,8 +253,14 @@ window.openNoteSelector = function(username, platform, gameId, currentNote) {
     document.getElementById('note-select-modal').style.display = 'flex';
 }
 
-window.savePredefinedNote = async function(noteType) { await applyNote(noteType); }
-window.saveCustomNote = async function() { const text = document.getElementById('custom-note-input').value; await applyNote(text); }
+window.savePredefinedNote = async function(noteType) { 
+    await applyNote(noteType); 
+}
+
+window.saveCustomNote = async function() { 
+    const text = document.getElementById('custom-note-input').value; 
+    await applyNote(text); 
+}
 
 async function applyNote(noteText) {
     const { username, platform, gameId } = editingTagTarget;
@@ -195,100 +271,231 @@ async function applyNote(noteText) {
     renderGameModalContent(gameId);
 }
 
-// --- Accounts logic ---
+
+// --- Логика вкладки Аккаунты (Accounts) ---
 
 async function loadAccounts() {
     const container = document.getElementById('launchers-list');
+    if (!container) return;
+    
     container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
-    const launchers = await GetLaunchers();
-    container.innerHTML = '';
-    launchers.forEach(group => {
-        const section = document.createElement('div');
-        section.className = 'launcher-section';
-        let accountsHtml = '';
-        group.accounts.forEach(acc => {
-            let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
-            if (acc.avatarUrl) avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
-            const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
-            accountsHtml += `
-                <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
-                    ${avatarHtml}
-                    <div class="acc-details">
-                        <div class="acc-nick">${acc.displayName}${commentHtml}</div>
-                        <div class="acc-login">${acc.username}</div>
-                    </div>
-                    <div class="acc-actions" onclick="event.stopPropagation()">
-                        <div class="action-icon-btn" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')"><i class="fa-solid fa-pen"></i></div>
-                        <div class="action-icon-btn delete-btn" onclick="deleteAccount('${acc.username}', '${group.platform}')"><i class="fa-solid fa-trash"></i></div>
-                    </div>
-                    <div class="acc-action-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
-                </div>`;
-        });
-        let footerHtml = '';
-        if (group.platform === 'Epic') {
-            footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="openSaveEpicModal()" style="background:transparent; border:1px dashed #444; color:#888; width:100%; padding:8px; cursor:pointer;"><i class="fa-solid fa-plus"></i> Save Current Epic Account</button></div>`;
+    
+    try {
+        const launchers = await GetLaunchers();
+        container.innerHTML = '';
+        
+        if (!launchers || launchers.length === 0) {
+            container.innerHTML = '<div style="padding:20px">No launchers found.</div>';
+            return;
         }
-        section.innerHTML = `<div class="launcher-header"><i class="fa-brands fa-${group.platform.toLowerCase()}"></i> ${group.name} <span class="count">${group.accounts.length}</span></div><div class="launcher-accounts">${accountsHtml}</div>${footerHtml}`;
-        container.appendChild(section);
-    });
+        
+        launchers.forEach(group => {
+            const section = document.createElement('div');
+            section.className = 'launcher-section';
+            
+            let accountsHtml = '';
+            // ВАЖНОЕ ИСПРАВЛЕНИЕ: Добавлена проверка (group.accounts || [])
+            // Это предотвращает ошибку, если список аккаунтов пустой/null
+            const accounts = group.accounts || [];
+            
+            accounts.forEach(acc => {
+                let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
+                if (acc.avatarUrl) {
+                    avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
+                }
+                
+                const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
+                
+                accountsHtml += `
+                    <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
+                        ${avatarHtml}
+                        <div class="acc-details">
+                            <div class="acc-nick">${acc.displayName}${commentHtml}</div>
+                            <div class="acc-login">${acc.username}</div>
+                        </div>
+                        <div class="acc-actions" onclick="event.stopPropagation()">
+                            <div class="action-icon-btn" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')"><i class="fa-solid fa-pen"></i></div>
+                            <div class="action-icon-btn delete-btn" onclick="deleteAccount('${acc.username}', '${group.platform}')"><i class="fa-solid fa-trash"></i></div>
+                        </div>
+                        <div class="acc-action-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
+                    </div>`;
+            });
+            
+            // Кнопка для Epic Games
+            let footerHtml = '';
+            if (group.platform === 'Epic') {
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="addEpicAccount()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;"><i class="fa-solid fa-plus"></i> Add Current Epic Session</button></div>`;
+            }
+
+            // Иконка платформы
+            let iconClass = "fa-gamepad";
+            if (group.platform === "Steam") iconClass = "fa-steam";
+            if (group.platform === "Epic") iconClass = "fa-bolt"; // Или fa-accessible-icon, если нет fa-epic
+            
+            section.innerHTML = `
+                <div class="launcher-header">
+                    <i class="fa-brands ${iconClass}"></i> ${group.name} 
+                    <span class="count">${accounts.length}</span>
+                </div>
+                <div class="launcher-accounts">${accountsHtml}</div>
+                ${footerHtml}
+            `;
+            container.appendChild(section);
+        });
+    } catch (e) {
+        container.innerHTML = `<div style="color:red; padding:20px;">Error loading accounts: ${e}</div>`;
+        console.error("Load Accounts Error:", e);
+    }
 }
 
-window.switchAccount = async function(username, platform) { alert(await SwitchToAccount(username, platform)); }
-window.openSaveEpicModal = function() { document.getElementById('epic-save-name').value = ''; document.getElementById('save-epic-modal').style.display = 'flex'; }
-window.doSaveEpic = async function() { const name = document.getElementById('epic-save-name').value; if (!name) return; alert(await SaveEpicAccount(name)); closeModal('save-epic-modal'); loadAccounts(); }
-window.deleteAccount = async function(username, platform) { if (confirm(`Hide account ${username}?`)) { await DeleteAccount(username, platform); loadAccounts(); } }
-window.openEditAccount = function(username, platform, currentComment) { editingAccountTarget = { username, platform }; document.getElementById('edit-comment').value = currentComment; document.getElementById('edit-avatar-path').value = ''; document.getElementById('edit-account-modal').style.display = 'flex'; }
-window.selectNewAvatar = async function() { const path = await SelectImage(); if (path) document.getElementById('edit-avatar-path').value = path; }
-window.saveAccountChanges = async function() { await UpdateAccountData(editingAccountTarget.username, editingAccountTarget.platform, document.getElementById('edit-comment').value, document.getElementById('edit-avatar-path').value); closeModal('edit-account-modal'); loadAccounts(); }
-window.browseFile = async function() { const path = await SelectExe(); if (path) document.getElementById('custom-path').value = path; }
-window.saveCustomGame = async function() { const res = await AddCustomGame(document.getElementById('custom-name').value, document.getElementById('custom-path').value); if (res === 'Success') { closeModal('add-game-modal'); loadLibrary(); document.getElementById('custom-name').value = ''; document.getElementById('custom-path').value = ''; } else { alert(res); } }
+// Переключение аккаунта в лаунчере
+window.switchAccount = async function(username, platform) { 
+    const result = await SwitchToAccount(username, platform);
+    alert(result);
+}
+
+// Удаление аккаунта
+window.deleteAccount = async function(username, platform) { 
+    if (confirm(`Скрыть аккаунт ${username} из списка?`)) { 
+        await DeleteAccount(username, platform); 
+        loadAccounts(); 
+    } 
+}
+
+// Редактирование аккаунта (комментарий, аватарка)
+window.openEditAccount = function(username, platform, currentComment) { 
+    editingAccountTarget = { username, platform }; 
+    document.getElementById('edit-comment').value = currentComment; 
+    document.getElementById('edit-avatar-path').value = ''; 
+    document.getElementById('edit-account-modal').style.display = 'flex'; 
+}
+
+window.selectNewAvatar = async function() { 
+    const path = await SelectImage(); 
+    if (path) document.getElementById('edit-avatar-path').value = path; 
+}
+
+window.saveAccountChanges = async function() { 
+    await UpdateAccountData(
+        editingAccountTarget.username, 
+        editingAccountTarget.platform, 
+        document.getElementById('edit-comment').value, 
+        document.getElementById('edit-avatar-path').value
+    ); 
+    closeModal('edit-account-modal'); 
+    loadAccounts(); 
+}
+
+// --- Добавление игр (Custom / Torrent) ---
+
+window.browseFile = async function() { 
+    const path = await SelectExe(); 
+    if (path) document.getElementById('custom-path').value = path; 
+}
+
+window.saveCustomGame = async function() { 
+    const res = await AddCustomGame(
+        document.getElementById('custom-name').value, 
+        document.getElementById('custom-path').value
+    ); 
+    
+    if (res === 'Success') { 
+        closeModal('add-game-modal'); 
+        loadLibrary(); 
+        document.getElementById('custom-name').value = ''; 
+        document.getElementById('custom-path').value = ''; 
+    } else { 
+        alert(res); 
+    } 
+}
+
+// --- Добавление Epic Account (Интеграция по запросу) ---
+
+window.addEpicAccount = function() {
+    // Спрашиваем у пользователя имя
+    let accountName = prompt("Введите название для текущего аккаунта Epic Games (убедитесь, что вы залогинены):", "Main Profile");
+
+    if (!accountName) return; // Отмена
+
+    // Вызываем Go функцию через импорт
+    SaveEpicAccount(accountName)
+        .then((result) => {
+            if (result === "Success") {
+                alert("Аккаунт Epic успешно сохранен!");
+                // Обновляем список, если мы на вкладке аккаунтов
+                if (document.getElementById('view-accounts').style.display !== 'none') {
+                    loadAccounts();
+                }
+            } else {
+                alert("Ошибка сохранения: " + result);
+            }
+        })
+        .catch((err) => {
+            console.error(err);
+            alert("Системная ошибка: " + err);
+        });
+};
 
 
-// --- Логика контекстного меню ---
+// --- Логика контекстного меню (ПКМ) ---
 
 const contextMenu = document.getElementById('context-menu');
 const deleteBtn = document.getElementById('ctx-delete');
 const changeIconBtn = document.getElementById('ctx-change-icon');
 
+// Закрываем меню при клике в любом месте
 document.addEventListener('click', () => {
     if (contextMenu) contextMenu.style.display = 'none';
 });
 
+// Открытие меню
 document.addEventListener('contextmenu', (e) => {
     const card = e.target.closest('.card');
 
     if (card) {
         e.preventDefault();
-        // Теперь эти атрибуты существуют, так как мы добавили их в loadLibrary
+        
+        // Получаем ID и платформу из data-атрибутов
         selectedGameId = card.getAttribute('data-id');
         selectedPlatform = card.getAttribute('data-platform');
 
-        if (selectedPlatform !== 'Torrent' && selectedPlatform !== 'Custom') {
-            deleteBtn.style.display = 'none';
+        // Логика: удалять и менять иконку можно только у Custom/Torrent игр
+        const isCustom = (selectedPlatform === 'Torrent' || selectedPlatform === 'Custom');
+
+        if (!isCustom) {
+            if (deleteBtn) deleteBtn.style.display = 'none';
             if (changeIconBtn) changeIconBtn.style.display = 'none';
+            // Если все опции скрыты - не открываем меню вообще (или можно оставить, если будут общие опции типа Pin)
+            // В данном случае, если нет опций, лучше не открывать, если не добавите "Pin" сюда
+             if (!deleteBtn && !changeIconBtn) {
+                 contextMenu.style.display = 'none';
+                 return;
+             }
         } else {
-            deleteBtn.style.display = 'block';
+            if (deleteBtn) deleteBtn.style.display = 'block';
             if (changeIconBtn) changeIconBtn.style.display = 'block';
         }
 
+        // Позиционирование меню
         contextMenu.style.top = `${e.pageY}px`;
         contextMenu.style.left = `${e.pageX}px`;
         contextMenu.style.display = 'block';
     } else {
-        contextMenu.style.display = 'none';
+        if (contextMenu) contextMenu.style.display = 'none';
     }
 });
 
+// Обработчик кнопки удаления
 if (deleteBtn) {
     deleteBtn.addEventListener('click', async () => {
         if (!selectedGameId || !selectedPlatform) return;
-        const confirmed = await confirm(`Удалить эту игру?`);
+        const confirmed = confirm(`Удалить эту игру из библиотеки?`);
         if (!confirmed) return;
 
         try {
             const result = await RemoveGame(selectedGameId, selectedPlatform);
             if (result === "Success") {
-                loadLibrary(); // Просто обновляем библиотеку без перезагрузки
+                loadLibrary(); 
             } else {
                 alert("Ошибка: " + result);
             }
@@ -298,44 +505,19 @@ if (deleteBtn) {
     });
 }
 
+// Обработчик смены иконки
 if (changeIconBtn) {
     changeIconBtn.addEventListener('click', async () => {
         if (!selectedGameId || !selectedPlatform) return;
         
-        // Вызываем функцию бэкенда для выбора и установки картинки
+        // Вызываем диалог выбора файла
         const result = await SetGameImage(selectedGameId, selectedPlatform);
         
-        // Если вернулся путь (не ошибка и не отмена), обновляем библиотеку
+        // Проверяем результат
         if (result && !result.startsWith("Error") && result !== "Cancelled" && result !== "Not supported for this platform") {
-            loadLibrary();
+            loadLibrary(); // Перерисовываем библиотеку с новой картинкой
         } else if (result && result.startsWith("Error")) {
             alert(result);
         }
     });
 }
-
-// Функция добавления аккаунта
-function addEpicAccount() {
-    let accountName = prompt("Введите название для текущего аккаунта Epic Games:", "My Epic Main");
-    
-    if (accountName) {
-        // Вызов Go функции через Wails
-        window.go.app.App.SaveEpicAccount(accountName)
-            .then((result) => {
-                if (result === "Success") {
-                    alert("Аккаунт Epic успешно сохранен!");
-                    // Тут можно обновить список аккаунтов на странице
-                    // location.reload(); или вызвать функцию обновления стейта
-                } else {
-                    alert("Ошибка при сохранении: " + result);
-                }
-            })
-            .catch((err) => {
-                console.error(err);
-                alert("Системная ошибка: " + err);
-            });
-    }
-}
-
-// Запуск при старте
-loadLibrary();
