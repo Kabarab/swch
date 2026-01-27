@@ -45,3 +45,7 @@ type LauncherGroup struct {
 	Platform string    `json:"platform"`
 	Accounts []Account `json:"accounts"`
 }
+
+type Settings struct {
+	Accounts []Account `json:"accounts"`
+}

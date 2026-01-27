@@ -12,7 +12,6 @@ import (
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
-	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -112,7 +111,9 @@ func runCSharpSwitcher(username string, gameID string) string {
 		cmd = exec.Command(switcherPath, username)
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	// Используем кроссплатформенный хелпер из internal/sys
+	sys.ConfigureCommand(cmd)
+
 	output, err := cmd.CombinedOutput()
 	fmt.Println("Switcher Log:\n", string(output))
 

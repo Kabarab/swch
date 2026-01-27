@@ -14,6 +14,11 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// ConfigureCommand скрывает окно консоли при запуске команды (только для Windows)
+func ConfigureCommand(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+}
+
 // --- STEAM UTILS ---
 
 func GetSteamPath() (string, error) {

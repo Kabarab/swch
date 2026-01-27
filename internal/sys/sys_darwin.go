@@ -9,6 +9,11 @@ import (
 	"path/filepath"
 )
 
+// ConfigureCommand для macOS ничего не делает, так как SysProcAttr.HideWindow не существует
+func ConfigureCommand(cmd *exec.Cmd) {
+	// No-op
+}
+
 // --- STEAM UTILS (macOS) ---
 
 func GetSteamPath() (string, error) {
