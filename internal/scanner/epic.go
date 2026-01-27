@@ -36,8 +36,7 @@ func getEpicConfigDir() string {
 
 // getEpicAuthDataPath возвращает путь к папке Data (где Epic хранит токены сессии)
 func getEpicAuthDataPath() string {
-	localAppData := os.Getenv("LOCALAPPDATA")
-	return filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
+	return sys.GetEpicAuthDataDir()
 }
 
 // SaveCurrentEpicAccount сохраняет текущую сессию Epic (папку Data)
@@ -110,11 +109,8 @@ func SwitchEpicAccount(name string) error {
 func ScanEpicGames() []models.LibraryGame {
 	var games []models.LibraryGame
 
-	programData := os.Getenv("ProgramData")
-	if programData == "" {
-		programData = "C:\\ProgramData"
-	}
-	manifestPath := filepath.Join(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests")
+	// Используем кроссплатформенный путь из пакета sys
+	manifestPath := sys.GetEpicManifestsDir()
 
 	files, err := os.ReadDir(manifestPath)
 	if err != nil {

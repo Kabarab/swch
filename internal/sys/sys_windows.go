@@ -1,7 +1,10 @@
+//go:build windows
+
 package sys
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -63,9 +66,7 @@ func SetSteamUser(username string) error {
 // --- EPIC GAMES UTILS ---
 
 func KillEpic() error {
-	// taskkill /F /IM EpicGamesLauncher.exe
 	cmd := exec.Command("taskkill", "/F", "/IM", "EpicGamesLauncher.exe")
-	// Игнорируем ошибку, если процесс не запущен
 	_ = cmd.Run()
 	return nil
 }
@@ -89,6 +90,21 @@ func SetEpicAccountId(accountId string) error {
 	return k.SetStringValue("AccountId", accountId)
 }
 
+// GetEpicManifestsDir возвращает путь к манифестам игр Epic на Windows
+func GetEpicManifestsDir() string {
+	programData := os.Getenv("ProgramData")
+	if programData == "" {
+		programData = "C:\\ProgramData"
+	}
+	return filepath.Join(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests")
+}
+
+// GetEpicAuthDataDir возвращает путь к папке с данными авторизации Epic на Windows
+func GetEpicAuthDataDir() string {
+	localAppData := os.Getenv("LOCALAPPDATA")
+	return filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
+}
+
 // --- RIOT GAMES UTILS ---
 
 func KillRiot() {
@@ -102,18 +118,15 @@ func KillRiot() {
 // --- LAUNCHER UTILS ---
 
 func StartGame(pathOrUrl string) {
-	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
 	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
 		RunExecutable(pathOrUrl)
 		return
 	}
-	// Иначе (например, steam:// или URL) запускаем через оболочку
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
-// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
 func RunExecutable(path string) error {
 	cleanPath := filepath.Clean(path)
 	cmd := exec.Command("explorer", cleanPath)
@@ -121,7 +134,6 @@ func RunExecutable(path string) error {
 	return cmd.Start()
 }
 
-// StartGameWithArgs запускает exe с аргументами (для Riot)
 func StartGameWithArgs(exePath string, args ...string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Dir(exePath)
