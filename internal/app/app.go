@@ -111,7 +111,7 @@ func runCSharpSwitcher(username string, gameID string) string {
 		cmd = exec.Command(switcherPath, username)
 	}
 
-	// Используем кроссплатформенный хелпер из internal/sys
+	// Исправлено: использование кроссплатформенного хелпера из пакета sys
 	sys.ConfigureCommand(cmd)
 
 	output, err := cmd.CombinedOutput()
@@ -343,8 +343,6 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 
 	return "Platform not supported"
 }
-
-// --- СТАРЫЕ МЕТОДЫ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ---
 
 func (a *App) AddTorrentGame(name string, exePath string) string {
 	if name == "" || exePath == "" {

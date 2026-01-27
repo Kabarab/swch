@@ -41,8 +41,7 @@ window.switchTab = function(tab) {
     document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
     
-    // Подсветка активной кнопки (предполагается, что у кнопок есть ID или классы)
-    // В данном случае просто переключаем видимость блоков
+    // Подсветка активной кнопки
     if (tab === 'library') {
         document.getElementById('view-library').style.display = 'block';
         loadLibrary();
@@ -294,8 +293,6 @@ async function loadAccounts() {
             section.className = 'launcher-section';
             
             let accountsHtml = '';
-            // ВАЖНОЕ ИСПРАВЛЕНИЕ: Добавлена проверка (group.accounts || [])
-            // Это предотвращает ошибку, если список аккаунтов пустой/null
             const accounts = group.accounts || [];
             
             accounts.forEach(acc => {
@@ -321,16 +318,16 @@ async function loadAccounts() {
                     </div>`;
             });
             
-            // Кнопка для Epic Games
+            // Кнопка для Epic Games - ИЗМЕНЕНО: теперь открывает модальное окно
             let footerHtml = '';
             if (group.platform === 'Epic') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="addEpicAccount()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;"><i class="fa-solid fa-plus"></i> Add Current Epic Session</button></div>`;
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;"><i class="fa-solid fa-plus"></i> Add Current Epic Session</button></div>`;
             }
 
             // Иконка платформы
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
-            if (group.platform === "Epic") iconClass = "fa-bolt"; // Или fa-accessible-icon, если нет fa-epic
+            if (group.platform === "Epic") iconClass = "fa-bolt"; 
             
             section.innerHTML = `
                 <div class="launcher-header">
@@ -409,32 +406,36 @@ window.saveCustomGame = async function() {
     } 
 }
 
-// --- Добавление Epic Account (Интеграция по запросу) ---
+// --- Добавление Epic Account (Исправлено) ---
 
-window.addEpicAccount = function() {
-    // Спрашиваем у пользователя имя
-    let accountName = prompt("Введите название для текущего аккаунта Epic Games (убедитесь, что вы залогинены):", "Main Profile");
+// Функция открытия модального окна
+window.openEpicSaveModal = function() {
+    document.getElementById('epic-save-name').value = '';
+    document.getElementById('save-epic-modal').style.display = 'flex';
+}
 
-    if (!accountName) return; // Отмена
+// Функция выполнения сохранения (вызывается из модального окна)
+window.doSaveEpic = async function() {
+    const name = document.getElementById('epic-save-name').value;
+    if (!name) {
+        alert("Please enter a name");
+        return;
+    }
 
-    // Вызываем Go функцию через импорт
-    SaveEpicAccount(accountName)
-        .then((result) => {
-            if (result === "Success") {
-                alert("Аккаунт Epic успешно сохранен!");
-                // Обновляем список, если мы на вкладке аккаунтов
-                if (document.getElementById('view-accounts').style.display !== 'none') {
-                    loadAccounts();
-                }
-            } else {
-                alert("Ошибка сохранения: " + result);
-            }
-        })
-        .catch((err) => {
-            console.error(err);
-            alert("Системная ошибка: " + err);
-        });
-};
+    try {
+        const result = await SaveEpicAccount(name);
+        if (result === "Success") {
+            closeModal('save-epic-modal');
+            alert("Epic account saved!");
+            loadAccounts();
+        } else {
+            alert("Error: " + result);
+        }
+    } catch (e) {
+        alert("System error: " + e);
+        console.error(e);
+    }
+}
 
 
 // --- Логика контекстного меню (ПКМ) ---
@@ -465,8 +466,6 @@ document.addEventListener('contextmenu', (e) => {
         if (!isCustom) {
             if (deleteBtn) deleteBtn.style.display = 'none';
             if (changeIconBtn) changeIconBtn.style.display = 'none';
-            // Если все опции скрыты - не открываем меню вообще (или можно оставить, если будут общие опции типа Pin)
-            // В данном случае, если нет опций, лучше не открывать, если не добавите "Pin" сюда
              if (!deleteBtn && !changeIconBtn) {
                  contextMenu.style.display = 'none';
                  return;
@@ -510,12 +509,10 @@ if (changeIconBtn) {
     changeIconBtn.addEventListener('click', async () => {
         if (!selectedGameId || !selectedPlatform) return;
         
-        // Вызываем диалог выбора файла
         const result = await SetGameImage(selectedGameId, selectedPlatform);
         
-        // Проверяем результат
         if (result && !result.startsWith("Error") && result !== "Cancelled" && result !== "Not supported for this platform") {
-            loadLibrary(); // Перерисовываем библиотеку с новой картинкой
+            loadLibrary(); 
         } else if (result && result.startsWith("Error")) {
             alert(result);
         }
