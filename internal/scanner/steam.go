@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"swch/internal/models"
@@ -272,7 +273,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 	libraryPaths := s.getLibraryFolders()
 	installedAppIDs := make(map[string]bool)
 
-	// 1. Установленные
+	// --- 1. Установленные игры ---
 	for _, libPath := range libraryPaths {
 		steamAppsPath := filepath.Join(libPath, "steamapps")
 		files, err := os.ReadDir(steamAppsPath)
@@ -307,6 +308,16 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					}
 				}
 
+				// Логика поддержки Mac для установленных игр
+				isMacSupported := false
+				if runtime.GOOS == "darwin" {
+					// Если мы на маке и игра установлена в Steam, значит она точно работает
+					isMacSupported = true
+				} else {
+					// Если мы на Windows, проверяем через API (или считаем false, если не хотим ждать)
+					// isMacSupported = checkMacSupport(appID)
+				}
+
 				games = append(games, models.LibraryGame{
 					ID:                  appID,
 					Name:                name,
@@ -315,13 +326,14 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					ExePath:             fullPath,
 					AvailableOnAccounts: owners,
 					IsInstalled:         true,
+					IsMacSupported:      isMacSupported, // <-- Новое поле
 				})
 				installedAppIDs[appID] = true
 			}
 		}
 	}
 
-	// 2. Неустановленные
+	// --- 2. Неустановленные игры ---
 	for _, acc := range accounts {
 		configFiles := []string{
 			filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf"),
@@ -335,6 +347,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 			}
 
 			var apps map[string]interface{}
+			// Попытка найти список приложений в разных структурах VDF
 			if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
 				if soft, ok := store["Software"].(map[string]interface{}); ok {
 					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
@@ -358,6 +371,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 			}
 
 			for appID, appData := range apps {
+				// Пропускаем уже добавленные (установленные)
 				if _, exists := installedAppIDs[appID]; exists {
 					continue
 				}
@@ -376,6 +390,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					}
 				}
 
+				// Если имени нет в конфиге, берем из кэша
 				if gameName == "" {
 					cacheMutex.RLock()
 					if name, found := appNameCache[appID]; found {
@@ -399,6 +414,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 				}
 
 				if foundIdx != -1 {
+					// Игра уже есть в списке (от другого аккаунта), добавляем владельца
 					games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
 					if (games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")) && gameName != "" {
 						games[foundIdx].Name = gameName
@@ -407,6 +423,19 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					if gameName == "" {
 						gameName = fmt.Sprintf("Steam App %s", appID)
 					}
+
+					// Логика поддержки Mac для неустановленных игр
+					isMacSupported := false
+
+					// ВНИМАНИЕ: Если включить этот блок, загрузка библиотеки замедлится!
+					// Steam API имеет лимиты (около 200 запросов в 5 минут).
+					// Рекомендуется вызывать checkMacSupport только по требованию пользователя.
+					/*
+						if runtime.GOOS == "darwin" {
+							isMacSupported = checkMacSupport(appID)
+						}
+					*/
+
 					games = append(games, models.LibraryGame{
 						ID:                  appID,
 						Name:                gameName,
@@ -415,6 +444,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 						ExePath:             "",
 						AvailableOnAccounts: []models.AccountStat{ownerStat},
 						IsInstalled:         false,
+						IsMacSupported:      isMacSupported, // <-- Новое поле
 					})
 				}
 			}
@@ -422,6 +452,50 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 	}
 
 	return games
+}
+
+// Структуры для ответа Steam Store API
+type storeAppDetails struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Platforms struct {
+			Windows bool `json:"windows"`
+			Mac     bool `json:"mac"`
+			Linux   bool `json:"linux"`
+		} `json:"platforms"`
+	} `json:"data"`
+}
+
+// Кэш совместимости (чтобы не спамить API при каждом запуске)
+var osSupportCache = make(map[string]bool)
+
+func checkMacSupport(appID string) bool {
+	// 1. Если уже проверяли - возвращаем из памяти
+	if val, ok := osSupportCache[appID]; ok {
+		return val
+	}
+
+	// 2. Делаем запрос к API магазина
+	url := fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s&filters=platforms", appID)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false // Если ошибка сети, считаем что не поддерживается (безопасно)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]storeAppDetails
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+
+	// 3. Парсим ответ
+	if appData, ok := result[appID]; ok && appData.Success {
+		isMac := appData.Data.Platforms.Mac
+		osSupportCache[appID] = isMac // Сохраняем в кэш
+		return isMac
+	}
+
+	return false
 }
 
 func (s *SteamScanner) getLibraryFolders() []string {
@@ -511,12 +585,30 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 }
 
 func (s *SteamScanner) ownsGame(steamID3 string, appID string) bool {
+	// 1. Проверяем localconfig.vdf (старый метод)
 	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
-	contentBytes, err := os.ReadFile(localConfigPath)
+	if fileContainsAppID(localConfigPath, appID) {
+		return true
+	}
+
+	// 2. Проверяем sharedconfig.vdf (новый надежный метод)
+	// Путь: userdata/<id>/7/remote/sharedconfig.vdf
+	sharedConfigPath := filepath.Join(s.Path, "userdata", steamID3, "7", "remote", "sharedconfig.vdf")
+	if fileContainsAppID(sharedConfigPath, appID) {
+		return true
+	}
+
+	return false
+}
+func fileContainsAppID(path, appID string) bool {
+	contentBytes, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(contentBytes), fmt.Sprintf(`"%s"`, appID))
+	// Ищем точное совпадение "appid", чтобы не найти "12" внутри "12345"
+	// Обычно в VDF это выглядит как key "123" или value "123"
+	searchStr := fmt.Sprintf(`"%s"`, appID)
+	return strings.Contains(string(contentBytes), searchStr)
 }
 
 func parseVdf(path string) map[string]interface{} {

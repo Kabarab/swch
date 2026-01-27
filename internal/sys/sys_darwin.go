@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"time"
 )
 
-// ConfigureCommand для macOS ничего не делает, так как SysProcAttr.HideWindow не существует
+// ConfigureCommand для macOS ничего не делает
 func ConfigureCommand(cmd *exec.Cmd) {
 	// No-op
 }
@@ -21,20 +23,74 @@ func GetSteamPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Стандартный путь Steam на macOS
 	return filepath.Join(home, "Library", "Application Support", "Steam"), nil
 }
 
 func KillSteam() {
-	// Pkill ищет процесс по имени. -i (case insensitive), -l (long name)
-	_ = exec.Command("pkill", "-il", "steam").Run()
+	// 1. Пытаемся закрыть мягко
+	exec.Command("pkill", "-il", "steam").Run()
+
+	// 2. Ждем 3 секунды и добиваем жестко, если еще жив
+	done := make(chan error, 1)
+	go func() {
+		// Проверяем наличие процесса steam_osx (основной бинарник на Mac)
+		for i := 0; i < 10; i++ {
+			if err := exec.Command("pgrep", "-x", "steam_osx").Run(); err != nil {
+				// pgrep вернул ошибку -> процесс не найден -> успех
+				done <- nil
+				return
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		// Если все еще жив - убиваем жестко
+		exec.Command("killall", "-9", "steam_osx").Run()
+		exec.Command("pkill", "-9", "-il", "steam").Run()
+		done <- nil
+	}()
+	<-done
 }
 
 func SetSteamUser(username string) error {
-	// На macOS автологин через реестр не работает, так как реестра нет.
-	// Основная работа по переключению делается через изменение loginusers.vdf в пакете scanner.
-	// Поэтому здесь возвращаем nil.
-	return nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	regPath := filepath.Join(home, "Library", "Application Support", "Steam", "registry.vdf")
+
+	// Читаем файл
+	contentBytes, err := os.ReadFile(regPath)
+	if err != nil {
+		return fmt.Errorf("registry.vdf not found: %v", err)
+	}
+	content := string(contentBytes)
+
+	// 1. Обновляем AutoLoginUser
+	// Используем (?i) для игнорирования регистра (AutoLoginUser или autologinuser)
+	reLogin := regexp.MustCompile(`(?i)"AutoLoginUser"\s+"[^"]*"`)
+	newLoginVal := fmt.Sprintf(`"AutoLoginUser"		"%s"`, username)
+
+	if reLogin.MatchString(content) {
+		content = reLogin.ReplaceAllString(content, newLoginVal)
+	} else {
+		// Если ключа нет, это проблема. Попробуем вставить его в блок Steam
+		// Ищем "Steam" { и вставляем после него
+		fmt.Println("[macOS] AutoLoginUser key missing, trying to inject...")
+		reSteamBlock := regexp.MustCompile(`(?i)"Steam"\s*\{`)
+		if loc := reSteamBlock.FindStringIndex(content); loc != nil {
+			insertStr := fmt.Sprintf("\n\t\t%s", newLoginVal)
+			content = content[:loc[1]] + insertStr + content[loc[1]:]
+		}
+	}
+
+	// 2. Обязательно обновляем RememberPassword, иначе автологин не сработает
+	reRemember := regexp.MustCompile(`(?i)"RememberPassword"\s+"\d+"`)
+	newRememberVal := `"RememberPassword"		"1"`
+
+	if reRemember.MatchString(content) {
+		content = reRemember.ReplaceAllString(content, newRememberVal)
+	}
+
+	return os.WriteFile(regPath, []byte(content), 0644)
 }
 
 // --- EPIC GAMES UTILS (macOS) ---
@@ -44,7 +100,6 @@ func KillEpic() error {
 }
 
 func GetEpicAccountId() (string, error) {
-	// На Mac идентификаторы хранятся в Plist файлах, пока заглушка.
 	return "", fmt.Errorf("not implemented on macos")
 }
 
@@ -70,30 +125,23 @@ func KillRiot() {
 	_ = exec.Command("pkill", "-il", "VALORANT").Run()
 }
 
+func GetRiotPrivateSettingsPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Library", "Application Support", "Riot Games", "Riot Client", "Data", "RiotClientPrivateSettings.yaml")
+}
+
 // --- LAUNCHER UTILS (macOS) ---
 
 func StartGame(pathOrUrl string) {
-	// Команда open универсальна: открывает файлы, приложения (.app) и ссылки (steam://)
-	cmd := exec.Command("open", pathOrUrl)
-	cmd.Start()
+	exec.Command("open", pathOrUrl).Start()
 }
 
 func RunExecutable(path string) error {
-	// Если это .app, open запустит его корректно
-	cmd := exec.Command("open", path)
-	return cmd.Start()
+	return exec.Command("open", path).Start()
 }
 
 func StartGameWithArgs(exePath string, args ...string) error {
-	// На Mac запуск с аргументами через open требует флага --args
-	// Пример: open -n -a "Riot Client" --args --launch-product=...
-
-	// Используем -n чтобы запустить новый экземпляр, если нужно, -a для указания приложения
-	// Однако часто достаточно просто передать путь к исполняемому файлу внутри .app
-
 	cmdArgs := []string{"-n", exePath, "--args"}
 	cmdArgs = append(cmdArgs, args...)
-
-	cmd := exec.Command("open", cmdArgs...)
-	return cmd.Start()
+	return exec.Command("open", cmdArgs...).Start()
 }

@@ -22,17 +22,16 @@ func getRiotConfigDir() string {
 	return path
 }
 
-func getRiotPrivateSettingsPath() string {
-	localAppData := os.Getenv("LOCALAPPDATA")
-	return filepath.Join(localAppData, "Riot Games", "Riot Client", "Data", "RiotClientPrivateSettings.yaml")
-}
-
-// ScanRiotGames ищет игры через RiotClientInstalls.json
+// ScanRiotGames пока оставляем специфичным для Windows (ProgramData),
+// так как точная структура установки игр на macOS может отличаться.
+// Но аккаунты будут работать.
 func ScanRiotGames() []models.LibraryGame {
 	var games []models.LibraryGame
 	programData := os.Getenv("ProgramData")
 	if programData == "" {
-		programData = "C:\\ProgramData"
+		// На macOS игр в ProgramData нет, возвращаем пустой список или
+		// можно добавить логику поиска в /Applications
+		return games
 	}
 
 	jsonPath := filepath.Join(programData, "Riot Games", "RiotClientInstalls.json")
@@ -87,7 +86,9 @@ func SaveCurrentRiotAccount(name string) error {
 		return fmt.Errorf("name is empty")
 	}
 
-	srcPath := getRiotPrivateSettingsPath()
+	// ИСПОЛЬЗУЕМ КРОССПЛАТФОРМЕННУЮ ФУНКЦИЮ ИЗ SYS
+	srcPath := sys.GetRiotPrivateSettingsPath()
+
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
 		return fmt.Errorf("Riot settings not found. Please login to Riot Client first.")
 	}
@@ -114,7 +115,8 @@ func SwitchRiotAccount(name string) error {
 
 	sys.KillRiot()
 
-	targetPath := getRiotPrivateSettingsPath()
+	// ИСПОЛЬЗУЕМ КРОССПЛАТФОРМЕННУЮ ФУНКЦИЮ ИЗ SYS
+	targetPath := sys.GetRiotPrivateSettingsPath()
 	os.Remove(targetPath)
 
 	if err := copyRiotFile(yamlSource, targetPath); err != nil {
@@ -153,7 +155,6 @@ func ScanRiotAccounts() []models.Account {
 	return accounts
 }
 
-// Переименовали, чтобы не конфликтовать с epic.go
 func copyRiotFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {

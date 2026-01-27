@@ -8,13 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -97,6 +98,7 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func runCSharpSwitcher(username string, gameID string) string {
+	// Эта функция используется только на Windows
 	cwd, _ := os.Getwd()
 	switcherPath := filepath.Join(cwd, "tools", "switcher.exe")
 
@@ -111,7 +113,6 @@ func runCSharpSwitcher(username string, gameID string) string {
 		cmd = exec.Command(switcherPath, username)
 	}
 
-	// Исправлено: использование кроссплатформенного хелпера из пакета sys
 	sys.ConfigureCommand(cmd)
 
 	output, err := cmd.CombinedOutput()
@@ -160,7 +161,6 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	}
 	library = append(library, customGames...)
 
-	// Применение настроек
 	for i := range library {
 		game := &library[i]
 		if gSet, ok := gameSettingsMap[game.ID]; ok {
@@ -185,15 +185,12 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	}
 
 	sort.Slice(library, func(i, j int) bool {
-		// 1. Сначала закрепленные
 		if library[i].IsPinned != library[j].IsPinned {
 			return library[i].IsPinned
 		}
-		// 2. Затем установленные
 		if library[i].IsInstalled != library[j].IsInstalled {
 			return library[i].IsInstalled
 		}
-		// 3. Остальные по имени
 		return library[i].Name < library[j].Name
 	})
 	return library
@@ -260,17 +257,53 @@ func (a *App) SaveEpicAccount(name string) string {
 	return "Success"
 }
 
+
+
+
 func (a *App) SwitchToAccount(accountName string, platform string) string {
 	if platform == "Steam" {
 		if accountName == "UNKNOWN" {
 			return "Error: Login not found."
 		}
+
+		// ЛОГИКА ДЛЯ MACOS
+		if runtime.GOOS == "darwin" {
+			fmt.Println("[App] Switching Steam account on macOS...")
+			
+			// 1. Убиваем Steam и ждем гарантии закрытия
+			sys.KillSteam()
+			
+			// Небольшая пауза для системы, чтобы освободить дескрипторы файлов
+			time.Sleep(1 * time.Second)
+
+			// 2. Сначала правим registry.vdf (это главное для автологина)
+			// Если эта запись не сменится, Steam войдет в старый аккаунт
+			if err := sys.SetSteamUser(accountName); err != nil {
+				fmt.Println("[App] Error setting registry user:", err)
+				// Не прерываем, попробуем обновить и loginusers.vdf
+			}
+
+			// 3. Затем правим loginusers.vdf (список аккаунтов)
+			if err := a.steam.SetUserActive(accountName); err != nil {
+				return "Error updating VDF: " + err.Error()
+			}
+			
+			fmt.Println("[App] Configs updated. Launching Steam...")
+
+			// 4. Запускаем Steam
+			sys.StartGame("steam://open/main")
+			return "Switched to " + accountName
+		}
+
+		// ЛОГИКА ДЛЯ WINDOWS
 		res := runCSharpSwitcher(accountName, "")
 		if res == "Success" {
 			return "Switched to " + accountName
 		}
 		return res
 	}
+	
+	// ... (Epic и Riot логика без изменений) ...
 	if platform == "Epic" {
 		err := scanner.SwitchEpicAccount(accountName)
 		if err != nil {
@@ -293,6 +326,19 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		if accountName == "UNKNOWN" {
 			return "Error: Login not found."
 		}
+
+		if runtime.GOOS == "darwin" {
+			sys.KillSteam()
+			time.Sleep(1 * time.Second)
+			
+			// Обновляем оба конфига перед запуском игры
+			sys.SetSteamUser(accountName)
+			a.steam.SetUserActive(accountName)
+			
+			sys.StartGame("steam://run/" + gameID)
+			return "Launched on Steam"
+		}
+
 		res := runCSharpSwitcher(accountName, gameID)
 		if res == "Success" {
 			return "Launched on Steam"
@@ -300,7 +346,8 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		return res
 	}
 
-	if platform == "Epic" {
+    // ... (остальной код LaunchGame без изменений) ...
+    if platform == "Epic" {
 		if accountName != "" && accountName != "Main Profile" {
 			err := scanner.SwitchEpicAccount(accountName)
 			if err != nil {
@@ -318,7 +365,19 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 				return "Error switching riot: " + err.Error()
 			}
 		}
-		// Пытаемся найти RiotClientServices.exe в стандартном месте
+		
+		if runtime.GOOS == "darwin" {
+			riotPath := "/Applications/Riot Games/Riot Client.app"
+			if _, err := os.Stat(riotPath); os.IsNotExist(err) {
+				return "Error: Riot Client.app not found in Applications"
+			}
+			err := sys.StartGameWithArgs(riotPath, "--launch-product="+gameID, "--launch-patchline=live")
+			if err != nil {
+				return "Error launching: " + err.Error()
+			}
+			return "Launched on Riot"
+		}
+
 		riotClientPath := "C:\\Riot Games\\Riot Client\\RiotClientServices.exe"
 		if _, err := os.Stat(riotClientPath); os.IsNotExist(err) {
 			return "Error: RiotClientServices.exe not found at default location"
@@ -344,6 +403,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	return "Platform not supported"
 }
 
+// ... (остальные функции AddTorrentGame, RemoveGame и т.д. без изменений) ...
 func (a *App) AddTorrentGame(name string, exePath string) string {
 	if name == "" || exePath == "" {
 		return "Error: empty fields"
@@ -449,9 +509,9 @@ func (a *App) UpdateGameNote(username, platform, gameID, note string) string {
 }
 
 func (a *App) SelectImage() string {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
 		Title: "Select Image",
-		Filters: []runtime.FileFilter{
+		Filters: []wruntime.FileFilter{
 			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.ico;*.webp"},
 		},
 	})
@@ -462,9 +522,9 @@ func (a *App) SelectImage() string {
 }
 
 func (a *App) SelectExe() string {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
 		Title:   "Select Executable",
-		Filters: []runtime.FileFilter{{DisplayName: "Executables (*.exe)", Pattern: "*.exe"}},
+		Filters: []wruntime.FileFilter{{DisplayName: "Executables (*.exe)", Pattern: "*.exe"}},
 	})
 	if err != nil {
 		return ""

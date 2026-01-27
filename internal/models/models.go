@@ -19,8 +19,8 @@ type LibraryGame struct {
 	ExePath             string        `json:"exePath"`
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
 	IsInstalled         bool          `json:"isInstalled"`
-	// Новое поле: закреплена ли игра
 	IsPinned bool `json:"isPinned"`
+	IsMacSupported      bool          `json:"isMacSupported"`
 }
 
 type Account struct {

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// ConfigureCommand скрывает окно консоли при запуске команды (только для Windows)
+// ConfigureCommand скрывает окно консоли при запуске команды
 func ConfigureCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }
@@ -60,7 +60,6 @@ func SetSteamUser(username string) error {
 		return err
 	}
 
-	// Сбрасываем активного пользователя, чтобы Steam перечитал конфиг
 	activeKey, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam\ActiveProcess`, registry.SET_VALUE)
 	if err == nil {
 		defer activeKey.Close()
@@ -98,7 +97,6 @@ func SetEpicAccountId(accountId string) error {
 	return k.SetStringValue("AccountId", accountId)
 }
 
-// GetEpicManifestsDir возвращает путь к манифестам игр Epic на Windows
 func GetEpicManifestsDir() string {
 	programData := os.Getenv("ProgramData")
 	if programData == "" {
@@ -107,7 +105,6 @@ func GetEpicManifestsDir() string {
 	return filepath.Join(programData, "Epic", "EpicGamesLauncher", "Data", "Manifests")
 }
 
-// GetEpicAuthDataDir возвращает путь к папке с данными авторизации Epic на Windows
 func GetEpicAuthDataDir() string {
 	localAppData := os.Getenv("LOCALAPPDATA")
 	return filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
@@ -123,21 +120,23 @@ func KillRiot() {
 	waitForExit("RiotClientServices.exe")
 }
 
+func GetRiotPrivateSettingsPath() string {
+	localAppData := os.Getenv("LOCALAPPDATA")
+	return filepath.Join(localAppData, "Riot Games", "Riot Client", "Data", "RiotClientPrivateSettings.yaml")
+}
+
 // --- LAUNCHER UTILS ---
 
 func StartGame(pathOrUrl string) {
-	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
 	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
 		RunExecutable(pathOrUrl)
 		return
 	}
-	// Иначе (например, steam:// или URL) запускаем через оболочку cmd
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
-// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
 func RunExecutable(path string) error {
 	cleanPath := filepath.Clean(path)
 	cmd := exec.Command("explorer", cleanPath)
@@ -145,7 +144,6 @@ func RunExecutable(path string) error {
 	return cmd.Start()
 }
 
-// StartGameWithArgs запускает exe с аргументами (используется для Riot)
 func StartGameWithArgs(exePath string, args ...string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Dir(exePath)
@@ -153,7 +151,6 @@ func StartGameWithArgs(exePath string, args ...string) error {
 	return cmd.Start()
 }
 
-// Вспомогательные функции
 func killProcess(name string) {
 	cmd := exec.Command("taskkill", "/F", "/IM", name)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

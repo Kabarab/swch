@@ -128,6 +128,7 @@ export namespace models {
 	    availableOn: AccountStat[];
 	    isInstalled: boolean;
 	    isPinned: boolean;
+	    isMacSupported: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LibraryGame(source);
@@ -143,6 +144,7 @@ export namespace models {
 	        this.availableOn = this.convertValues(source["availableOn"], AccountStat);
 	        this.isInstalled = source["isInstalled"];
 	        this.isPinned = source["isPinned"];
+	        this.isMacSupported = source["isMacSupported"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
