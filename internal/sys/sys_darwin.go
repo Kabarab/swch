@@ -26,8 +26,9 @@ func KillSteam() {
 }
 
 func SetSteamUser(username string) error {
-	// На macOS автологин через реестр не работает.
-	// Основная работа делается через loginusers.vdf в scanner пакете.
+	// На macOS автологин через реестр не работает, так как реестра нет.
+	// Основная работа по переключению делается через изменение loginusers.vdf в пакете scanner.
+	// Поэтому здесь возвращаем nil.
 	return nil
 }
 
@@ -38,7 +39,7 @@ func KillEpic() error {
 }
 
 func GetEpicAccountId() (string, error) {
-	// На Mac идентификаторы хранятся иначе, заглушка
+	// На Mac идентификаторы хранятся в Plist файлах, пока заглушка.
 	return "", fmt.Errorf("not implemented on macos")
 }
 
@@ -67,13 +68,13 @@ func KillRiot() {
 // --- LAUNCHER UTILS (macOS) ---
 
 func StartGame(pathOrUrl string) {
-	// Команда open открывает файлы, приложения (.app) и ссылки (steam://)
+	// Команда open универсальна: открывает файлы, приложения (.app) и ссылки (steam://)
 	cmd := exec.Command("open", pathOrUrl)
 	cmd.Start()
 }
 
 func RunExecutable(path string) error {
-	// Если это .app, open запустит его. Если бинарник - терминал.
+	// Если это .app, open запустит его корректно
 	cmd := exec.Command("open", path)
 	return cmd.Start()
 }
@@ -82,7 +83,9 @@ func StartGameWithArgs(exePath string, args ...string) error {
 	// На Mac запуск с аргументами через open требует флага --args
 	// Пример: open -n -a "Riot Client" --args --launch-product=...
 
-	// Если exePath - это путь к .app
+	// Используем -n чтобы запустить новый экземпляр, если нужно, -a для указания приложения
+	// Однако часто достаточно просто передать путь к исполняемому файлу внутри .app
+
 	cmdArgs := []string{"-n", exePath, "--args"}
 	cmdArgs = append(cmdArgs, args...)
 

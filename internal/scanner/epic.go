@@ -23,7 +23,6 @@ type EpicManifest struct {
 // EpicAccountData хранит метаданные сохраненного аккаунта
 type EpicAccountData struct {
 	Name string `json:"name"`
-	// RegistryId удален, так как для метода подмены папки Data он не критичен
 }
 
 // getEpicConfigDir возвращает путь, где мы храним бэкапы аккаунтов
@@ -34,7 +33,7 @@ func getEpicConfigDir() string {
 	return path
 }
 
-// getEpicAuthDataPath возвращает путь к папке Data (где Epic хранит токены сессии)
+// getEpicAuthDataPath возвращает системный путь к папке Data (где Epic хранит токены сессии)
 func getEpicAuthDataPath() string {
 	return sys.GetEpicAuthDataDir()
 }

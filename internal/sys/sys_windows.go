@@ -14,6 +14,8 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// --- STEAM UTILS ---
+
 func GetSteamPath() (string, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.QUERY_VALUE)
 	if err != nil {
@@ -53,6 +55,7 @@ func SetSteamUser(username string) error {
 		return err
 	}
 
+	// Сбрасываем активного пользователя, чтобы Steam перечитал конфиг
 	activeKey, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam\ActiveProcess`, registry.SET_VALUE)
 	if err == nil {
 		defer activeKey.Close()
@@ -118,15 +121,18 @@ func KillRiot() {
 // --- LAUNCHER UTILS ---
 
 func StartGame(pathOrUrl string) {
+	// Если это exe файл, запускаем его напрямую с установкой рабочей директории
 	if strings.HasSuffix(strings.ToLower(pathOrUrl), ".exe") {
 		RunExecutable(pathOrUrl)
 		return
 	}
+	// Иначе (например, steam:// или URL) запускаем через оболочку cmd
 	cmd := exec.Command("cmd", "/C", "start", "", pathOrUrl)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
 
+// RunExecutable запускает exe файл, устанавливая его директорию как рабочую.
 func RunExecutable(path string) error {
 	cleanPath := filepath.Clean(path)
 	cmd := exec.Command("explorer", cleanPath)
@@ -134,6 +140,7 @@ func RunExecutable(path string) error {
 	return cmd.Start()
 }
 
+// StartGameWithArgs запускает exe с аргументами (используется для Riot)
 func StartGameWithArgs(exePath string, args ...string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Dir(exePath)
