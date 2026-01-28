@@ -1,38 +1,43 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
+using Microsoft.Win32;
 
 namespace EpicSwitcher
 {
     class Program
     {
+        // Ключ реестра, отвечающий за текущий ID пользователя
+        static string EpicRegistryPath = @"Software\Epic Games\Unreal Engine\Identifiers";
+        static string EpicRegistryKey = "AccountId";
+
         static void Main(string[] args)
         {
-            // Ожидаемые аргументы:
+            // Аргументы:
             // 0: action ("switch" или "save")
-            // 1: путь к папке с сохраненным аккаунтом (Source для switch / Dest для save)
-            // 2: путь к системной папке Epic Data (Dest для switch / Source для save)
+            // 1: accountName (Имя папки аккаунта)
+            // 2: storagePath (Где лежат все аккаунты swch)
 
             if (args.Length < 3)
             {
-                Console.WriteLine("Usage: EpicSwitcher.exe <action> <account_path> <system_path>");
+                Console.WriteLine("Usage: EpicSwitcher.exe <action> <account_name> <storage_path>");
                 Environment.Exit(1);
             }
 
             string action = args[0];
-            string accountPath = args[1];
-            string systemPath = args[2];
+            string accountName = args[1];
+            string baseStoragePath = args[2];
+            string accountDir = Path.Combine(baseStoragePath, accountName);
 
             try
             {
                 if (action == "switch")
                 {
-                    SwitchAccount(accountPath, systemPath);
+                    SwitchAccount(accountDir);
                 }
                 else if (action == "save")
                 {
-                    SaveAccount(systemPath, accountPath);
+                    SaveAccount(accountDir);
                 }
             }
             catch (Exception ex)
@@ -42,92 +47,112 @@ namespace EpicSwitcher
             }
         }
 
-        static void SwitchAccount(string sourceDir, string destDir)
+        static void SwitchAccount(string sourceDir)
         {
-            Console.WriteLine("Stopping Epic Games Launcher...");
+            Console.WriteLine("Stopping Epic Games processes...");
             TerminateProcess("EpicGamesLauncher");
-            // Иногда Epic запускает отдельные процессы для UnrealEngine, можно добавить и их
-            TerminateProcess("EpicWebHelper"); 
+            TerminateProcess("EpicWebHelper");
+            TerminateProcess("UnrealCEFSubProcess");
 
-            Console.WriteLine("Clearing current session...");
-            CleanDirectory(destDir);
+            if (!Directory.Exists(sourceDir))
+            {
+                throw new DirectoryNotFoundException($"Account directory not found: {sourceDir}");
+            }
 
-            Console.WriteLine("Restoring account...");
-            CopyDirectory(sourceDir, destDir);
-            
-            Console.WriteLine("Success.");
+            // 1. Восстанавливаем GameUserSettings.ini (настройки лаунчера)
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string destConfigDir = Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "Config", "WindowsEditor");
+            string sourceIni = Path.Combine(sourceDir, "GameUserSettings.ini");
+
+            if (File.Exists(sourceIni))
+            {
+                if (!Directory.Exists(destConfigDir)) Directory.CreateDirectory(destConfigDir);
+                File.Copy(sourceIni, Path.Combine(destConfigDir, "GameUserSettings.ini"), true);
+                Console.WriteLine("Config restored.");
+            }
+
+            // 2. Восстанавливаем ID пользователя в РЕЕСТР (Самое важное!)
+            string sourceRegFile = Path.Combine(sourceDir, "AccountId.txt");
+            if (File.Exists(sourceRegFile))
+            {
+                string accountId = File.ReadAllText(sourceRegFile).Trim();
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(EpicRegistryPath))
+                {
+                    if (key != null)
+                    {
+                        key.SetValue(EpicRegistryKey, accountId);
+                        Console.WriteLine($"Registry AccountId updated to: {accountId}");
+                    }
+                }
+            }
+            else 
+            {
+                Console.WriteLine("Warning: AccountId.txt not found. Switch might fail.");
+            }
+
+            // 3. Чистим кэш, чтобы сбросить старую сессию
+            Console.WriteLine("Clearing Epic cache...");
+            ClearEpicCache(localAppData);
+
+            Console.WriteLine("Success");
         }
 
-        static void SaveAccount(string sourceDir, string destDir)
+        static void SaveAccount(string destDir)
         {
-            // При сохранении убивать процесс не обязательно, но желательно для целостности данных
-            // TerminateProcess("EpicGamesLauncher"); 
+            if (!Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
 
             Console.WriteLine("Saving account...");
-            CleanDirectory(destDir); // Очищаем папку бэкапа перед записью
-            CopyDirectory(sourceDir, destDir);
-            Console.WriteLine("Saved.");
-        }
 
-        // Аналог KillGameProcesses из TcNo
-        static void TerminateProcess(string processName)
-        {
-            foreach (var process in Process.GetProcessesByName(processName))
+            // 1. Сохраняем GameUserSettings.ini
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string sourceIni = Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "Config", "WindowsEditor", "GameUserSettings.ini");
+            
+            if (File.Exists(sourceIni))
             {
-                try
+                File.Copy(sourceIni, Path.Combine(destDir, "GameUserSettings.ini"), true);
+            }
+
+            // 2. Сохраняем ID из реестра
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(EpicRegistryPath))
+            {
+                if (key != null)
                 {
-                    process.Kill();
-                    process.WaitForExit(3000); // Ждем до 3 секунд
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Warning: Could not kill {processName}: {e.Message}");
+                    object val = key.GetValue(EpicRegistryKey);
+                    if (val != null)
+                    {
+                        File.WriteAllText(Path.Combine(destDir, "AccountId.txt"), val.ToString());
+                        Console.WriteLine($"Saved Registry ID: {val}");
+                    }
                 }
             }
+            Console.WriteLine("Saved");
         }
 
-        // Аналог ClearCurrentLoginBasic из TcNo
-        static void CleanDirectory(string path)
+        static void TerminateProcess(string name)
         {
-            if (Directory.Exists(path))
+            foreach (var p in Process.GetProcessesByName(name))
             {
-                DirectoryInfo di = new DirectoryInfo(path);
-                foreach (FileInfo file in di.GetFiles())
-                {
-                    file.Delete();
-                }
-                foreach (DirectoryInfo dir in di.GetDirectories())
-                {
-                    dir.Delete(true);
-                }
-            }
-            else
-            {
-                Directory.CreateDirectory(path);
+                try { p.Kill(); p.WaitForExit(1000); } catch { }
             }
         }
 
-        // Аналог BasicCopyInAccount из TcNo (рекурсивное копирование)
-        static void CopyDirectory(string sourceDir, string destDir)
+        static void ClearEpicCache(string localAppData)
         {
-            DirectoryInfo dir = new DirectoryInfo(sourceDir);
+            // Список путей для очистки (на основе логики TcNo)
+            string[] paths = {
+                Path.Combine(localAppData, "Epic Games", "Epic Online Services", "UI Helper", "Cache"),
+                Path.Combine(localAppData, "Epic Games", "EOSOverlay", "BrowserCache"),
+                Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache"),
+                Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache_4147"),
+                Path.Combine(localAppData, "EpicGamesLauncher", "Saved", "webcache_4430")
+            };
 
-            if (!dir.Exists)
-                throw new DirectoryNotFoundException($"Source directory not found: {sourceDir}");
-
-            DirectoryInfo[] dirs = dir.GetDirectories();
-            Directory.CreateDirectory(destDir);
-
-            foreach (FileInfo file in dir.GetFiles())
+            foreach (var p in paths)
             {
-                string tempPath = Path.Combine(destDir, file.Name);
-                file.CopyTo(tempPath, true);
-            }
-
-            foreach (DirectoryInfo subdir in dirs)
-            {
-                string tempPath = Path.Combine(destDir, subdir.Name);
-                CopyDirectory(subdir.FullName, tempPath);
+                if (Directory.Exists(p))
+                {
+                    try { Directory.Delete(p, true); } catch { }
+                }
             }
         }
     }

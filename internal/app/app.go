@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"swch/internal/legendary"
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
@@ -133,15 +134,19 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	steamGames := a.steam.GetGames()
 	library = append(library, steamGames...)
 
-	// 2. Epic Games
+	// 2. Epic Games (Official)
 	epicGames := scanner.ScanEpicGames()
 	library = append(library, epicGames...)
 
-	// 3. Riot Games
+	// 3. Legendary (Epic CLI)
+	legendaryGames := legendary.ScanLegendaryGames()
+	library = append(library, legendaryGames...)
+
+	// 4. Riot Games
 	riotGames := scanner.ScanRiotGames()
 	library = append(library, riotGames...)
 
-	// 4. Custom & Torrent Games
+	// 5. Custom & Torrent Games
 	customGames := scanner.LoadCustomGames()
 	for i := range customGames {
 		customGames[i].IsInstalled = true
@@ -228,10 +233,16 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		}
 	}
 
-	// Epic
+	// Epic (Official)
 	epicAccs := scanner.ScanEpicAccounts()
 	filteredEpic := processAccounts(epicAccs)
 	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filteredEpic})
+
+	// Legendary
+	legendaryAccs := legendary.ScanLegendaryAccounts()
+	filteredLegendary := processAccounts(legendaryAccs)
+	// Добавляем группу Legendary всегда, чтобы интерфейс знал о поддержке
+	groups = append(groups, models.LauncherGroup{Name: "Legendary", Platform: "Legendary", Accounts: filteredLegendary})
 
 	// Riot
 	riotAccs := scanner.ScanRiotAccounts()
@@ -240,6 +251,34 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 
 	return groups
 }
+
+// --- Legendary Функции ---
+
+func (a *App) LoginLegendaryAccount() string {
+	err := legendary.LaunchLegendaryAuth()
+	if err != nil {
+		return "Error launching terminal: " + err.Error()
+	}
+	return "Terminal launched. Please complete login there."
+}
+
+func (a *App) SaveLegendaryAccount(name string) string {
+	err := legendary.SaveCurrentLegendaryAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
+}
+
+func (a *App) SwitchLegendaryAccount(name string) string {
+	err := legendary.SwitchLegendaryAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Switched Legendary to " + name
+}
+
+// -------------------------
 
 func (a *App) SaveRiotAccount(name string) string {
 	err := scanner.SaveCurrentRiotAccount(name)
@@ -266,25 +305,23 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		// ЛОГИКА ДЛЯ MACOS
 		if runtime.GOOS == "darwin" {
 			fmt.Println("[App] Switching Steam account on macOS...")
-			
+
 			// 1. Убиваем Steam и ждем гарантии закрытия
 			sys.KillSteam()
-			
+
 			// Небольшая пауза для системы, чтобы освободить дескрипторы файлов
 			time.Sleep(1 * time.Second)
 
 			// 2. Сначала правим registry.vdf (это главное для автологина)
-			// Если эта запись не сменится, Steam войдет в старый аккаунт
 			if err := sys.SetSteamUser(accountName); err != nil {
 				fmt.Println("[App] Error setting registry user:", err)
-				// Не прерываем, попробуем обновить и loginusers.vdf
 			}
 
 			// 3. Затем правим loginusers.vdf (список аккаунтов)
 			if err := a.steam.SetUserActive(accountName); err != nil {
 				return "Error updating VDF: " + err.Error()
 			}
-			
+
 			fmt.Println("[App] Configs updated. Launching Steam...")
 
 			// 4. Запускаем Steam
@@ -299,26 +336,29 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		}
 		return res
 	}
-	
+
 	if platform == "Epic" {
 		err := scanner.SwitchEpicAccount(accountName)
 		if err != nil {
 			return "Error: " + err.Error()
 		}
-		
-		// ИСПРАВЛЕНИЕ: Автоматический перезапуск на macOS с ожиданием
+
 		if runtime.GOOS == "darwin" {
-			// KillEpic (вызывается внутри SwitchEpicAccount -> KillEpic) 
-			// теперь ждет завершения процесса, но добавим еще секунду для надежности.
-			time.Sleep(1 * time.Second) 
-			
-			// Запускаем Epic Launcher через стандартный путь .app
+			time.Sleep(1 * time.Second)
 			sys.StartGame("/Applications/Epic Games Launcher.app")
-			
 			return "Switched to " + accountName
 		}
 
 		return "Switched to " + accountName + ". Please restart Epic Launcher."
+	}
+
+	if platform == "Legendary" {
+		err := legendary.SwitchLegendaryAccount(accountName)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		// Legendary не требует перезапуска процессов, так как это CLI
+		return "Switched to " + accountName
 	}
 
 	if platform == "Riot" {
@@ -340,11 +380,10 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		if runtime.GOOS == "darwin" {
 			sys.KillSteam()
 			time.Sleep(1 * time.Second)
-			
-			// Обновляем оба конфига перед запуском игры
+
 			sys.SetSteamUser(accountName)
 			a.steam.SetUserActive(accountName)
-			
+
 			sys.StartGame("steam://run/" + gameID)
 			return "Launched on Steam"
 		}
@@ -356,7 +395,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		return res
 	}
 
-    if platform == "Epic" {
+	if platform == "Epic" {
 		if accountName != "" && accountName != "Main Profile" {
 			err := scanner.SwitchEpicAccount(accountName)
 			if err != nil {
@@ -367,6 +406,25 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		return "Launched on Epic"
 	}
 
+	if platform == "Legendary" {
+		// Для Legendary проверяем, нужно ли сменить конфиг перед запуском
+		if accountName != "" && accountName != "Active Account" {
+			err := legendary.SwitchLegendaryAccount(accountName)
+			if err != nil {
+				return "Error switching legendary: " + err.Error()
+			}
+		}
+
+		// Запуск игры через legendary launch
+		cmd := exec.Command("legendary", "launch", gameID)
+		sys.ConfigureCommand(cmd)
+		err := cmd.Start()
+		if err != nil {
+			return "Error launching: " + err.Error()
+		}
+		return "Launched via Legendary"
+	}
+
 	if platform == "Riot" {
 		if accountName != "" {
 			err := scanner.SwitchRiotAccount(accountName)
@@ -374,7 +432,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 				return "Error switching riot: " + err.Error()
 			}
 		}
-		
+
 		if runtime.GOOS == "darwin" {
 			riotPath := "/Applications/Riot Games/Riot Client.app"
 			if _, err := os.Stat(riotPath); os.IsNotExist(err) {
