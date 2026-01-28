@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,7 +27,6 @@ var (
 	cacheLoaded  bool
 )
 
-
 const cacheFileName = "steam_cache.json"
 
 type SteamScanner struct {
@@ -37,6 +37,37 @@ func NewSteamScanner() *SteamScanner {
 	path, _ := sys.GetSteamPath()
 	return &SteamScanner{Path: path}
 }
+
+// --- XML структуры (логика из steam-app-id-finder) ---
+type steamGamesListXML struct {
+	XMLName xml.Name       `xml:"gamesList"`
+	Games   steamGamesData `xml:"games"`
+	Error   string         `xml:"error"`
+}
+
+type steamGamesData struct {
+	Game []steamGameXML `xml:"game"`
+}
+
+type steamGameXML struct {
+	AppID string `xml:"appID"`
+	Name  string `xml:"name"`
+}
+// -----------------------------------------------------
+
+// --- Store API структуры ---
+type storeAppDetailsResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Name      string `json:"name"`
+		Platforms struct {
+			Windows bool `json:"windows"`
+			Mac     bool `json:"mac"`
+			Linux   bool `json:"linux"`
+		} `json:"platforms"`
+	} `json:"data"`
+}
+// ---------------------------
 
 // SetUserActive обновляет loginusers.vdf
 func (s *SteamScanner) SetUserActive(targetUsername string) error {
@@ -124,7 +155,6 @@ func loadCacheFromFile() {
 					appNameCache = loadedMap
 					cacheLoaded = true
 					cacheMutex.Unlock()
-					fmt.Printf("[Steam] Loaded %d game names from cache: %s\n", len(loadedMap), path)
 					return
 				}
 			}
@@ -144,15 +174,11 @@ func saveCacheToFile() {
 		appDir := filepath.Join(configDir, "swch")
 		_ = os.MkdirAll(appDir, 0755)
 		path := filepath.Join(appDir, cacheFileName)
-		if err := os.WriteFile(path, data, 0644); err == nil {
-			fmt.Printf("[Steam] Cache saved to %s\n", path)
-		}
+		os.WriteFile(path, data, 0644)
 	}
 }
 
-// Создает минимальный список популярных игр, если интернет не работает
 func createFallbackCache() {
-	fmt.Println("[Steam] Network failed. Generating fallback game list...")
 	fallback := map[string]string{
 		"730":     "Counter-Strike 2",
 		"570":     "Dota 2",
@@ -190,37 +216,27 @@ func ensureGameNamesLoaded() {
 	urls := []string{
 		"https://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json",
 		"https://raw.githubusercontent.com/oxypanel/Steam-App-List/main/data/apps.json",
-		"https://raw.githubusercontent.com/teslaworks/steam-app-list/master/steam_app_list.json",
 		"https://raw.githubusercontent.com/WindowsGSM/SteamAppInfo/master/apps.json",
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 	var success bool
-
-	fmt.Println("[Steam] Downloading App List...")
 
 	for _, u := range urls {
 		req, _ := http.NewRequest("GET", u, nil)
 		req.Header.Set("User-Agent", "Valve/Steam HTTP Client 1.0")
-
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf(" - Error fetching %s: %v\n", u, err)
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
-			fmt.Printf(" - HTTP Error %d for %s\n", resp.StatusCode, u)
 			continue
 		}
 
 		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			continue
-		}
-
-		if len(bodyBytes) > 0 && bodyBytes[0] == '<' {
+		if err != nil || len(bodyBytes) == 0 || bodyBytes[0] == '<' {
 			continue
 		}
 
@@ -250,16 +266,90 @@ func ensureGameNamesLoaded() {
 			cacheLoaded = true
 			cacheMutex.Unlock()
 			success = true
-			fmt.Printf("[Steam] Successfully downloaded %d game names.\n", len(apps))
 			saveCacheToFile()
 			break
 		}
 	}
 
 	if !success {
-		// ВАЖНО: Если ничего не скачалось, создаем фейковый кэш, чтобы программа работала
 		createFallbackCache()
 	}
+}
+
+// enrichCacheFromAccounts запрашивает XML-списки игр из профилей
+func (s *SteamScanner) enrichCacheFromAccounts(accounts []models.Account) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	updated := false
+
+	for _, acc := range accounts {
+		id3, err := strconv.ParseInt(acc.ID, 10, 64)
+		if err != nil {
+			continue
+		}
+		id64 := id3 + 76561197960265728
+		url := fmt.Sprintf("https://steamcommunity.com/profiles/%d/games?xml=1", id64)
+
+		req, _ := http.NewRequest("GET", url, nil)
+		// User-Agent важен, иначе Steam блокирует
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			continue
+		}
+
+		// Декодируем XML
+		var list steamGamesListXML
+		if err := xml.NewDecoder(resp.Body).Decode(&list); err != nil {
+			continue
+		}
+
+		if list.Error != "" {
+			continue // Профиль скрыт или ошибка
+		}
+
+		cacheMutex.Lock()
+		for _, g := range list.Games.Game {
+			if g.AppID != "" && g.Name != "" {
+				// Если такого нет или имя "Steam App...", обновляем
+				curr, exists := appNameCache[g.AppID]
+				if !exists || strings.HasPrefix(curr, "Steam App") {
+					appNameCache[g.AppID] = g.Name
+					updated = true
+				}
+			}
+		}
+		cacheMutex.Unlock()
+	}
+
+	if updated {
+		saveCacheToFile()
+	}
+}
+
+// fetchSingleGameName запрашивает имя игры через Store API
+func fetchSingleGameName(appID string) string {
+	url := fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s&filters=basic", appID)
+	client := &http.Client{Timeout: 3 * time.Second}
+	
+	resp, err := client.Get(url)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	var result map[string]storeAppDetailsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		if data, ok := result[appID]; ok && data.Success {
+			return data.Data.Name
+		}
+	}
+	return ""
 }
 
 func (s *SteamScanner) GetGames() []models.LibraryGame {
@@ -269,8 +359,11 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 	}
 
 	ensureGameNamesLoaded()
-
 	accounts := s.GetAccounts()
+	
+	// 1. Попытка получить имена через профили пользователей (XML метод)
+	s.enrichCacheFromAccounts(accounts)
+
 	libraryPaths := s.getLibraryFolders()
 	installedAppIDs := make(map[string]bool)
 
@@ -309,14 +402,9 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					}
 				}
 
-				// Логика поддержки Mac для установленных игр
 				isMacSupported := false
 				if runtime.GOOS == "darwin" {
-					// Если мы на маке и игра установлена в Steam, значит она точно работает
 					isMacSupported = true
-				} else {
-					// Если мы на Windows, проверяем через API (или считаем false, если не хотим ждать)
-					// isMacSupported = checkMacSupport(appID)
 				}
 
 				games = append(games, models.LibraryGame{
@@ -327,7 +415,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 					ExePath:             fullPath,
 					AvailableOnAccounts: owners,
 					IsInstalled:         true,
-					IsMacSupported:      isMacSupported, // <-- Новое поле
+					IsMacSupported:      isMacSupported,
 				})
 				installedAppIDs[appID] = true
 			}
@@ -348,7 +436,6 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 			}
 
 			var apps map[string]interface{}
-			// Попытка найти список приложений в разных структурах VDF
 			if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
 				if soft, ok := store["Software"].(map[string]interface{}); ok {
 					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
@@ -372,7 +459,6 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 			}
 
 			for appID, appData := range apps {
-				// Пропускаем уже добавленные (установленные)
 				if _, exists := installedAppIDs[appID]; exists {
 					continue
 				}
@@ -415,7 +501,6 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 				}
 
 				if foundIdx != -1 {
-					// Игра уже есть в списке (от другого аккаунта), добавляем владельца
 					games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
 					if (games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")) && gameName != "" {
 						games[foundIdx].Name = gameName
@@ -425,18 +510,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 						gameName = fmt.Sprintf("Steam App %s", appID)
 					}
 
-					// Логика поддержки Mac для неустановленных игр
 					isMacSupported := false
-
-					// ВНИМАНИЕ: Если включить этот блок, загрузка библиотеки замедлится!
-					// Steam API имеет лимиты (около 200 запросов в 5 минут).
-					// Рекомендуется вызывать checkMacSupport только по требованию пользователя.
-					/*
-						if runtime.GOOS == "darwin" {
-							isMacSupported = checkMacSupport(appID)
-						}
-					*/
-
 					games = append(games, models.LibraryGame{
 						ID:                  appID,
 						Name:                gameName,
@@ -445,57 +519,63 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 						ExePath:             "",
 						AvailableOnAccounts: []models.AccountStat{ownerStat},
 						IsInstalled:         false,
-						IsMacSupported:      isMacSupported, // <-- Новое поле
+						IsMacSupported:      isMacSupported,
 					})
 				}
 			}
 		}
 	}
 
+	// --- 3. FINAL FALLBACK: Проверяем игры без имени через Store API ---
+	// Это спасет ситуацию, если профиль скрыт, а игра есть в конфиге
+	cacheUpdated := false
+	for i := range games {
+		if strings.HasPrefix(games[i].Name, "Steam App") {
+			// Пробуем скачать имя напрямую из магазина
+			realName := fetchSingleGameName(games[i].ID)
+			if realName != "" {
+				games[i].Name = realName
+				
+				// Сохраняем в кэш
+				cacheMutex.Lock()
+				appNameCache[games[i].ID] = realName
+				cacheMutex.Unlock()
+				cacheUpdated = true
+			}
+		}
+	}
+	if cacheUpdated {
+		saveCacheToFile()
+	}
+
 	return games
 }
 
-// Структуры для ответа Steam Store API
-type storeAppDetails struct {
-	Success bool `json:"success"`
-	Data    struct {
-		Platforms struct {
-			Windows bool `json:"windows"`
-			Mac     bool `json:"mac"`
-			Linux   bool `json:"linux"`
-		} `json:"platforms"`
-	} `json:"data"`
-}
+// ... остальной код (checkMacSupport, getLibraryFolders и т.д.) без изменений ...
 
 // Кэш совместимости (чтобы не спамить API при каждом запуске)
 var osSupportCache = make(map[string]bool)
 
 func checkMacSupport(appID string) bool {
-	// 1. Если уже проверяли - возвращаем из памяти
 	if val, ok := osSupportCache[appID]; ok {
 		return val
 	}
-
-	// 2. Делаем запрос к API магазина
 	url := fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s&filters=platforms", appID)
 	resp, err := http.Get(url)
 	if err != nil {
-		return false // Если ошибка сети, считаем что не поддерживается (безопасно)
+		return false
 	}
 	defer resp.Body.Close()
 
-	var result map[string]storeAppDetails
+	var result map[string]storeAppDetailsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false
 	}
-
-	// 3. Парсим ответ
 	if appData, ok := result[appID]; ok && appData.Success {
 		isMac := appData.Data.Platforms.Mac
-		osSupportCache[appID] = isMac // Сохраняем в кэш
+		osSupportCache[appID] = isMac
 		return isMac
 	}
-
 	return false
 }
 
@@ -586,19 +666,14 @@ func (s *SteamScanner) GetAccounts() []models.Account {
 }
 
 func (s *SteamScanner) ownsGame(steamID3 string, appID string) bool {
-	// 1. Проверяем localconfig.vdf (старый метод)
 	localConfigPath := filepath.Join(s.Path, "userdata", steamID3, "config", "localconfig.vdf")
 	if fileContainsAppID(localConfigPath, appID) {
 		return true
 	}
-
-	// 2. Проверяем sharedconfig.vdf (новый надежный метод)
-	// Путь: userdata/<id>/7/remote/sharedconfig.vdf
 	sharedConfigPath := filepath.Join(s.Path, "userdata", steamID3, "7", "remote", "sharedconfig.vdf")
 	if fileContainsAppID(sharedConfigPath, appID) {
 		return true
 	}
-
 	return false
 }
 func fileContainsAppID(path, appID string) bool {
@@ -606,8 +681,6 @@ func fileContainsAppID(path, appID string) bool {
 	if err != nil {
 		return false
 	}
-	// Ищем точное совпадение "appid", чтобы не найти "12" внутри "12345"
-	// Обычно в VDF это выглядит как key "123" или value "123"
 	searchStr := fmt.Sprintf(`"%s"`, appID)
 	return strings.Contains(string(contentBytes), searchStr)
 }

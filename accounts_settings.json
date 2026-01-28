@@ -43,7 +43,9 @@
       "291550": "",
       "730": "VAC"
     },
-    "hiddenGames": null
+    "hiddenGames": {
+      "730": true
+    }
   },
   "Steam:youcef16152": {
     "comment": "",
@@ -54,7 +56,8 @@
       "730": "VAC"
     },
     "hiddenGames": {
-      "730": false
+      "570": true,
+      "730": true
     }
   }
 }
