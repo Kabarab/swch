@@ -500,3 +500,85 @@ body {
 .ctx-item.delete:hover {
     background-color: #3d1a1a;
 }
+
+
+
+/* Добавьте это в конец файла */
+
+/* --- 10. ФИЛЬТРЫ БИБЛИОТЕКИ --- */
+.filters-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    align-items: center;
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.search-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+    font-size: 14px;
+}
+
+.search-input {
+    padding-left: 35px; /* Место под иконку */
+    border-radius: 20px;
+    background: #252525;
+    border: 1px solid #333;
+}
+
+.search-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.filter-group {
+    display: flex;
+    gap: 8px;
+}
+
+.filter-tag {
+    background: #252525;
+    border: 1px solid #333;
+    color: #888;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-tag:hover {
+    background: #333;
+    color: #ddd;
+}
+
+/* Активное состояние фильтра */
+.filter-tag.active {
+    background: rgba(0, 116, 228, 0.2); /* Прозрачный синий */
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Спец. цвет для macOS фильтра */
+#filter-macos.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #ddd;
+    color: #fff;
+}

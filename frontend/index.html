@@ -5,7 +5,6 @@
     <title>swch</title>
     <link rel="stylesheet" href="src/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
 </head>
 <body>
     <div class="app-container">
@@ -28,6 +27,38 @@
         <main class="main-content">
             <div id="view-library" class="view-section">
                 <div class="header"><div class="title">Library</div></div>
+                
+                <div id="library-filters" class="filters-container">
+                    <div class="search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="filter-search" placeholder="Поиск по названию..." class="input-field search-input" oninput="applyFilters()">
+                    </div>
+
+                    <div class="filter-group">
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Steam')" data-type="platform">
+                            <i class="fa-brands fa-steam"></i> Steam
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Epic')" data-type="platform">
+                            <i class="fa-solid fa-bolt"></i> Epic
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Riot')" data-type="platform">
+                            <i class="fa-solid fa-gamepad"></i> Riot
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Custom')" data-type="platform">
+                            <i class="fa-solid fa-folder"></i> Custom
+                        </button>
+                    </div>
+
+                    <div class="filter-group right">
+                        <button class="filter-tag" id="filter-installed" onclick="toggleBooleanFilter(this)">
+                            <i class="fa-solid fa-download"></i> Только скачанные
+                        </button>
+                        <button class="filter-tag" id="filter-macos" onclick="toggleBooleanFilter(this)">
+                            <i class="fa-brands fa-apple"></i> macOS
+                        </button>
+                    </div>
+                </div>
+
                 <div class="grid" id="games-grid"></div>
             </div>
 
@@ -125,7 +156,7 @@
         </div>
     </div>
     
-<div id="context-menu" class="context-menu">
+    <div id="context-menu" class="context-menu">
         <ul>
             <li id="ctx-change-icon" class="ctx-item">Изменить иконку</li>
             <li id="ctx-delete" class="ctx-item delete">Удалить игру</li>

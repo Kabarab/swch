@@ -26,6 +26,7 @@ var (
 	cacheLoaded  bool
 )
 
+
 const cacheFileName = "steam_cache.json"
 
 type SteamScanner struct {

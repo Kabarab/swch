@@ -27,6 +27,14 @@ let currentModalGameId = '';
 let selectedGameId = null;
 let selectedPlatform = null;
 
+// Состояние фильтров
+let filterState = {
+    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent'], // По умолчанию все включены
+    onlyInstalled: false,
+    onlyMac: false,
+    searchQuery: ''
+};
+
 // --- Инициализация ---
 
 // Запуск при старте страницы
@@ -44,6 +52,7 @@ window.switchTab = function(tab) {
     // Подсветка активной кнопки
     if (tab === 'library') {
         document.getElementById('view-library').style.display = 'block';
+        // При переключении на библиотеку лучше обновить данные, но фильтры сохранить
         loadLibrary();
     } else {
         document.getElementById('view-accounts').style.display = 'block';
@@ -60,76 +69,137 @@ window.openAddGameModal = function() {
     document.getElementById('add-game-modal').style.display = 'flex';
 }
 
-// --- Логика Библиотеки (Library) ---
+// --- Логика Библиотеки (Library) и Фильтрации ---
 
+// Главная функция загрузки (запрашивает данные из Go)
 async function loadLibrary() {
-    const list = document.getElementById('games-grid');
-    if (!list) return;
-
     try {
         const games = await GetLibrary();
-        globalGames = games;
-        list.innerHTML = '';
-
-        if (!games || games.length === 0) {
-            list.innerHTML = '<div style="color:#aaa; padding:20px;">Игры не найдены. Добавьте игру или сканируйте библиотеки.</div>';
-            return;
-        }
-
-        games.forEach(game => {
-            const card = document.createElement('div');
-            card.className = 'card';
-            if (!game.isInstalled) card.classList.add('game-not-installed');
-
-            // Атрибуты для контекстного меню
-            card.setAttribute('data-id', game.id);
-            card.setAttribute('data-platform', game.platform);
-
-            // Клик по карточке открывает детали
-            card.onclick = () => openGameModal(game.id);
-
-            // Цвет плашки платформы
-            let platColor = '#0074e4';
-            if (game.platform === 'Steam') platColor = '#1b2838';
-            if (game.platform === 'Epic') platColor = '#333';
-            if (game.platform === 'Riot') platColor = '#d13639';
-            if (game.platform === 'Custom' || game.platform === 'Torrent') platColor = '#2d8c58';
-
-            // Обработка картинки
-            let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
-            if (game.iconUrl) {
-                // Исправляем Windows пути на понятные браузеру
-                img = game.iconUrl.replace(/\\/g, '/');
-            }
-
-            const pinClass = game.isPinned ? 'active' : '';
-            // stopPropagation чтобы клик по пину не открывал игру
-            const pinBtn = `<div class="pin-btn ${pinClass}" onclick="window.togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
-
-            let overlay = '';
-            if (!game.isInstalled) overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
-
-            card.innerHTML = `
-                <div class="platform-badge" style="background:${platColor}">${game.platform}</div>
-                ${pinBtn}
-                ${overlay}
-                <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
-                <div class="card-info">
-                    <div class="game-title" style="font-weight:bold;">${game.name}</div>
-                </div>
-            `;
-            list.appendChild(card);
-        });
+        globalGames = games || [];
+        applyFilters(); // Фильтруем и рисуем
     } catch (err) {
         console.error("Ошибка загрузки библиотеки:", err);
     }
+}
+
+// Управление фильтрами платформ
+window.toggleFilter = function(btn, platform) {
+    btn.classList.toggle('active');
+    
+    // Custom включает в себя и Torrent для удобства пользователя
+    const platformsToCheck = platform === 'Custom' ? ['Custom', 'Torrent'] : [platform];
+    
+    if (btn.classList.contains('active')) {
+        // Добавляем платформу(ы) в массив, если их там нет
+        platformsToCheck.forEach(p => {
+            if (!filterState.platforms.includes(p)) filterState.platforms.push(p);
+        });
+    } else {
+        // Удаляем
+        filterState.platforms = filterState.platforms.filter(p => !platformsToCheck.includes(p));
+    }
+    applyFilters();
+}
+
+// Управление булевыми фильтрами (Installed / macOS)
+window.toggleBooleanFilter = function(btn) {
+    btn.classList.toggle('active');
+    if (btn.id === 'filter-installed') filterState.onlyInstalled = btn.classList.contains('active');
+    if (btn.id === 'filter-macos') filterState.onlyMac = btn.classList.contains('active');
+    applyFilters();
+}
+
+// Применяет фильтры к globalGames и вызывает рендер
+window.applyFilters = function() {
+    const searchInput = document.getElementById('filter-search');
+    filterState.searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+
+    const filtered = globalGames.filter(game => {
+        // 1. Фильтр платформ
+        let pCheck = game.platform;
+        if (!filterState.platforms.includes(pCheck)) return false;
+
+        // 2. Только установленные
+        if (filterState.onlyInstalled && !game.isInstalled) return false;
+
+        // 3. Поддержка macOS
+        if (filterState.onlyMac && !game.isMacSupported) return false;
+
+        // 4. Поиск по названию
+        if (filterState.searchQuery && !game.name.toLowerCase().includes(filterState.searchQuery)) return false;
+
+        return true;
+    });
+
+    renderGrid(filtered);
+}
+
+// Отрисовка сетки игр
+function renderGrid(games) {
+    const list = document.getElementById('games-grid');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (!games || games.length === 0) {
+        list.innerHTML = '<div style="color:#aaa; padding:20px; grid-column: 1/-1; text-align:center;">Игры не найдены по заданным фильтрам.</div>';
+        return;
+    }
+
+    games.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        if (!game.isInstalled) card.classList.add('game-not-installed');
+
+        // Атрибуты для контекстного меню
+        card.setAttribute('data-id', game.id);
+        card.setAttribute('data-platform', game.platform);
+
+        // Клик по карточке открывает детали
+        card.onclick = () => openGameModal(game.id);
+
+        // Цвет плашки платформы
+        let platColor = '#0074e4';
+        if (game.platform === 'Steam') platColor = '#1b2838';
+        if (game.platform === 'Epic') platColor = '#333';
+        if (game.platform === 'Riot') platColor = '#d13639';
+        if (game.platform === 'Custom' || game.platform === 'Torrent') platColor = '#2d8c58';
+
+        // Обработка картинки
+        let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
+        if (game.iconUrl) {
+            img = game.iconUrl.replace(/\\/g, '/');
+        }
+
+        const pinClass = game.isPinned ? 'active' : '';
+        const pinBtn = `<div class="pin-btn ${pinClass}" onclick="window.togglePin(event, '${game.id}')"><i class="fa-solid fa-thumbtack"></i></div>`;
+
+        let overlay = '';
+        if (!game.isInstalled) overlay = '<div class="install-overlay"><i class="fa-solid fa-download"></i></div>';
+
+        // Иконка Apple если игра поддерживает macOS
+        let macBadge = '';
+        if (game.isMacSupported) macBadge = `<i class="fa-brands fa-apple" style="margin-right:5px;" title="macOS Supported"></i>`;
+
+        card.innerHTML = `
+            <div class="platform-badge" style="background:${platColor}">
+                ${macBadge}${game.platform}
+            </div>
+            ${pinBtn}
+            ${overlay}
+            <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
+            <div class="card-info">
+                <div class="game-title" title="${game.name}">${game.name}</div>
+            </div>
+        `;
+        list.appendChild(card);
+    });
 }
 
 // Закрепление игры
 window.togglePin = async function(e, gameId) {
     if (e) e.stopPropagation();
     await ToggleGamePin(gameId);
-    loadLibrary();
+    loadLibrary(); // Перезагружаем, чтобы обновить состояние isPinned с бэкенда
 }
 
 // Открытие модального окна игры
@@ -191,7 +261,7 @@ function renderGameModalContent(gameId) {
             else if (acc.note === 'VAC') noteHtml = `<span class="badge badge-vac"><i class="fa-solid fa-ban"></i> VAC BAN</span>`;
             else if (acc.note) noteHtml = `<span class="badge badge-custom"><i class="fa-solid fa-note-sticky"></i> ${acc.note}</span>`;
 
-            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-eye-slash"; // Иконка глаза или восстановления
+            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-eye-slash"; 
             const hideClass = acc.isHidden ? "toggle-restore-btn" : "toggle-hidden-btn";
             const hideTitle = acc.isHidden ? "Restore account" : "Hide from this game";
 
@@ -237,8 +307,7 @@ window.launch = async function(account, gameId, platform, exePath) {
 window.toggleGameAccountHidden = async function(username, platform, gameId) {
     await ToggleGameAccountHidden(username, platform, gameId);
     // Обновляем данные глобально
-    const games = await GetLibrary();
-    globalGames = games;
+    await loadLibrary();
     // Перерисовываем модалку
     renderGameModalContent(gameId);
 }
@@ -264,8 +333,7 @@ window.saveCustomNote = async function() {
 async function applyNote(noteText) {
     const { username, platform, gameId } = editingTagTarget;
     await UpdateGameNote(username, platform, gameId, noteText);
-    const games = await GetLibrary();
-    globalGames = games;
+    await loadLibrary();
     document.getElementById('note-select-modal').style.display = 'none';
     renderGameModalContent(gameId);
 }
@@ -318,13 +386,12 @@ async function loadAccounts() {
                     </div>`;
             });
             
-            // Кнопка для Epic Games - ИЗМЕНЕНО: теперь открывает модальное окно
+            // Кнопка для Epic Games
             let footerHtml = '';
             if (group.platform === 'Epic') {
                 footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;"><i class="fa-solid fa-plus"></i> Add Current Epic Session</button></div>`;
             }
 
-            // Иконка платформы
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
             if (group.platform === "Epic") iconClass = "fa-bolt"; 
@@ -345,7 +412,7 @@ async function loadAccounts() {
     }
 }
 
-// Переключение аккаунта в лаунчере
+// Переключение аккаунта
 window.switchAccount = async function(username, platform) { 
     const result = await SwitchToAccount(username, platform);
     alert(result);
@@ -359,7 +426,7 @@ window.deleteAccount = async function(username, platform) {
     } 
 }
 
-// Редактирование аккаунта (комментарий, аватарка)
+// Редактирование аккаунта
 window.openEditAccount = function(username, platform, currentComment) { 
     editingAccountTarget = { username, platform }; 
     document.getElementById('edit-comment').value = currentComment; 
@@ -406,15 +473,13 @@ window.saveCustomGame = async function() {
     } 
 }
 
-// --- Добавление Epic Account (Исправлено) ---
+// --- Добавление Epic Account ---
 
-// Функция открытия модального окна
 window.openEpicSaveModal = function() {
     document.getElementById('epic-save-name').value = '';
     document.getElementById('save-epic-modal').style.display = 'flex';
 }
 
-// Функция выполнения сохранения (вызывается из модального окна)
 window.doSaveEpic = async function() {
     const name = document.getElementById('epic-save-name').value;
     if (!name) {
