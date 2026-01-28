@@ -72,37 +72,66 @@ func SaveCurrentEpicAccount(name string) error {
 	return os.WriteFile(filepath.Join(destDir, "meta.json"), data, 0644)
 }
 
-// SwitchEpicAccount переключает аккаунт путем подмены папки Data
+// SwitchEpicAccount переключает аккаунт (Оркестратор)
 func SwitchEpicAccount(name string) error {
-	// Путь к сохраненному аккаунту
+	// 1. Проверка существования аккаунта
+	accountDir, err := validateAccount(name)
+	if err != nil {
+		return err
+	}
+
+	// 2. Остановка процессов Epic Games
+	if err := terminateEpicProcess(); err != nil {
+		// Логируем, но не прерываем, так как процесс может быть уже закрыт
+		fmt.Printf("Warning killing epic: %v\n", err)
+	}
+
+	// 3. Очистка текущей сессии
+	if err := clearCurrentSession(); err != nil {
+		return fmt.Errorf("failed to clean current session: %v", err)
+	}
+
+	// 4. Восстановление сессии из бэкапа
+	if err := restoreAccountSession(accountDir); err != nil {
+		return fmt.Errorf("failed to restore account: %v", err)
+	}
+
+	return nil
+}
+
+// --- Вспомогательные функции для SwitchEpicAccount ---
+
+// validateAccount проверяет, существует ли папка с аккаунтом и метаданные
+func validateAccount(name string) (string, error) {
 	storedAccountDir := filepath.Join(getEpicConfigDir(), name)
 	metaPath := filepath.Join(storedAccountDir, "meta.json")
 
 	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
-		return fmt.Errorf("account not found")
+		return "", fmt.Errorf("account not found")
 	}
-
-	// 1. Важно: Убиваем процесс Epic Games, иначе файлы будут заняты
-	if err := sys.KillEpic(); err != nil {
-		// Логируем ошибку, но пробуем продолжить (вдруг процесс уже мертв)
-		fmt.Printf("Warning killing epic: %v\n", err)
-	}
-
-	// 2. Очищаем текущую папку Data в системе
-	realDataPath := getEpicAuthDataPath()
-	if err := os.RemoveAll(realDataPath); err != nil {
-		return fmt.Errorf("failed to remove current session files: %v", err)
-	}
-
-	// 3. Восстанавливаем папку Data из бэкапа
-	storedDataPath := filepath.Join(storedAccountDir, "Data")
-	if err := copyDir(storedDataPath, realDataPath); err != nil {
-		return fmt.Errorf("failed to restore session files: %v", err)
-	}
-
-	// Готово. При следующем запуске Epic подхватит эти файлы.
-	return nil
+	return storedAccountDir, nil
 }
+
+// terminateEpicProcess убивает процесс лаунчера
+func terminateEpicProcess() error {
+	return sys.KillEpic()
+}
+
+// clearCurrentSession удаляет папку Data в системе
+func clearCurrentSession() error {
+	realDataPath := getEpicAuthDataPath()
+	return os.RemoveAll(realDataPath)
+}
+
+// restoreAccountSession копирует файлы сохраненного аккаунта в системную папку
+func restoreAccountSession(storedAccountDir string) error {
+	storedDataPath := filepath.Join(storedAccountDir, "Data")
+	realDataPath := getEpicAuthDataPath()
+	
+	return copyDir(storedDataPath, realDataPath)
+}
+
+// --- Функции сканирования ---
 
 // ScanEpicGames сканирует установленные игры
 func ScanEpicGames() []models.LibraryGame {
@@ -173,7 +202,7 @@ func ScanEpicAccounts() []models.Account {
 	return accounts
 }
 
-// Вспомогательные функции
+// --- Общие утилиты ---
 
 // copyDir рекурсивно копирует директорию
 func copyDir(src string, dst string) error {

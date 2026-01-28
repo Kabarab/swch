@@ -306,11 +306,15 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 			return "Error: " + err.Error()
 		}
 		
-		// ИСПРАВЛЕНИЕ: Автоматический перезапуск на macOS
+		// ИСПРАВЛЕНИЕ: Автоматический перезапуск на macOS с ожиданием
 		if runtime.GOOS == "darwin" {
-			time.Sleep(1 * time.Second) // Даем системе время освободить файлы
-			// Запускаем Epic Launcher через стандартный путь
+			// KillEpic (вызывается внутри SwitchEpicAccount -> KillEpic) 
+			// теперь ждет завершения процесса, но добавим еще секунду для надежности.
+			time.Sleep(1 * time.Second) 
+			
+			// Запускаем Epic Launcher через стандартный путь .app
 			sys.StartGame("/Applications/Epic Games Launcher.app")
+			
 			return "Switched to " + accountName
 		}
 
@@ -352,7 +356,6 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		return res
 	}
 
-    // ... (остальной код LaunchGame без изменений) ...
     if platform == "Epic" {
 		if accountName != "" && accountName != "Main Profile" {
 			err := scanner.SwitchEpicAccount(accountName)
@@ -409,7 +412,6 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	return "Platform not supported"
 }
 
-// ... (остальные функции AddTorrentGame, RemoveGame и т.д. без изменений) ...
 func (a *App) AddTorrentGame(name string, exePath string) string {
 	if name == "" || exePath == "" {
 		return "Error: empty fields"

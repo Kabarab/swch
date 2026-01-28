@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// ConfigureCommand для macOS ничего не делает
+// ConfigureCommand для macOS не требует специальных настроек (в отличие от Windows)
 func ConfigureCommand(cmd *exec.Cmd) {
 	// No-op
 }
@@ -30,13 +30,13 @@ func KillSteam() {
 	// 1. Пытаемся закрыть мягко
 	exec.Command("pkill", "-il", "steam").Run()
 
-	// 2. Ждем 3 секунды и добиваем жестко, если еще жив
+	// 2. Ждем и добиваем жестко, если еще жив
 	done := make(chan error, 1)
 	go func() {
-		// Проверяем наличие процесса steam_osx (основной бинарник на Mac)
 		for i := 0; i < 10; i++ {
+			// pgrep возвращает 0 (успех), если процесс найден
 			if err := exec.Command("pgrep", "-x", "steam_osx").Run(); err != nil {
-				// pgrep вернул ошибку -> процесс не найден -> успех
+				// Процесс не найден -> успех
 				done <- nil
 				return
 			}
@@ -57,7 +57,6 @@ func SetSteamUser(username string) error {
 	}
 	regPath := filepath.Join(home, "Library", "Application Support", "Steam", "registry.vdf")
 
-	// Читаем файл
 	contentBytes, err := os.ReadFile(regPath)
 	if err != nil {
 		return fmt.Errorf("registry.vdf not found: %v", err)
@@ -65,16 +64,13 @@ func SetSteamUser(username string) error {
 	content := string(contentBytes)
 
 	// 1. Обновляем AutoLoginUser
-	// Используем (?i) для игнорирования регистра (AutoLoginUser или autologinuser)
 	reLogin := regexp.MustCompile(`(?i)"AutoLoginUser"\s+"[^"]*"`)
 	newLoginVal := fmt.Sprintf(`"AutoLoginUser"		"%s"`, username)
 
 	if reLogin.MatchString(content) {
 		content = reLogin.ReplaceAllString(content, newLoginVal)
 	} else {
-		// Если ключа нет, это проблема. Попробуем вставить его в блок Steam
-		// Ищем "Steam" { и вставляем после него
-		fmt.Println("[macOS] AutoLoginUser key missing, trying to inject...")
+		// Если ключа нет, пробуем вставить его
 		reSteamBlock := regexp.MustCompile(`(?i)"Steam"\s*\{`)
 		if loc := reSteamBlock.FindStringIndex(content); loc != nil {
 			insertStr := fmt.Sprintf("\n\t\t%s", newLoginVal)
@@ -82,7 +78,7 @@ func SetSteamUser(username string) error {
 		}
 	}
 
-	// 2. Обязательно обновляем RememberPassword, иначе автологин не сработает
+	// 2. Обязательно обновляем RememberPassword
 	reRemember := regexp.MustCompile(`(?i)"RememberPassword"\s+"\d+"`)
 	newRememberVal := `"RememberPassword"		"1"`
 
@@ -96,21 +92,29 @@ func SetSteamUser(username string) error {
 // --- EPIC GAMES UTILS (macOS) ---
 
 func KillEpic() error {
-	// ИСПРАВЛЕНО: убран флаг -l, который предотвращал закрытие процесса
-	return exec.Command("pkill", "-i", "EpicGamesLauncher").Run()
-}
+	// 1. Агрессивно убиваем ВСЕ процессы Epic.
+	// Используем 'pkill -9 -f', чтобы убить процесс мгновенно (SIGKILL).
+	// -f ищет по всей командной строке, чтобы поймать "EpicGamesLauncher-Mac-Shipping" и "EpicWebHelper".
+	
+	// Убиваем веб-хелперы (часто именно они держат сессию)
+	exec.Command("pkill", "-9", "-f", "EpicWebHelper").Run()
+	// Убиваем основной процесс
+	exec.Command("pkill", "-9", "-f", "EpicGamesLauncher").Run()
 
-func GetEpicAccountId() (string, error) {
-	return "", fmt.Errorf("not implemented on macos")
-}
+	// 2. Цикл ожидания полного завершения (до 2 секунд)
+	// Если мы начнем копировать файлы пока процесс умирает, он может перезаписать их перед смертью.
+	for i := 0; i < 20; i++ { 
+		// pgrep возвращает exit code 1 (ошибка), если процесс НЕ найден -> значит он закрылся
+		if err := exec.Command("pgrep", "-f", "EpicGamesLauncher").Run(); err != nil {
+			// Дополнительная пауза, чтобы файловая система "отпустила" файлы
+			time.Sleep(200 * time.Millisecond)
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
-func SetEpicAccountId(accountId string) error {
-	return nil
-}
-
-func GetEpicManifestsDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Data", "Manifests")
+	// Если спустя 2 секунды процесс всё еще висит
+	return fmt.Errorf("epic games process refuses to die")
 }
 
 func GetEpicAuthDataDir() string {
@@ -118,12 +122,26 @@ func GetEpicAuthDataDir() string {
 	return filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Data")
 }
 
+func GetEpicManifestsDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Data", "Manifests")
+}
+
+// Заглушки для совместимости с интерфейсом (ID получается через парсинг файлов в scanner)
+func GetEpicAccountId() (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func SetEpicAccountId(accountId string) error {
+	return nil
+}
+
 // --- RIOT GAMES UTILS (macOS) ---
 
 func KillRiot() {
-	_ = exec.Command("pkill", "-il", "RiotClient").Run()
-	_ = exec.Command("pkill", "-il", "LeagueClient").Run()
-	_ = exec.Command("pkill", "-il", "VALORANT").Run()
+	exec.Command("pkill", "-il", "RiotClient").Run()
+	exec.Command("pkill", "-il", "LeagueClient").Run()
+	exec.Command("pkill", "-il", "VALORANT").Run()
 }
 
 func GetRiotPrivateSettingsPath() string {
@@ -134,11 +152,12 @@ func GetRiotPrivateSettingsPath() string {
 // --- LAUNCHER UTILS (macOS) ---
 
 func StartGame(pathOrUrl string) {
-	exec.Command("open", pathOrUrl).Start()
+	// -n открывает новый экземпляр (помогает, если предыдущий завис)
+	exec.Command("open", "-n", pathOrUrl).Start()
 }
 
 func RunExecutable(path string) error {
-	return exec.Command("open", path).Start()
+	return exec.Command("open", "-n", path).Start()
 }
 
 func StartGameWithArgs(exePath string, args ...string) error {
