@@ -257,9 +257,6 @@ func (a *App) SaveEpicAccount(name string) string {
 	return "Success"
 }
 
-
-
-
 func (a *App) SwitchToAccount(accountName string, platform string) string {
 	if platform == "Steam" {
 		if accountName == "UNKNOWN" {
@@ -303,14 +300,23 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 		return res
 	}
 	
-	// ... (Epic и Riot логика без изменений) ...
 	if platform == "Epic" {
 		err := scanner.SwitchEpicAccount(accountName)
 		if err != nil {
 			return "Error: " + err.Error()
 		}
+		
+		// ИСПРАВЛЕНИЕ: Автоматический перезапуск на macOS
+		if runtime.GOOS == "darwin" {
+			time.Sleep(1 * time.Second) // Даем системе время освободить файлы
+			// Запускаем Epic Launcher через стандартный путь
+			sys.StartGame("/Applications/Epic Games Launcher.app")
+			return "Switched to " + accountName
+		}
+
 		return "Switched to " + accountName + ". Please restart Epic Launcher."
 	}
+
 	if platform == "Riot" {
 		err := scanner.SwitchRiotAccount(accountName)
 		if err != nil {

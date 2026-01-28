@@ -96,7 +96,8 @@ func SetSteamUser(username string) error {
 // --- EPIC GAMES UTILS (macOS) ---
 
 func KillEpic() error {
-	return exec.Command("pkill", "-il", "EpicGamesLauncher").Run()
+	// ИСПРАВЛЕНО: убран флаг -l, который предотвращал закрытие процесса
+	return exec.Command("pkill", "-i", "EpicGamesLauncher").Run()
 }
 
 func GetEpicAccountId() (string, error) {
