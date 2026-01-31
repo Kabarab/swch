@@ -15,6 +15,7 @@ import (
 	"swch/internal/scanner"
 	"swch/internal/sys"
 	"time"
+	"swch/internal/epic"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -289,11 +290,19 @@ func (a *App) SaveRiotAccount(name string) string {
 }
 
 func (a *App) SaveEpicAccount(name string) string {
-	err := scanner.SaveCurrentEpicAccount(name)
-	if err != nil {
-		return "Error: " + err.Error()
-	}
-	return "Success"
+    err := epic.SaveCurrentAccount(name)
+    if err != nil {
+        return "Error: " + err.Error()
+    }
+    return "Saved"
+}
+
+func (a *App) SwitchEpicAccount(name string) string {
+    err := epic.SwitchAccount(name)
+    if err != nil {
+        return "Error: " + err.Error()
+    }
+    return "Switched"
 }
 
 func (a *App) SwitchToAccount(accountName string, platform string) string {
@@ -621,7 +630,8 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 func (a *App) EpicLogin(sid string) string {
     err := legendary.Auth(sid)
     if err != nil {
-        return "Error: " + err.Error()
+        // Возвращаем текст ошибки на фронтенд
+        return err.Error()
     }
     return "Success"
 }

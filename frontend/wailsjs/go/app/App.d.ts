@@ -46,6 +46,8 @@ export function SelectImage():Promise<string>;
 
 export function SetGameImage(arg1:string,arg2:string):Promise<string>;
 
+export function SwitchEpicAccount(arg1:string):Promise<string>;
+
 export function SwitchLegendaryAccount(arg1:string):Promise<string>;
 
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;

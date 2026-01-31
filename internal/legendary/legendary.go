@@ -252,8 +252,14 @@ func GetBinary() (string, error) {
 
 // Auth - авторизация через SID
 func Auth(sid string) error {
-	_, err := runCommand("auth", "--sid", sid)
-	return err
+    // --sid принудительно пытается войти
+    output, err := runCommand("auth", "--sid", sid, "--disable-webview")
+    
+    if err != nil {
+        // Теперь мы увидим реальную причину (например "Invalid SID")
+        return fmt.Errorf("ошибка входа: %s. Вывод: %s", err, string(output))
+    }
+    return nil
 }
 
 func Status() bool {
@@ -368,17 +374,14 @@ func getBinaryPath() (string, error) {
 }
 
 func runCommand(args ...string) ([]byte, error) {
-	bin, err := getBinaryPath()
-	if err != nil {
-		return nil, err
-	}
+    bin, err := getBinaryPath()
+    if err != nil {
+        return nil, err
+    }
 
-	cmd := exec.Command(bin, args...)
-	setSysProcAttr(cmd) // Вызов платформо-зависимой функции (скрытие окна)
+    cmd := exec.Command(bin, args...)
+    setSysProcAttr(cmd) // Ваша функция для скрытия окна (windows)
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return output, fmt.Errorf("ошибка legendary: %s, вывод: %s", err, string(output))
-	}
-	return output, nil
+    // CombinedOutput возвращает stdout и stderr вместе
+    return cmd.CombinedOutput()
 }

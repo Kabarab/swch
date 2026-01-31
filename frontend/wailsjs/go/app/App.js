@@ -90,6 +90,10 @@ export function SetGameImage(arg1, arg2) {
   return window['go']['app']['App']['SetGameImage'](arg1, arg2);
 }
 
+export function SwitchEpicAccount(arg1) {
+  return window['go']['app']['App']['SwitchEpicAccount'](arg1);
+}
+
 export function SwitchLegendaryAccount(arg1) {
   return window['go']['app']['App']['SwitchLegendaryAccount'](arg1);
 }
