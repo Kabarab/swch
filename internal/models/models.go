@@ -1,5 +1,35 @@
+// internal/models/models.go
 package models
 
+// EpicGame представляет игру из Legendary
+type EpicGame struct {
+	AppName     string   `json:"app_name"`
+	AppTitle    string   `json:"app_title"`
+	Version     string   `json:"version"`
+	IsInstalled bool     `json:"is_installed"`
+	InstallPath string   `json:"install_path"`
+	Metadata    EpicMeta `json:"metadata"`
+}
+
+type EpicMeta struct {
+	KeyImages []EpicImage `json:"key_images"`
+}
+
+type EpicImage struct {
+	Type   string `json:"type"`
+	URL    string `json:"url"`
+	Height int    `json:"height"`
+	Width  int    `json:"width"`
+}
+
+// Упрощенная структура для отправки на фронтенд (если нужно)
+type GameUI struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Image     string `json:"image"`
+	Installed bool   `json:"installed"`
+	Source    string `json:"source"` // "epic", "steam" и т.д.
+}
 type AccountStat struct {
 	AccountID   string `json:"accountId"`
 	DisplayName string `json:"displayName"`
@@ -49,3 +79,4 @@ type LauncherGroup struct {
 type Settings struct {
 	Accounts []Account `json:"accounts"`
 }
+

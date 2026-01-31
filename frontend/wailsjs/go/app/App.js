@@ -14,6 +14,34 @@ export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
 
+export function EpicCheckStatus() {
+  return window['go']['app']['App']['EpicCheckStatus']();
+}
+
+export function EpicInstallGame(arg1) {
+  return window['go']['app']['App']['EpicInstallGame'](arg1);
+}
+
+export function EpicLaunchGame(arg1) {
+  return window['go']['app']['App']['EpicLaunchGame'](arg1);
+}
+
+export function EpicLogin(arg1) {
+  return window['go']['app']['App']['EpicLogin'](arg1);
+}
+
+export function EpicLogout() {
+  return window['go']['app']['App']['EpicLogout']();
+}
+
+export function GetEpicGames() {
+  return window['go']['app']['App']['GetEpicGames']();
+}
+
+export function GetEpicLibrary() {
+  return window['go']['app']['App']['GetEpicLibrary']();
+}
+
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
 }
@@ -22,8 +50,16 @@ export function GetLibrary() {
   return window['go']['app']['App']['GetLibrary']();
 }
 
+export function LaunchEpicGame(arg1) {
+  return window['go']['app']['App']['LaunchEpicGame'](arg1);
+}
+
 export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
+}
+
+export function LoginLegendaryAccount() {
+  return window['go']['app']['App']['LoginLegendaryAccount']();
 }
 
 export function RemoveGame(arg1, arg2) {
@@ -32,6 +68,10 @@ export function RemoveGame(arg1, arg2) {
 
 export function SaveEpicAccount(arg1) {
   return window['go']['app']['App']['SaveEpicAccount'](arg1);
+}
+
+export function SaveLegendaryAccount(arg1) {
+  return window['go']['app']['App']['SaveLegendaryAccount'](arg1);
 }
 
 export function SaveRiotAccount(arg1) {
@@ -48,6 +88,10 @@ export function SelectImage() {
 
 export function SetGameImage(arg1, arg2) {
   return window['go']['app']['App']['SetGameImage'](arg1, arg2);
+}
+
+export function SwitchLegendaryAccount(arg1) {
+  return window['go']['app']['App']['SwitchLegendaryAccount'](arg1);
 }
 
 export function SwitchToAccount(arg1, arg2) {

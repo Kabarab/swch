@@ -8,15 +8,35 @@ export function AddTorrentGame(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
+export function EpicCheckStatus():Promise<boolean>;
+
+export function EpicInstallGame(arg1:string):Promise<string>;
+
+export function EpicLaunchGame(arg1:string):Promise<string>;
+
+export function EpicLogin(arg1:string):Promise<string>;
+
+export function EpicLogout():Promise<void>;
+
+export function GetEpicGames():Promise<Array<models.GameUI>>;
+
+export function GetEpicLibrary():Promise<Array<models.GameUI>>;
+
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
 export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
+export function LaunchEpicGame(arg1:string):Promise<void>;
+
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function LoginLegendaryAccount():Promise<string>;
 
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 
 export function SaveEpicAccount(arg1:string):Promise<string>;
+
+export function SaveLegendaryAccount(arg1:string):Promise<string>;
 
 export function SaveRiotAccount(arg1:string):Promise<string>;
 
@@ -25,6 +45,8 @@ export function SelectExe():Promise<string>;
 export function SelectImage():Promise<string>;
 
 export function SetGameImage(arg1:string,arg2:string):Promise<string>;
+
+export function SwitchLegendaryAccount(arg1:string):Promise<string>;
 
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
 

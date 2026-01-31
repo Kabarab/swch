@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>swch</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/main-CDPa7d9e.js"></script>
+  <script type="module" crossorigin src="/assets/main-DxlOy9FK.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/main-CIZT_knc.css">
 </head>
 <body>
@@ -23,7 +23,10 @@
             <div class="nav-item action-btn" onclick="openAddGameModal()">
                 <i class="fa-solid fa-plus"></i> Add Game
             </div>
-        </aside>
+            <div class="nav-item action-btn" onclick="openAddAccountModal()" style="margin-top: 10px; background-color: #444;">
+                <i class="fa-solid fa-user-plus"></i> Add Account
+            </div>
+            </aside>
 
         <main class="main-content">
             <div id="view-library" class="view-section">
@@ -156,7 +159,71 @@
             </div>
         </div>
     </div>
-    
+
+    <div id="add-account-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Add New Account</h3>
+                <span class="close" onclick="closeModal('add-account-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                <button onclick="startLegendaryLogin()" class="btn-main" style="padding:15px; background:#000; color:white; border:1px solid #444; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-terminal"></i> 
+                    <div style="text-align:left;">
+                        <div style="font-weight:bold;">Legendary (Epic CLI)</div>
+                        <div style="font-size:11px; color:#aaa;">Login via Browser/Terminal</div>
+                    </div>
+                </button>
+                
+                <button onclick="openEpicSaveModal(); closeModal('add-account-modal')" class="btn-main" style="padding:15px; background:#333; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-bolt"></i>
+                    <div style="text-align:left;">
+                        <div style="font-weight:bold;">Epic Games Launcher</div>
+                        <div style="font-size:11px; color:#aaa;">Save CURRENT logged in session</div>
+                    </div>
+                </button>
+
+                <button onclick="openRiotSaveModal(); closeModal('add-account-modal')" class="btn-main" style="padding:15px; background:#d13639; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-gamepad"></i>
+                    <div style="text-align:left;">
+                        <div style="font-weight:bold;">Riot Games Client</div>
+                        <div style="font-size:11px; color:#aaa;">Save CURRENT logged in session</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="save-legendary-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Current Legendary Session</h3>
+                <span class="close" onclick="closeModal('save-legendary-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
+                    1. Login via "Add Account" -> "Legendary" first.<br>
+                    2. Come back here and save the session.
+                </p>
+                <input type="text" id="legendary-save-name" placeholder="Account Name (e.g. MyEpicAcc)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveLegendary()" style="width:100%; margin-top:10px; padding:10px; background:#000; border:1px solid #444; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="save-riot-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Current Riot Account</h3>
+                <span class="close" onclick="closeModal('save-riot-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Riot Client.</p>
+                <input type="text" id="riot-save-name" placeholder="Account Name (e.g. Main)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveRiot()" style="width:100%; margin-top:10px; padding:10px; background:#d13639; border:none; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
+            </div>
+        </div>
+    </div>
     <div id="context-menu" class="context-menu">
         <ul>
             <li id="ctx-change-icon" class="ctx-item">Изменить иконку</li>

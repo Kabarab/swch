@@ -616,3 +616,101 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 	}
 	return "Success"
 }
+
+// EpicLogin выполняет вход в Epic Games через SID
+func (a *App) EpicLogin(sid string) string {
+    err := legendary.Auth(sid)
+    if err != nil {
+        return "Error: " + err.Error()
+    }
+    return "Success"
+}
+
+func (a *App) GetEpicGames() []models.GameUI {
+    games, err := legendary.ListGames()
+    if err != nil {
+        // Log error
+        return []models.GameUI{}
+    }
+
+    var result []models.GameUI
+    for _, g := range games {
+        // Ищем подходящую картинку
+        imgURL := ""
+        for _, img := range g.Metadata.KeyImages {
+            if img.Type == "DieselGameBox" || img.Type == "Thumbnail" {
+                imgURL = img.URL
+                break
+            }
+        }
+
+        result = append(result, models.GameUI{
+            ID:        g.AppName,
+            Title:     g.AppTitle,
+            Installed: g.IsInstalled,
+            Image:     imgURL,
+            Source:    "epic",
+        })
+    }
+    return result
+}
+
+// EpicCheckStatus проверяет, залогинен ли пользователь
+func (a *App) EpicCheckStatus() bool {
+    return legendary.Status()
+}
+
+// GetEpicLibrary возвращает список игр с картинками
+func (a *App) GetEpicLibrary() []models.GameUI {
+    games, err := legendary.ListGames()
+    if err != nil {
+        // Логируем ошибку, возвращаем пустой список
+        return []models.GameUI{}
+    }
+
+    var uiGames []models.GameUI
+    for _, g := range games {
+        img := ""
+        // Ищем подходящую картинку (обычно Thumbnail или BoxArt)
+        for _, image := range g.Metadata.KeyImages {
+            if image.Type == "Thumbnail" || image.Type == "DieselGameBox" {
+                img = image.URL
+                break
+            }
+        }
+        
+        uiGames = append(uiGames, models.GameUI{
+            ID:        g.AppName,
+            Title:     g.AppTitle,
+            Installed: g.IsInstalled,
+            Image:     img,
+        })
+    }
+    return uiGames
+}
+func (a *App) EpicInstallGame(appName string) string {
+    err := legendary.InstallGame(appName)
+    if err != nil {
+        return err.Error()
+    }
+    return "Installation Started"
+}
+
+// EpicLaunchGame запускает игру
+func (a *App) EpicLaunchGame(appName string) string {
+    err := legendary.LaunchGame(appName)
+    if err != nil {
+        return err.Error()
+    }
+    return "Launched"
+}
+
+// EpicLogout выходит из аккаунта
+func (a *App) EpicLogout() {
+    legendary.Logout()
+}
+
+// LaunchEpicGame запускает игру по её AppName
+func (a *App) LaunchEpicGame(id string) {
+    legendary.LaunchGame(id)
+}

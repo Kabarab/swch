@@ -12,6 +12,7 @@ import (
 	"swch/internal/sys"
 )
 
+var binaryPath string
 // LegendaryGame structure to parse 'legendary list-games --json' output
 type LegendaryGame struct {
 	AppName     string `json:"app_name"`
@@ -214,4 +215,170 @@ func LaunchLegendaryAuth() error {
 
 	sys.ConfigureCommand(cmd)
 	return cmd.Start()
+}
+
+
+// Путь к бинарнику legendary. 
+// В Heroic он поставляется вместе с лаунчером, либо ищется в системе.
+func GetBinary() (string, error) {
+	if binaryPath != "" {
+		return binaryPath, nil
+	}
+
+	binName := "legendary"
+	if runtime.GOOS == "windows" {
+		binName = "legendary.exe"
+	}
+
+	// 1. Ищем рядом с исполняемым файлом (для портативности)
+	exePath, err := os.Executable()
+	if err == nil {
+		localBin := filepath.Join(filepath.Dir(exePath), "tools", binName) // например, папка tools
+		if _, err := os.Stat(localBin); err == nil {
+			binaryPath = localBin
+			return binaryPath, nil
+		}
+	}
+
+	// 2. Ищем в PATH
+	path, err := exec.LookPath(binName)
+	if err == nil {
+		binaryPath = path
+		return binaryPath, nil
+	}
+
+	return "", fmt.Errorf("legendary binary not found")
+}
+
+// Auth - авторизация через SID
+func Auth(sid string) error {
+	_, err := runCommand("auth", "--sid", sid)
+	return err
+}
+
+func Status() bool {
+	bin, err := GetBinary()
+	if err != nil {
+		return false
+	}
+	// 'legendary status' возвращает 0, если вход выполнен, и 1, если нет (обычно)
+	cmd := exec.Command(bin, "status")
+	err = cmd.Run()
+	return err == nil
+}
+
+
+func ListGames() ([]models.EpicGame, error) {
+	// --json выводит данные, которые легко парсить
+	output, err := runCommand("list-games", "--json")
+	if err != nil {
+		return nil, err
+	}
+
+	var games []models.EpicGame
+	if err := json.Unmarshal(output, &games); err != nil {
+		return nil, fmt.Errorf("ошибка парсинга JSON: %s", err)
+	}
+
+	return games, nil
+}
+
+// InstallGame запускает установку игры
+func InstallGame(appName string) error {
+	bin, err := getBinaryPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(bin, "install", appName, "-y")
+	setSysProcAttr(cmd)
+	return cmd.Start()
+}
+
+// LaunchGame запускает игру
+func LaunchGame(appName string) error {
+	bin, err := getBinaryPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(bin, "launch", appName)
+	setSysProcAttr(cmd)
+	return cmd.Start()
+}
+
+// Logout выполняет выход из аккаунта
+func Logout() error {
+	_, err := runCommand("auth", "--delete")
+	return err
+}
+
+func getBinaryPath() (string, error) {
+	var platformDir string
+	var binaryName string
+
+	// Определяем папку и имя файла в зависимости от системы
+	switch runtime.GOOS {
+	case "windows":
+		platformDir = "windows"
+		binaryName = "legendary.exe"
+	case "darwin":
+		platformDir = "darwin"
+		binaryName = "legendary"
+	case "linux":
+		platformDir = "linux"
+		binaryName = "legendary"
+	default:
+		return "", fmt.Errorf("неподдерживаемая система: %s", runtime.GOOS)
+	}
+
+	// 1. Ищем относительно исполняемого файла (для готовой сборки)
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		// Проверяем: ./tools/windows/legendary.exe
+		bundledPath := filepath.Join(exeDir, "tools", platformDir, binaryName)
+		if _, err := os.Stat(bundledPath); err == nil {
+			return bundledPath, nil
+		}
+		
+		// На Mac в готовом приложении (app bundle) путь может быть сложнее,
+		// но если вы положите tools рядом с бинарником внутри .app/Contents/MacOS/, это сработает.
+		// Для разработки Wails обычно кладет бинарник в build/bin, поэтому ищем там:
+		devPath := filepath.Join(exeDir, "..", "..", "tools", platformDir, binaryName)
+		if _, err := os.Stat(devPath); err == nil {
+			return devPath, nil
+		}
+	}
+
+	// 2. Ищем в текущей рабочей директории (полезно для `wails dev`)
+	wd, err := os.Getwd()
+	if err == nil {
+		localPath := filepath.Join(wd, "tools", platformDir, binaryName)
+		if _, err := os.Stat(localPath); err == nil {
+			return localPath, nil
+		}
+	}
+
+	// 3. Если не нашли, пробуем искать в глобальном PATH (на случай если пользователь сам установил)
+	path, err := exec.LookPath(binaryName)
+	if err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("legendary не найден. Ожидался в tools/%s/%s", platformDir, binaryName)
+}
+
+func runCommand(args ...string) ([]byte, error) {
+	bin, err := getBinaryPath()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(bin, args...)
+	setSysProcAttr(cmd) // Вызов платформо-зависимой функции (скрытие окна)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("ошибка legendary: %s, вывод: %s", err, string(output))
+	}
+	return output, nil
 }

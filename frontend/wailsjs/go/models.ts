@@ -85,6 +85,26 @@ export namespace models {
 	    }
 	}
 	
+	export class GameUI {
+	    id: string;
+	    title: string;
+	    image: string;
+	    installed: boolean;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameUI(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.image = source["image"];
+	        this.installed = source["installed"];
+	        this.source = source["source"];
+	    }
+	}
 	export class LauncherGroup {
 	    name: string;
 	    platform: string;

@@ -14,7 +14,11 @@ import {
     UpdateAccountData, 
     SelectExe, 
     AddCustomGame, 
-    SetGameImage 
+    SetGameImage,
+    // НОВЫЕ ИМПОРТЫ
+    LoginLegendaryAccount,
+    SaveLegendaryAccount,
+    SaveRiotAccount
 } from '../wailsjs/go/app/App';
 
 // --- Глобальные переменные ---
@@ -386,15 +390,31 @@ async function loadAccounts() {
                     </div>`;
             });
             
-            // Кнопка для Epic Games
+            // Кнопка для добавления (Footer)
             let footerHtml = '';
+            
+            // Для Epic Games (Official)
             if (group.platform === 'Epic') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;"><button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;"><i class="fa-solid fa-plus"></i> Add Current Epic Session</button></div>`;
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;">
+                    <button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Add Current Epic Session
+                    </button>
+                </div>`;
+            }
+            
+            // НОВАЯ КНОПКА ДЛЯ LEGENDARY
+            if (group.platform === 'Legendary') {
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;">
+                    <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Save Current Session
+                    </button>
+                </div>`;
             }
 
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
             if (group.platform === "Epic") iconClass = "fa-bolt"; 
+            if (group.platform === "Legendary") iconClass = "fa-terminal"; // Иконка для Legendary
             
             section.innerHTML = `
                 <div class="launcher-header">
@@ -502,6 +522,79 @@ window.doSaveEpic = async function() {
     }
 }
 
+// --- ADD ACCOUNT LOGIC (NEW) ---
+
+// Открытие главного меню добавления
+window.openAddAccountModal = function() {
+    document.getElementById('add-account-modal').style.display = 'flex';
+}
+
+// 1. Legendary Login
+window.startLegendaryLogin = async function() {
+    closeModal('add-account-modal');
+    // Вызываем Go функцию, которая запустит терминал/браузер для входа
+    const res = await LoginLegendaryAccount();
+    alert(res); 
+    loadAccounts();
+}
+
+// 2. Riot Save Logic (Аналогично Epic)
+window.openRiotSaveModal = function() {
+    document.getElementById('riot-save-name').value = '';
+    document.getElementById('save-riot-modal').style.display = 'flex';
+}
+
+window.doSaveRiot = async function() {
+    const name = document.getElementById('riot-save-name').value;
+    if (!name) {
+        alert("Please enter a name");
+        return;
+    }
+
+    try {
+        const result = await SaveRiotAccount(name);
+        if (result === "Success") {
+            closeModal('save-riot-modal');
+            alert("Riot account saved!");
+            loadAccounts();
+        } else {
+            alert("Error: " + result);
+        }
+    } catch (e) {
+        alert("System error: " + e);
+        console.error(e);
+    }
+}
+
+// --- Логика сохранения Legendary (NEW) ---
+
+window.openLegendarySaveModal = function() {
+    document.getElementById('legendary-save-name').value = '';
+    document.getElementById('save-legendary-modal').style.display = 'flex';
+}
+
+window.doSaveLegendary = async function() {
+    const name = document.getElementById('legendary-save-name').value;
+    if (!name) {
+        alert("Please enter a name");
+        return;
+    }
+
+    try {
+        // Вызываем Go функцию SaveLegendaryAccount
+        const result = await SaveLegendaryAccount(name);
+        if (result === "Success") {
+            closeModal('save-legendary-modal');
+            alert("Legendary account saved!");
+            loadAccounts(); 
+        } else {
+            alert("Error: " + result);
+        }
+    } catch (e) {
+        alert("System error: " + e);
+        console.error(e);
+    }
+}
 
 // --- Логика контекстного меню (ПКМ) ---
 
