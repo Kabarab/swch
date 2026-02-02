@@ -53,6 +53,7 @@ type steamGameXML struct {
 	AppID string `xml:"appID"`
 	Name  string `xml:"name"`
 }
+
 // -----------------------------------------------------
 
 // --- Store API структуры ---
@@ -67,6 +68,7 @@ type storeAppDetailsResponse struct {
 		} `json:"platforms"`
 	} `json:"data"`
 }
+
 // ---------------------------
 
 // SetUserActive обновляет loginusers.vdf
@@ -81,7 +83,7 @@ func (s *SteamScanner) SetUserActive(targetUsername string) error {
 	reReset := regexp.MustCompile(`"MostRecent"\s+"1"`)
 	content = reReset.ReplaceAllString(content, `"MostRecent"       "0"`)
 
-	targetPattern := fmt.Sprintf(`"(?i)%s"`, regexp.QuoteMeta(targetUsername))
+	targetPattern := fmt.Sprintf(`(?i)"%s"`, regexp.QuoteMeta(targetUsername))
 	loc := regexp.MustCompile(targetPattern).FindStringIndex(content)
 
 	if loc != nil {
@@ -292,7 +294,7 @@ func (s *SteamScanner) enrichCacheFromAccounts(accounts []models.Account) {
 		req, _ := http.NewRequest("GET", url, nil)
 		// User-Agent важен, иначе Steam блокирует
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-		
+
 		resp, err := client.Do(req)
 		if err != nil {
 			continue
@@ -336,7 +338,7 @@ func (s *SteamScanner) enrichCacheFromAccounts(accounts []models.Account) {
 func fetchSingleGameName(appID string) string {
 	url := fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s&filters=basic", appID)
 	client := &http.Client{Timeout: 3 * time.Second}
-	
+
 	resp, err := client.Get(url)
 	if err != nil {
 		return ""
@@ -360,7 +362,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 
 	ensureGameNamesLoaded()
 	accounts := s.GetAccounts()
-	
+
 	// 1. Попытка получить имена через профили пользователей (XML метод)
 	s.enrichCacheFromAccounts(accounts)
 
@@ -535,7 +537,7 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 			realName := fetchSingleGameName(games[i].ID)
 			if realName != "" {
 				games[i].Name = realName
-				
+
 				// Сохраняем в кэш
 				cacheMutex.Lock()
 				appNameCache[games[i].ID] = realName
@@ -694,4 +696,54 @@ func parseVdf(path string) map[string]interface{} {
 	p := vdf.NewParser(f)
 	m, _ := p.Parse()
 	return m
+}
+
+// RemoveUser удаляет пользователя из loginusers.vdf и его папку userdata
+func (s *SteamScanner) RemoveUser(username string) error {
+	if s.Path == "" {
+		return fmt.Errorf("путь к Steam не найден")
+	}
+
+	accounts := s.GetAccounts()
+	var targetID3 string
+	for _, acc := range accounts {
+		if acc.Username == username {
+			targetID3 = acc.ID
+			break
+		}
+	}
+
+	if targetID3 == "" {
+		return fmt.Errorf("аккаунт '%s' не найден", username)
+	}
+
+	// 1. Удаляем пользователя из loginusers.vdf
+	loginUsersPath := filepath.Join(s.Path, "config", "loginusers.vdf")
+	contentBytes, err := os.ReadFile(loginUsersPath)
+	if err == nil {
+		content := string(contentBytes)
+		id3, _ := strconv.ParseInt(targetID3, 10, 64)
+		id64 := id3 + 76561197960265728
+		id64Str := strconv.FormatInt(id64, 10)
+
+		// Этот регэксп удаляет весь блок пользователя.
+		// (?s) позволяет `.` соответствовать новым строкам.
+		re := regexp.MustCompile(fmt.Sprintf(`(?s)\s*"%s"\s*{[^}]+}`, id64Str))
+		newContent := re.ReplaceAllString(content, "")
+
+		if newContent != content {
+			err = os.WriteFile(loginUsersPath, []byte(newContent), 0644)
+			if err != nil {
+				return fmt.Errorf("ошибка записи loginusers.vdf: %v", err)
+			}
+		}
+	}
+
+	// 2. Удаляем папку userdata
+	userDataPath := filepath.Join(s.Path, "userdata", targetID3)
+	if _, err := os.Stat(userDataPath); !os.IsNotExist(err) {
+		return os.RemoveAll(userDataPath)
+	}
+
+	return nil
 }

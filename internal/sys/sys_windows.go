@@ -78,6 +78,43 @@ func KillEpic() error {
 	return nil
 }
 
+func getEpicLauncherPath() (string, error) {
+	// Пробуем 64-битный путь
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Epic Games\EpicGamesLauncher`, registry.QUERY_VALUE)
+	if err != nil {
+		// Если не удалось, пробуем 32-битный путь (для 32-битных приложений на 64-битной ОС)
+		k, err = registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Epic Games\EpicGamesLauncher`, registry.QUERY_VALUE)
+		if err != nil {
+			return "", fmt.Errorf("cannot find Epic Games Launcher registry key")
+		}
+	}
+	defer k.Close()
+
+	installDir, _, err := k.GetStringValue("InstallDir")
+	if err != nil {
+		return "", fmt.Errorf("cannot find InstallDir value in registry: %w", err)
+	}
+	// Путь к исполняемому файлу в современных версиях лаунчера
+	return filepath.Join(installDir, "Launcher", "Portal", "Binaries", "Win64", "EpicGamesLauncher.exe"), nil
+}
+
+func StartEpic() {
+	path, err := getEpicLauncherPath()
+	if err != nil {
+		fmt.Printf("Could not get Epic Launcher path: %v. Trying default path.\n", err)
+		// Пробуем стандартный путь как запасной вариант
+		defaultPath := "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe"
+		if _, statErr := os.Stat(defaultPath); statErr == nil {
+			RunExecutable(defaultPath)
+		}
+		return
+	}
+
+	// Небольшая задержка перед запуском, чтобы дать файловой системе "успокоиться" после Kill
+	time.Sleep(500 * time.Millisecond)
+	RunExecutable(path)
+}
+
 func GetEpicAccountId() (string, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Epic Games\Unreal Engine\Identifiers`, registry.QUERY_VALUE)
 	if err != nil {

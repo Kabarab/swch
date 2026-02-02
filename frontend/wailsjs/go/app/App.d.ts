@@ -8,29 +8,39 @@ export function AddTorrentGame(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
-export function EpicCheckStatus():Promise<boolean>;
+export function DeleteAllEpicAccounts():Promise<string>;
 
-export function EpicInstallGame(arg1:string):Promise<string>;
-
-export function EpicLaunchGame(arg1:string):Promise<string>;
-
-export function EpicLogin(arg1:string):Promise<string>;
-
-export function EpicLogout():Promise<void>;
-
-export function GetEpicGames():Promise<Array<models.GameUI>>;
-
-export function GetEpicLibrary():Promise<Array<models.GameUI>>;
+export function GetClipboardText():Promise<string>;
 
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
-export function GetLibrary():Promise<Array<models.LibraryGame>>;
+export function GetLegendaryGames():Promise<Array<models.GameUI>>;
 
-export function LaunchEpicGame(arg1:string):Promise<void>;
+export function GetLegendaryLibrary():Promise<Array<models.GameUI>>;
+
+export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
+export function LaunchLegendaryGame(arg1:string):Promise<void>;
+
+export function LegendaryCheckStatus():Promise<boolean>;
+
+export function LegendaryInstallGame(arg1:string):Promise<string>;
+
+export function LegendaryLaunchGame(arg1:string):Promise<string>;
+
+export function LegendaryLogin(arg1:string):Promise<string>;
+
+export function LegendaryLoginWithBrowser():Promise<string>;
+
+export function LegendaryLogout():Promise<void>;
+
 export function LoginLegendaryAccount():Promise<string>;
+
+export function LoginLegendaryAuto():Promise<string>;
+
+export function OpenLegendaryLoginPage():Promise<void>;
 
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 

@@ -17,15 +17,21 @@ import {
     SetGameImage,
     // НОВЫЕ ИМПОРТЫ
     LoginLegendaryAccount,
+    LegendaryLogin,
+    LoginLegendaryAuto,
     SaveLegendaryAccount,
-    SaveRiotAccount
+    SaveRiotAccount,
+    OpenLegendaryLoginPage,
+    GetClipboardText
 } from '../wailsjs/go/app/App';
+import { setupLegendary } from './legendary.js';
 
 // --- Глобальные переменные ---
 let globalGames = [];
 let editingTagTarget = { username: '', platform: '', gameId: '' };
 let editingAccountTarget = { username: '', platform: '' };
 let currentModalGameId = '';
+let showHiddenEpic = false;
 
 // Переменные для контекстного меню
 let selectedGameId = null;
@@ -33,7 +39,7 @@ let selectedPlatform = null;
 
 // Состояние фильтров
 let filterState = {
-    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent'], // По умолчанию все включены
+    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent', 'Legendary'], // По умолчанию все включены
     onlyInstalled: false,
     onlyMac: false,
     searchQuery: ''
@@ -44,9 +50,65 @@ let filterState = {
 // Запуск при старте страницы
 document.addEventListener("DOMContentLoaded", () => {
     loadLibrary();
+    document.querySelector('.nav-item[onclick="switchTab(\'library\')"]').classList.add('active');
+    setupLegendary();
+
+    const launchersList = document.getElementById('launchers-list');
+    if (launchersList) {
+        launchersList.addEventListener('click', function(event) {
+            console.log('[DEBUG] Click detected on accounts list. Target:', event.target);
+            const target = event.target;
+
+            // 1. Проверяем кнопку удаления
+            const deleteButton = target.closest('.delete-account-btn');
+            if (deleteButton) {
+                console.log('[DEBUG] Hide button clicked. Username:', deleteButton.dataset.username, 'Platform:', deleteButton.dataset.platform);
+                const username = deleteButton.dataset.username;
+                const platform = deleteButton.dataset.platform;
+                window.hideAccount(username, platform); // Вызываем новую функцию
+                return; // Останавливаем дальнейшую обработку
+            }
+
+            // 2. Проверяем кнопку редактирования
+            const editButton = target.closest('.edit-account-btn');
+            if (editButton) {
+                console.log('[DEBUG] Edit button found. Username:', editButton.dataset.username);
+                const username = editButton.dataset.username;
+                const platform = editButton.dataset.platform;
+                const comment = editButton.dataset.comment;
+                window.openEditAccount(username, platform, comment);
+                return; // Останавливаем дальнейшую обработку
+            }
+
+            // 3. Если не кнопка, проверяем клик по самой строке для переключения
+            const accountRow = target.closest('.account-row');
+            if (accountRow) {
+                console.log('[DEBUG] Account row clicked. Username:', accountRow.dataset.username);
+                const username = accountRow.dataset.username;
+                const platform = accountRow.dataset.platform;
+                const isHidden = accountRow.dataset.hidden === 'true';
+
+                // Убедимся, что клик был по валидной строке с данными
+                if (username && platform) { 
+                    if (isHidden) {
+                        if (confirm(`Restore account ${username}?`)) {
+                            window.restoreAccount(username, platform);
+                        }
+                    } else {
+                        window.switchAccount(username, platform);
+                    }
+                }
+            }
+        });
+    }
 });
 
 // --- Функции навигации и интерфейса ---
+
+window.toggleHiddenEpic = function() {
+    showHiddenEpic = !showHiddenEpic;
+    loadAccounts();
+}
 
 // Переключение вкладок (Библиотека / Аккаунты)
 window.switchTab = function(tab) {
@@ -56,11 +118,16 @@ window.switchTab = function(tab) {
     // Подсветка активной кнопки
     if (tab === 'library') {
         document.getElementById('view-library').style.display = 'block';
+        document.querySelector('.nav-item[onclick="switchTab(\'library\')"]').classList.add('active');
         // При переключении на библиотеку лучше обновить данные, но фильтры сохранить
         loadLibrary();
-    } else {
+    } else if (tab === 'accounts') {
         document.getElementById('view-accounts').style.display = 'block';
+        document.querySelector('.nav-item[onclick="switchTab(\'accounts\')"]').classList.add('active');
         loadAccounts();
+    } else if (tab === 'legendary') {
+        document.getElementById('view-legendary').style.display = 'block';
+        document.querySelector('.nav-item[onclick="switchTab(\'legendary\')"]').classList.add('active');
     }
 }
 
@@ -167,6 +234,7 @@ function renderGrid(games) {
         if (game.platform === 'Epic') platColor = '#333';
         if (game.platform === 'Riot') platColor = '#d13639';
         if (game.platform === 'Custom' || game.platform === 'Torrent') platColor = '#2d8c58';
+        if (game.platform === 'Legendary') platColor = '#e47300'; // Оранжевый цвет для Legendary
 
         // Обработка картинки
         let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
@@ -356,7 +424,7 @@ async function loadAccounts() {
         container.innerHTML = '';
         
         if (!launchers || launchers.length === 0) {
-            container.innerHTML = '<div style="padding:20px">No launchers found.</div>';
+            container.innerHTML = '<div style="padd ing:20px">No launchers found.</div>';
             return;
         }
         
@@ -368,23 +436,36 @@ async function loadAccounts() {
             const accounts = group.accounts || [];
             
             accounts.forEach(acc => {
+                // Не показывать скрытые аккаунты
+                const isHidden = acc.comment && acc.comment.startsWith('_swch_hidden_');
+                if (isHidden) {
+                    if (group.platform !== 'Epic' || !showHiddenEpic) return;
+                }
+
                 let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
                 if (acc.avatarUrl) {
                     avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
                 }
                 
-                const commentHtml = acc.comment ? `<div class="acc-comment">${acc.comment}</div>` : '';
+                let displayComment = acc.comment;
+                if (isHidden) {
+                    const parts = acc.comment.split(':');
+                    const reason = parts.slice(1).join(':');
+                    displayComment = reason ? `Hidden: ${reason}` : 'Hidden';
+                }
+                const commentHtml = displayComment ? `<div class="acc-comment">${displayComment}</div>` : '';
+                const rowStyle = isHidden ? 'opacity: 0.6;' : '';
                 
                 accountsHtml += `
-                    <div class="account-row interactable" onclick="switchAccount('${acc.username}', '${group.platform}')">
+                    <div class="account-row interactable" style="${rowStyle}" data-username="${acc.username}" data-platform="${group.platform}" data-hidden="${isHidden}">
                         ${avatarHtml}
                         <div class="acc-details">
                             <div class="acc-nick">${acc.displayName}${commentHtml}</div>
                             <div class="acc-login">${acc.username}</div>
                         </div>
-                        <div class="acc-actions" onclick="event.stopPropagation()">
-                            <div class="action-icon-btn" onclick="openEditAccount('${acc.username}', '${group.platform}', '${acc.comment || ''}')"><i class="fa-solid fa-pen"></i></div>
-                            <div class="action-icon-btn delete-btn" onclick="deleteAccount('${acc.username}', '${group.platform}')"><i class="fa-solid fa-trash"></i></div>
+                        <div class="acc-actions">
+                            <div class="action-icon-btn edit-account-btn" data-username="${acc.username}" data-platform="${group.platform}" data-comment="${acc.comment || ''}"><i class="fa-solid fa-pen"></i></div>
+                            <div class="action-icon-btn delete-btn delete-account-btn" data-username="${acc.username}" data-platform="${group.platform}"><i class="fa-solid fa-trash"></i></div>
                         </div>
                         <div class="acc-action-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
                     </div>`;
@@ -395,9 +476,15 @@ async function loadAccounts() {
             
             // Для Epic Games (Official)
             if (group.platform === 'Epic') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;">
-                    <button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-plus"></i> Add Current Epic Session
+                const hiddenText = showHiddenEpic ? "Hide Hidden" : "Show Hidden";
+                const hiddenIcon = showHiddenEpic ? "fa-eye-slash" : "fa-eye";
+
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Add Current
+                    </button>
+                    <button onclick="toggleHiddenEpic()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid ${hiddenIcon}"></i> ${hiddenText}
                     </button>
                 </div>`;
             }
@@ -439,11 +526,39 @@ window.switchAccount = async function(username, platform) {
 }
 
 // Удаление аккаунта
-window.deleteAccount = async function(username, platform) { 
-    if (confirm(`Скрыть аккаунт ${username} из списка?`)) { 
-        await DeleteAccount(username, platform); 
-        loadAccounts(); 
-    } 
+// Скрывает аккаунт, а не удаляет, помечая его специальным комментарием
+window.hideAccount = async function(username, platform) {
+    const reason = prompt("Reason for hiding (optional, e.g. Ban):", "");
+    if (reason === null) return;
+
+    const comment = reason ? `_swch_hidden_:${reason}` : "_swch_hidden_";
+
+    try {
+        // Используем UpdateAccountData чтобы установить специальный комментарий
+        // Пустой стринг для avatarPath, чтобы он не менялся
+        const res = await UpdateAccountData(username, platform, comment, ""); 
+        
+        if (res && (res.startsWith("Error") || res.startsWith("Ошибка"))) {
+            alert("Ошибка при скрытии аккаунта: " + res);
+        } else {
+            loadAccounts(); // Перезагружаем список, чтобы скрытый аккаунт исчез
+        }
+    } catch (e) {
+        alert('An error occurred while hiding the account: ' + e);
+    }
+}
+
+window.restoreAccount = async function(username, platform) {
+    try {
+        const res = await UpdateAccountData(username, platform, "", ""); 
+        if (res && (res.startsWith("Error") || res.startsWith("Ошибка"))) {
+            alert("Error restoring account: " + res);
+        } else {
+            loadAccounts();
+        }
+    } catch (e) {
+        alert('An error occurred while restoring the account: ' + e);
+    }
 }
 
 // Редактирование аккаунта
@@ -532,10 +647,114 @@ window.openAddAccountModal = function() {
 // 1. Legendary Login
 window.startLegendaryLogin = async function() {
     closeModal('add-account-modal');
-    // Вызываем Go функцию, которая запустит терминал/браузер для входа
-    const res = await LoginLegendaryAccount();
-    alert(res); 
-    loadAccounts();
+
+    // Создаем модальное окно для ввода SID, если его нет
+    let modal = document.getElementById('legendary-auth-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'legendary-auth-modal';
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:2000;";
+        modal.innerHTML = `
+        <div style="background:#1e1e1e; padding:25px; border-radius:8px; width:450px; color:#fff; font-family:sans-serif; border:1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+            <h3 style="margin-top:0; margin-bottom:15px; color:#e47300;"><i class="fa-solid fa-key"></i> Legendary Login</h3>
+            
+            <div style="margin-bottom:20px;">
+                <p style="color:#ccc; font-size:14px; margin-bottom:5px;">1. Open Epic Games login page:</p>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-open-epic" style="flex:1; padding:10px; background:#333; color:#fff; border:1px solid #555; cursor:pointer; border-radius:4px; transition:0.2s;">
+                        <i class="fa-solid fa-external-link-alt"></i> Manual Browser
+                    </button>
+                    <button id="btn-auto-epic" style="flex:1; padding:10px; background:#e47300; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold;">
+                        <i class="fa-solid fa-magic"></i> Auto Login
+                    </button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom:20px;">
+                <p style="color:#ccc; font-size:14px; margin-bottom:5px;">2. After login, <b>Copy</b> the text (JSON) from the page.</p>
+                <p style="color:#e47300; font-size:12px; margin-bottom:5px;"><i class="fa-solid fa-spinner fa-spin"></i> Waiting for you to copy the code...</p>
+                <textarea id="input-sid" placeholder='Paste the full JSON response here...' style="width:100%; height:80px; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:8px; resize:none; font-family:monospace;"></textarea>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <button id="btn-submit-sid" style="flex:1; padding:10px; background:#e47300; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold;">Login</button>
+                <button id="btn-cancel-sid" style="flex:1; padding:10px; background:#d13639; color:#fff; border:none; cursor:pointer; border-radius:4px;">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+
+        // Обработчики событий
+        document.getElementById('btn-open-epic').onclick = () => OpenLegendaryLoginPage();
+        document.getElementById('btn-auto-epic').onclick = async () => {
+            const res = await LoginLegendaryAuto();
+            if (res === "Success") {
+                modal.style.display = 'none';
+                if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
+                loadAccounts();
+            } else {
+                alert(res);
+            }
+        };
+        document.getElementById('btn-cancel-sid').onclick = () => {
+            modal.style.display = 'none'; 
+            if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
+        };
+        document.getElementById('btn-submit-sid').onclick = async () => {
+            const input = document.getElementById('input-sid').value.trim();
+            if (!input) return;
+
+            // Пытаемся извлечь SID, если пользователь вставил весь JSON
+            let sid = input;
+            try {
+                const json = JSON.parse(input);
+                if (json.sid) sid = json.sid;
+                else if (json.authorizationCode) sid = json.authorizationCode;
+            } catch (e) {
+                const match = input.match(/"sid"\s*:\s*"([^"]+)"/);
+                if (match && match[1]) {
+                    sid = match[1];
+                } else {
+                    const matchCode = input.match(/"authorizationCode"\s*:\s*"([^"]+)"/);
+                    if (matchCode && matchCode[1]) sid = matchCode[1];
+                }
+            }
+
+            const res = await LegendaryLogin(sid);
+            alert(res);
+            modal.style.display = 'none';
+            if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
+            loadAccounts();
+        };
+    }
+
+    // Показываем модальное окно
+    modal.style.display = 'flex';
+    document.getElementById('input-sid').value = ''; // Очистка поля
+
+    // Запускаем проверку буфера обмена
+    if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
+    window.legendaryAuthInterval = setInterval(async () => {
+        if (modal.style.display === 'none') {
+            clearInterval(window.legendaryAuthInterval);
+            return;
+        }
+        try {
+            const text = await GetClipboardText();
+            if (text && (text.includes('"authorizationCode"') || text.includes('"sid"') || text.includes('"code"'))) {
+                // Если нашли JSON с кодом
+                document.getElementById('input-sid').value = text;
+                
+                // Автоматически нажимаем Login
+                const btn = document.getElementById('btn-submit-sid');
+                if (btn) {
+                    clearInterval(window.legendaryAuthInterval);
+                    btn.click();
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+    }, 1000);
 }
 
 // 2. Riot Save Logic (Аналогично Epic)

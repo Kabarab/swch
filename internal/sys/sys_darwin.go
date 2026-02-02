@@ -57,6 +57,10 @@ func SetSteamUser(username string) error {
 	}
 	regPath := filepath.Join(home, "Library", "Application Support", "Steam", "registry.vdf")
 
+	if _, err := os.Stat(regPath); os.IsNotExist(err) {
+		regPath = filepath.Join(home, "Library", "Application Support", "Steam", "config", "registry.vdf")
+	}
+
 	contentBytes, err := os.ReadFile(regPath)
 	if err != nil {
 		return fmt.Errorf("registry.vdf not found: %v", err)
@@ -95,18 +99,21 @@ func KillEpic() error {
 	// 1. Агрессивно убиваем ВСЕ процессы Epic.
 	// Используем 'pkill -9 -f', чтобы убить процесс мгновенно (SIGKILL).
 	// -f ищет по всей командной строке, чтобы поймать "EpicGamesLauncher-Mac-Shipping" и "EpicWebHelper".
-	
+
 	// Убиваем веб-хелперы (часто именно они держат сессию)
 	exec.Command("pkill", "-9", "-f", "EpicWebHelper").Run()
 	// Убиваем основной процесс
 	exec.Command("pkill", "-9", "-f", "EpicGamesLauncher").Run()
+	// Иногда процесс называется с пробелами
+	exec.Command("pkill", "-9", "-f", "Epic Games Launcher").Run()
 
 	// 2. Цикл ожидания полного завершения (до 2 секунд)
 	// Если мы начнем копировать файлы пока процесс умирает, он может перезаписать их перед смертью.
-	for i := 0; i < 20; i++ { 
+	for i := 0; i < 20; i++ {
 		// pgrep возвращает exit code 1 (ошибка), если процесс НЕ найден -> значит он закрылся
-		if err := exec.Command("pgrep", "-f", "EpicGamesLauncher").Run(); err != nil {
-			// Дополнительная пауза, чтобы файловая система "отпустила" файлы
+		err1 := exec.Command("pgrep", "-f", "EpicGamesLauncher").Run()
+		err2 := exec.Command("pgrep", "-f", "Epic Games Launcher").Run()
+		if err1 != nil && err2 != nil {
 			time.Sleep(200 * time.Millisecond)
 			return nil
 		}
@@ -119,12 +126,23 @@ func KillEpic() error {
 
 func GetEpicAuthDataDir() string {
 	home, _ := os.UserHomeDir()
+	// На macOS токены часто лежат прямо в Data, а не в Saved/Data
+	// Но проверим оба варианта, чтобы не сломать, если структура изменится
+	savedData := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Data")
+	if info, err := os.Stat(savedData); err == nil && info.IsDir() {
+		return savedData
+	}
 	return filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Data")
 }
 
 func GetEpicManifestsDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Data", "Manifests")
+}
+
+func StartEpic() {
+	// -SkipBuildPatchPrereq: пропускает проверку обновлений при запуске
+	StartGameWithArgs("/Applications/Epic Games Launcher.app", "-SkipBuildPatchPrereq")
 }
 
 // Заглушки для совместимости с интерфейсом (ID получается через парсинг файлов в scanner)

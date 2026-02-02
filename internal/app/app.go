@@ -10,14 +10,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"swch/internal/legendary"
 	"swch/internal/models"
 	"swch/internal/scanner"
 	"swch/internal/sys"
 	"time"
-	"swch/internal/epic"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	webview "github.com/webview/webview_go"
 )
 
 type App struct {
@@ -42,6 +43,8 @@ var gameSettingsMap = make(map[string]GameSettings)
 
 const settingsFile = "accounts_settings.json"
 const gameSettingsFile = "games_settings.json"
+
+const epicLoginURL = "https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode"
 
 func fileToBase64(filePath string) string {
 	data, err := os.ReadFile(filePath)
@@ -290,19 +293,19 @@ func (a *App) SaveRiotAccount(name string) string {
 }
 
 func (a *App) SaveEpicAccount(name string) string {
-    err := epic.SaveCurrentAccount(name)
-    if err != nil {
-        return "Error: " + err.Error()
-    }
-    return "Saved"
+	err := scanner.SaveCurrentEpicAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
 }
 
 func (a *App) SwitchEpicAccount(name string) string {
-    err := epic.SwitchAccount(name)
-    if err != nil {
-        return "Error: " + err.Error()
-    }
-    return "Switched"
+	err := scanner.SwitchEpicAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Switched"
 }
 
 func (a *App) SwitchToAccount(accountName string, platform string) string {
@@ -347,8 +350,10 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 	}
 
 	if platform == "Epic" {
+		fmt.Printf("[App] Request to switch Epic account to: %s\n", accountName)
 		err := scanner.SwitchEpicAccount(accountName)
 		if err != nil {
+			fmt.Printf("[App] Error switching Epic account: %v\n", err)
 			return "Error: " + err.Error()
 		}
 
@@ -425,9 +430,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		}
 
 		// Запуск игры через legendary launch
-		cmd := exec.Command("legendary", "launch", gameID)
-		sys.ConfigureCommand(cmd)
-		err := cmd.Start()
+		err := legendary.LaunchGame(gameID)
 		if err != nil {
 			return "Error launching: " + err.Error()
 		}
@@ -563,11 +566,60 @@ func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) 
 func (a *App) DeleteAccount(username, platform string) string {
 	loadSettings()
 	key := makeKey(platform, username)
-	settings := accountSettingsMap[key]
-	settings.Hidden = true
-	accountSettingsMap[key] = settings
+
+	// Для Steam мы просто скрываем аккаунт, так как физическое удаление из loginusers.vdf
+	// ненадежно (Steam может восстановить его) и scanner все равно его найдет.
+	if platform == "Steam" {
+		settings := accountSettingsMap[key]
+		settings.Hidden = true
+		accountSettingsMap[key] = settings
+		saveSettings()
+		return "Аккаунт скрыт из списка."
+	}
+
+	var deleteErr error
+	switch platform {
+	case "Epic":
+		deleteErr = scanner.DeleteEpicAccount(username)
+	case "Legendary":
+		deleteErr = legendary.DeleteLegendaryAccount(username)
+	case "Riot":
+		deleteErr = scanner.DeleteRiotAccount(username)
+	default:
+		// This platform doesn't support physical deletion.
+		// We can only remove it from our settings.
+		if _, ok := accountSettingsMap[key]; ok {
+			delete(accountSettingsMap, key)
+			saveSettings()
+			return "Аккаунт успешно удален."
+		}
+		// If it's not in settings either, then there's nothing to do.
+		return fmt.Sprintf("Удаление для платформы '%s' не поддерживается, и аккаунт не найден.", platform)
+	}
+
+	if deleteErr != nil {
+		return fmt.Sprintf("Ошибка при удалении файлов аккаунта: %v", deleteErr)
+	}
+
+	// Also remove from settings if physical deletion was successful.
+	delete(accountSettingsMap, key)
 	saveSettings()
-	return "Account removed from list"
+
+	return "Аккаунт успешно удален."
+}
+
+func (a *App) DeleteAllEpicAccounts() string {
+	if err := scanner.DeleteAllEpicAccounts(); err != nil {
+		return "Error: " + err.Error()
+	}
+	loadSettings()
+	for k := range accountSettingsMap {
+		if strings.HasPrefix(k, "Epic:") {
+			delete(accountSettingsMap, k)
+		}
+	}
+	saveSettings()
+	return "Success"
 }
 
 func (a *App) UpdateGameNote(username, platform, gameID, note string) string {
@@ -627,100 +679,195 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 }
 
 // EpicLogin выполняет вход в Epic Games через SID
-func (a *App) EpicLogin(sid string) string {
-    err := legendary.Auth(sid)
-    if err != nil {
-        // Возвращаем текст ошибки на фронтенд
-        return err.Error()
-    }
-    return "Success"
+func (a *App) LegendaryLogin(sid string) string {
+	err := legendary.Auth(sid)
+	if err != nil {
+		// Возвращаем текст ошибки на фронтенд
+		return err.Error()
+	}
+	return "Success"
 }
 
-func (a *App) GetEpicGames() []models.GameUI {
-    games, err := legendary.ListGames()
-    if err != nil {
-        // Log error
-        return []models.GameUI{}
-    }
+// LoginLegendaryAuto открывает встроенное окно браузера для автоматического входа
+func (a *App) LoginLegendaryAuto() string {
+	// На macOS запуск второго UI-цикла (webview) в том же процессе, где работает Wails,
+	// часто приводит к конфликтам потоков.
+	if runtime.GOOS == "darwin" {
+		return "На macOS автоматический вход внутри приложения может работать нестабильно. Рекомендуется использовать ручной метод."
+	}
 
-    var result []models.GameUI
-    for _, g := range games {
-        // Ищем подходящую картинку
-        imgURL := ""
-        for _, img := range g.Metadata.KeyImages {
-            if img.Type == "DieselGameBox" || img.Type == "Thumbnail" {
-                imgURL = img.URL
-                break
-            }
-        }
+	url := epicLoginURL
+	resultCh := make(chan string, 1)
 
-        result = append(result, models.GameUI{
-            ID:        g.AppName,
-            Title:     g.AppTitle,
-            Installed: g.IsInstalled,
-            Image:     imgURL,
-            Source:    "epic",
-        })
-    }
-    return result
+	// Запускаем webview в горутине
+	go func() {
+		// debug=true позволяет использовать инспектор (ПКМ -> Inspect)
+		w := webview.New(true)
+		defer w.Destroy()
+		w.SetTitle("Epic Games Login - Auto")
+		w.SetSize(500, 700, webview.HintNone)
+
+		// Функция, которую вызовет JS, когда найдет код
+		w.Bind("sendAuthData", func(data string) {
+			resultCh <- data
+			w.Terminate()
+		})
+
+		// JS скрипт, который опрашивает содержимое страницы
+		// Epic возвращает JSON прямо в теле страницы
+		script := `
+		setInterval(function() {
+			var text = document.body.innerText;
+			// Проверяем, похоже ли это на JSON с sid или code
+			if (text.trim().startsWith('{') && (text.includes('"sid"') || text.includes('"code"'))) {
+				sendAuthData(text);
+			}
+		}, 500);
+		`
+		w.Init(script)
+		w.Navigate(url)
+		w.Run()
+	}()
+
+	// Ждем результат или таймаут
+	select {
+	case jsonStr := <-resultCh:
+		// Пытаемся залогиниться с полученным JSON (функция Auth сама разберет SID)
+		// Но Auth ожидает чистый SID, поэтому извлечем его
+		// Для простоты передадим весь JSON в LegendaryLogin, если бы она умела парсить,
+		// но сейчас она ждет SID. Сделаем простой парсинг здесь или передадим как есть,
+		// если LegendaryLogin (Auth) умеет работать с JSON (обычно нет).
+		// Лучше использовать существующую логику парсинга на фронте или добавить её сюда.
+		// В данном случае просто передаем JSON, так как LegendaryLogin вызывает Auth(sid),
+		// а Auth передает это в legendary --sid. Если legendary умный, он поймет.
+		// Если нет - нужно распарсить jsonStr.
+
+		var data struct {
+			SID               string `json:"sid"`
+			AuthorizationCode string `json:"authorizationCode"`
+		}
+		json.Unmarshal([]byte(jsonStr), &data)
+
+		if data.SID != "" {
+			return a.LegendaryLogin(data.SID)
+		}
+		if data.AuthorizationCode != "" {
+			return a.LegendaryLogin(data.AuthorizationCode)
+		}
+		// Если SID нет, пробуем передать как есть (вдруг там code)
+		return a.LegendaryLogin(jsonStr)
+
+	case <-time.After(3 * time.Minute):
+		return "Login timed out"
+	}
+}
+
+func (a *App) GetLegendaryGames() []models.GameUI {
+	games, err := legendary.ListGames()
+	if err != nil {
+		// Log error
+		return []models.GameUI{}
+	}
+
+	var result []models.GameUI
+	for _, g := range games {
+		// Ищем подходящую картинку
+		imgURL := ""
+		for _, img := range g.Metadata.KeyImages {
+			if img.Type == "DieselGameBox" || img.Type == "Thumbnail" {
+				imgURL = img.URL
+				break
+			}
+		}
+
+		result = append(result, models.GameUI{
+			ID:        g.AppName,
+			Title:     g.AppTitle,
+			Installed: g.IsInstalled,
+			Image:     imgURL,
+			Source:    "epic",
+		})
+	}
+	return result
 }
 
 // EpicCheckStatus проверяет, залогинен ли пользователь
-func (a *App) EpicCheckStatus() bool {
-    return legendary.Status()
+func (a *App) LegendaryCheckStatus() bool {
+	return legendary.Status()
 }
 
 // GetEpicLibrary возвращает список игр с картинками
-func (a *App) GetEpicLibrary() []models.GameUI {
-    games, err := legendary.ListGames()
-    if err != nil {
-        // Логируем ошибку, возвращаем пустой список
-        return []models.GameUI{}
-    }
+func (a *App) GetLegendaryLibrary() []models.GameUI {
+	games, err := legendary.ListGames()
+	if err != nil {
+		// Логируем ошибку, возвращаем пустой список
+		return []models.GameUI{}
+	}
 
-    var uiGames []models.GameUI
-    for _, g := range games {
-        img := ""
-        // Ищем подходящую картинку (обычно Thumbnail или BoxArt)
-        for _, image := range g.Metadata.KeyImages {
-            if image.Type == "Thumbnail" || image.Type == "DieselGameBox" {
-                img = image.URL
-                break
-            }
-        }
-        
-        uiGames = append(uiGames, models.GameUI{
-            ID:        g.AppName,
-            Title:     g.AppTitle,
-            Installed: g.IsInstalled,
-            Image:     img,
-        })
-    }
-    return uiGames
+	var uiGames []models.GameUI
+	for _, g := range games {
+		img := ""
+		// Ищем подходящую картинку (обычно Thumbnail или BoxArt)
+		for _, image := range g.Metadata.KeyImages {
+			if image.Type == "Thumbnail" || image.Type == "DieselGameBox" {
+				img = image.URL
+				break
+			}
+		}
+
+		uiGames = append(uiGames, models.GameUI{
+			ID:        g.AppName,
+			Title:     g.AppTitle,
+			Installed: g.IsInstalled,
+			Image:     img,
+		})
+	}
+	return uiGames
 }
-func (a *App) EpicInstallGame(appName string) string {
-    err := legendary.InstallGame(appName)
-    if err != nil {
-        return err.Error()
-    }
-    return "Installation Started"
+func (a *App) LegendaryInstallGame(appName string) string {
+	err := legendary.InstallGame(appName, "")
+	if err != nil {
+		return err.Error()
+	}
+	return "Installation Started"
 }
 
 // EpicLaunchGame запускает игру
-func (a *App) EpicLaunchGame(appName string) string {
-    err := legendary.LaunchGame(appName)
-    if err != nil {
-        return err.Error()
-    }
-    return "Launched"
+func (a *App) LegendaryLaunchGame(appName string) string {
+	err := legendary.LaunchGame(appName)
+	if err != nil {
+		return err.Error()
+	}
+	return "Launched"
 }
 
 // EpicLogout выходит из аккаунта
-func (a *App) EpicLogout() {
-    legendary.Logout()
+func (a *App) LegendaryLogout() {
+	legendary.Logout()
 }
 
 // LaunchEpicGame запускает игру по её AppName
-func (a *App) LaunchEpicGame(id string) {
-    legendary.LaunchGame(id)
+func (a *App) LaunchLegendaryGame(id string) {
+	legendary.LaunchGame(id)
+}
+
+func (a *App) OpenLegendaryLoginPage() {
+	url := epicLoginURL
+	wruntime.BrowserOpenURL(a.ctx, url)
+}
+
+func (a *App) GetClipboardText() string {
+	text, err := wruntime.ClipboardGetText(a.ctx)
+	if err != nil {
+		return ""
+	}
+	return text
+}
+
+func (a *App) LegendaryLoginWithBrowser() string {
+	err := legendary.LoginWithBrowser()
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
 }

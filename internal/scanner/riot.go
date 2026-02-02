@@ -171,3 +171,15 @@ func copyRiotFile(src, dst string) error {
 	_, err = io.Copy(out, in)
 	return err
 }
+
+// DeleteRiotAccount удаляет сохраненный аккаунт Riot
+func DeleteRiotAccount(name string) error {
+	if name == "" {
+		return fmt.Errorf("имя аккаунта не может быть пустым")
+	}
+	accountDir := filepath.Join(getRiotConfigDir(), name)
+	if _, err := os.Stat(accountDir); os.IsNotExist(err) {
+		return fmt.Errorf("аккаунт '%s' не найден", name)
+	}
+	return os.RemoveAll(accountDir)
+}

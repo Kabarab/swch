@@ -14,52 +14,72 @@ export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
 
-export function EpicCheckStatus() {
-  return window['go']['app']['App']['EpicCheckStatus']();
+export function DeleteAllEpicAccounts() {
+  return window['go']['app']['App']['DeleteAllEpicAccounts']();
 }
 
-export function EpicInstallGame(arg1) {
-  return window['go']['app']['App']['EpicInstallGame'](arg1);
-}
-
-export function EpicLaunchGame(arg1) {
-  return window['go']['app']['App']['EpicLaunchGame'](arg1);
-}
-
-export function EpicLogin(arg1) {
-  return window['go']['app']['App']['EpicLogin'](arg1);
-}
-
-export function EpicLogout() {
-  return window['go']['app']['App']['EpicLogout']();
-}
-
-export function GetEpicGames() {
-  return window['go']['app']['App']['GetEpicGames']();
-}
-
-export function GetEpicLibrary() {
-  return window['go']['app']['App']['GetEpicLibrary']();
+export function GetClipboardText() {
+  return window['go']['app']['App']['GetClipboardText']();
 }
 
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
 }
 
-export function GetLibrary() {
-  return window['go']['app']['App']['GetLibrary']();
+export function GetLegendaryGames() {
+  return window['go']['app']['App']['GetLegendaryGames']();
 }
 
-export function LaunchEpicGame(arg1) {
-  return window['go']['app']['App']['LaunchEpicGame'](arg1);
+export function GetLegendaryLibrary() {
+  return window['go']['app']['App']['GetLegendaryLibrary']();
+}
+
+export function GetLibrary() {
+  return window['go']['app']['App']['GetLibrary']();
 }
 
 export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }
 
+export function LaunchLegendaryGame(arg1) {
+  return window['go']['app']['App']['LaunchLegendaryGame'](arg1);
+}
+
+export function LegendaryCheckStatus() {
+  return window['go']['app']['App']['LegendaryCheckStatus']();
+}
+
+export function LegendaryInstallGame(arg1) {
+  return window['go']['app']['App']['LegendaryInstallGame'](arg1);
+}
+
+export function LegendaryLaunchGame(arg1) {
+  return window['go']['app']['App']['LegendaryLaunchGame'](arg1);
+}
+
+export function LegendaryLogin(arg1) {
+  return window['go']['app']['App']['LegendaryLogin'](arg1);
+}
+
+export function LegendaryLoginWithBrowser() {
+  return window['go']['app']['App']['LegendaryLoginWithBrowser']();
+}
+
+export function LegendaryLogout() {
+  return window['go']['app']['App']['LegendaryLogout']();
+}
+
 export function LoginLegendaryAccount() {
   return window['go']['app']['App']['LoginLegendaryAccount']();
+}
+
+export function LoginLegendaryAuto() {
+  return window['go']['app']['App']['LoginLegendaryAuto']();
+}
+
+export function OpenLegendaryLoginPage() {
+  return window['go']['app']['App']['OpenLegendaryLoginPage']();
 }
 
 export function RemoveGame(arg1, arg2) {
