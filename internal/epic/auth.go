@@ -36,8 +36,7 @@ func NewEpicClient() *EpicClient {
 // GetEpicAuthURL returns the URL to start the authorization flow
 func GetEpicAuthURL() string {
 	// Standard Epic Auth URL
-	// We use the same redirect URI as the official launcher or legendary
-	return "https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code"
+	return fmt.Sprintf("https://www.epicgames.com/id/api/redirect?clientId=%s&responseType=code", LauncherAppClientID)
 }
 
 // DeviceAuth stores the device authentication credentials
@@ -50,6 +49,9 @@ type DeviceAuth struct {
 // getAuthHeader returns the Basic auth header for Epic API
 func (c *EpicClient) getAuthHeader() string {
 	credentials := LauncherAppClientID + ":" + LauncherAppSecret
+	// Debug log to verify correct credentials are loaded (showing first 4 chars)
+	fmt.Printf("[EpicAuth] Using ClientID: %s... Secret: %s...\n",
+		LauncherAppClientID[:4], LauncherAppSecret[:4])
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
 }
 
