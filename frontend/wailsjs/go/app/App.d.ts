@@ -14,7 +14,11 @@ export function DeleteAllEpicAccounts():Promise<string>;
 
 export function GetClipboardText():Promise<string>;
 
+<<<<<<< HEAD
 export function GetEpicAuthURL():Promise<string>;
+=======
+export function GetEpicFullLibrary():Promise<Array<models.LibraryGame>>;
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
@@ -73,6 +77,8 @@ export function SwitchEpicAccountWithDeviceAuth(arg1:string):Promise<string>;
 export function SwitchLegendaryAccount(arg1:string):Promise<string>;
 
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
+
+export function SyncEpicLibrary():Promise<string>;
 
 export function ToggleGameAccountHidden(arg1:string,arg2:string,arg3:string):Promise<string>;
 

@@ -1,4 +1,5 @@
 // 1. Импорты (все функции из Go)
+<<<<<<< HEAD
 import {
     RemoveGame,
     GetLibrary,
@@ -15,13 +16,30 @@ import {
     UpdateAccountData,
     SelectExe,
     AddCustomGame,
+=======
+import { 
+    RemoveGame, 
+    GetLibrary, 
+    ToggleGamePin, 
+    LaunchGame, 
+    UpdateGameNote, 
+    ToggleGameAccountHidden, 
+    GetLaunchers, 
+    SwitchToAccount, 
+    SaveEpicAccount, 
+    DeleteAccount, 
+    SelectImage, 
+    UpdateAccountData, 
+    SelectExe, 
+    AddCustomGame, 
+    AddCustomGame, 
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
     SetGameImage,
-    // НОВЫЕ ИМПОРТЫ
-    LoginLegendaryAccount,
-    LegendaryLogin,
-    LoginLegendaryAuto,
-    SaveLegendaryAccount,
+    // EPIC NATIVE
+    EpicLogin,
+    EpicLoginAuto,
     SaveRiotAccount,
+<<<<<<< HEAD
     OpenLegendaryLoginPage,
     GetClipboardText,
     GetEpicAuthURL,
@@ -29,8 +47,10 @@ import {
 
     OpenEpicAuthPage,
     SaveRobloxAccount
+=======
+    GetClipboardText
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 } from '../wailsjs/go/app/App';
-import { setupLegendary } from './legendary.js';
 
 // --- Глобальные переменные ---
 let globalGames = [];
@@ -45,7 +65,7 @@ let selectedPlatform = null;
 
 // Состояние фильтров
 let filterState = {
-    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent', 'Legendary'], // По умолчанию все включены
+    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent'], // По умолчанию все включены
     onlyInstalled: false,
     onlyMac: false,
     searchQuery: ''
@@ -164,7 +184,6 @@ window.saveAccountChanges = async function () {
 document.addEventListener("DOMContentLoaded", () => {
     loadLibrary();
     document.querySelector('.nav-item[onclick="switchTab(\'library\')"]').classList.add('active');
-    setupLegendary();
 
     const launchersList = document.getElementById('launchers-list');
     if (launchersList) {
@@ -220,9 +239,6 @@ window.switchTab = function (tab) {
         document.getElementById('view-accounts').style.display = 'block';
         document.querySelector('.nav-item[onclick="switchTab(\'accounts\')"]').classList.add('active');
         loadAccounts();
-    } else if (tab === 'legendary') {
-        document.getElementById('view-legendary').style.display = 'block';
-        document.querySelector('.nav-item[onclick="switchTab(\'legendary\')"]').classList.add('active');
     }
 }
 
@@ -327,9 +343,6 @@ function renderGrid(games) {
         let platColor = '#0074e4';
         if (game.platform === 'Steam') platColor = '#1b2838';
         if (game.platform === 'Epic') platColor = '#333';
-        if (game.platform === 'Riot') platColor = '#d13639';
-        if (game.platform === 'Custom' || game.platform === 'Torrent') platColor = '#2d8c58';
-        if (game.platform === 'Legendary') platColor = '#e47300'; // Оранжевый цвет для Legendary
 
         // Обработка картинки
         let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
@@ -606,6 +619,7 @@ async function loadAccounts() {
                     </button>
                     ${showHiddenBtn}
                 </div>`;
+<<<<<<< HEAD
             } else if (group.platform === 'Legendary') {
                 footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
@@ -634,6 +648,10 @@ async function loadAccounts() {
                 </div>`;
             }
 
+=======
+            }
+            
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
             if (group.platform === "Epic") iconClass = "fa-bolt";
@@ -667,6 +685,7 @@ window.saveCustomGame = async function () {
     const res = await AddCustomGame(
         document.getElementById('custom-name').value,
         document.getElementById('custom-path').value
+<<<<<<< HEAD
     );
 
     if (res === 'Success') {
@@ -677,6 +696,13 @@ window.saveCustomGame = async function () {
     } else {
         alert(res);
     }
+=======
+    ); 
+    
+    } else { 
+        alert(res); 
+    } 
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 }
 
 // --- Добавление Epic Account ---
@@ -764,57 +790,54 @@ window.openAddAccountModal = function () {
     document.getElementById('add-account-modal').style.display = 'flex';
 }
 
+<<<<<<< HEAD
 // 1. Legendary Login
 window.startLegendaryLogin = async function () {
+=======
+// 1. Epic Native Login
+window.startEpicNativeLogin = async function() {
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
     closeModal('add-account-modal');
 
-    // Создаем модальное окно для ввода SID, если его нет
-    let modal = document.getElementById('legendary-auth-modal');
+    let modal = document.getElementById('epic-native-auth-modal');
     if (!modal) {
         modal = document.createElement('div');
-        modal.id = 'legendary-auth-modal';
+        modal.id = 'epic-native-auth-modal';
         modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:2000;";
         modal.innerHTML = `
         <div style="background:#1e1e1e; padding:25px; border-radius:8px; width:450px; color:#fff; font-family:sans-serif; border:1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-            <h3 style="margin-top:0; margin-bottom:15px; color:#e47300;"><i class="fa-solid fa-key"></i> Legendary Login</h3>
+            <h3 style="margin-top:0; margin-bottom:15px; color:#0074e4;"><i class="fa-solid fa-bolt"></i> Epic Games Login</h3>
             
             <div style="margin-bottom:20px;">
-                <p style="color:#ccc; font-size:14px; margin-bottom:5px;">1. Open Epic Games login page:</p>
-                <div style="display:flex; gap:10px;">
-                    <button id="btn-open-epic" style="flex:1; padding:10px; background:#333; color:#fff; border:1px solid #555; cursor:pointer; border-radius:4px; transition:0.2s;">
-                        <i class="fa-solid fa-external-link-alt"></i> Manual Browser
-                    </button>
-                    <button id="btn-auto-epic" style="flex:1; padding:10px; background:#e47300; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold;">
-                        <i class="fa-solid fa-magic"></i> Auto Login
-                    </button>
-                </div>
+                <p style="color:#ccc; font-size:14px; margin-bottom:15px;">Login to your Epic Games account to sync your library.</p>
+                <button id="btn-auto-epic-native" style="width:100%; padding:15px; background:#0074e4; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold; font-size:16px;">
+                    <i class="fa-solid fa-magic"></i> Start Automatic Login
+                </button>
             </div>
             
-            <div style="margin-bottom:20px;">
-                <p style="color:#ccc; font-size:14px; margin-bottom:5px;">2. After login, <b>Copy</b> the text (JSON) from the page.</p>
-                <p style="color:#e47300; font-size:12px; margin-bottom:5px;"><i class="fa-solid fa-spinner fa-spin"></i> Waiting for you to copy the code...</p>
-                <textarea id="input-sid" placeholder='Paste the full JSON response here...' style="width:100%; height:80px; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:8px; resize:none; font-family:monospace;"></textarea>
+            <div style="margin-bottom:20px; border-top: 1px solid #333; padding-top:15px;">
+                <p style="color:#888; font-size:12px; margin-bottom:5px;">Or paste SID manually if automatic login fails:</p>
+                <input type="password" id="input-sid-native" placeholder='Paste SID here...' style="width:100%; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:10px; margin-bottom:10px;">
+                <button id="btn-submit-sid-native" style="width:100%; padding:10px; background:#333; color:#fff; border:1px solid #555; cursor:pointer; border-radius:4px;">Login with SID</button>
             </div>
             
-            <div style="display:flex; gap:10px;">
-                <button id="btn-submit-sid" style="flex:1; padding:10px; background:#e47300; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold;">Login</button>
-                <button id="btn-cancel-sid" style="flex:1; padding:10px; background:#d13639; color:#fff; border:none; cursor:pointer; border-radius:4px;">Cancel</button>
+            <div style="text-align:right;">
+                <button id="btn-cancel-epic-native" style="padding:8px 20px; background:none; border:none; color:#aaa; cursor:pointer;">Cancel</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
 
-        // Обработчики событий
-        document.getElementById('btn-open-epic').onclick = () => OpenLegendaryLoginPage();
-        document.getElementById('btn-auto-epic').onclick = async () => {
-            const res = await LoginLegendaryAuto();
+        document.getElementById('btn-auto-epic-native').onclick = async () => {
+            const res = await EpicLoginAuto();
             if (res === "Success") {
                 modal.style.display = 'none';
-                if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
+                loadLibrary();
                 loadAccounts();
             } else {
                 alert(res);
             }
         };
+<<<<<<< HEAD
         document.getElementById('btn-cancel-sid').onclick = () => {
             modal.style.display = 'none';
             if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
@@ -822,33 +845,29 @@ window.startLegendaryLogin = async function () {
         document.getElementById('btn-submit-sid').onclick = async () => {
             const input = document.getElementById('input-sid').value.trim();
             if (!input) return;
+=======
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 
-            // Пытаемся извлечь SID, если пользователь вставил весь JSON
-            let sid = input;
-            try {
-                const json = JSON.parse(input);
-                if (json.sid) sid = json.sid;
-                else if (json.authorizationCode) sid = json.authorizationCode;
-            } catch (e) {
-                const match = input.match(/"sid"\s*:\s*"([^"]+)"/);
-                if (match && match[1]) {
-                    sid = match[1];
-                } else {
-                    const matchCode = input.match(/"authorizationCode"\s*:\s*"([^"]+)"/);
-                    if (matchCode && matchCode[1]) sid = matchCode[1];
-                }
-            }
-
-            const res = await LegendaryLogin(sid);
-            alert(res);
+        document.getElementById('btn-cancel-epic-native').onclick = () => {
             modal.style.display = 'none';
-            if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
-            loadAccounts();
+        };
+
+        document.getElementById('btn-submit-sid-native').onclick = async () => {
+            const sid = document.getElementById('input-sid-native').value.trim();
+            if (!sid) return;
+            const res = await EpicLogin(sid);
+            if (res === "Success") {
+                modal.style.display = 'none';
+                loadLibrary();
+                loadAccounts();
+            } else {
+                alert(res);
+            }
         };
     }
 
-    // Показываем модальное окно
     modal.style.display = 'flex';
+<<<<<<< HEAD
     document.getElementById('input-sid').value = ''; // Очистка поля
 
     // Запускаем проверку буфера обмена
@@ -875,6 +894,9 @@ window.startLegendaryLogin = async function () {
             // ignore
         }
     }, 1000);
+=======
+    document.getElementById('input-sid-native').value = '';
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 }
 
 // 2. Riot Save Logic (Аналогично Epic)

@@ -73,8 +73,19 @@ func SetSteamUser(username string) error {
 // --- EPIC GAMES UTILS ---
 
 func KillEpic() error {
-	cmd := exec.Command("taskkill", "/F", "/IM", "EpicGamesLauncher.exe")
-	_ = cmd.Run()
+	// Завершаем все связанные процессы Epic Games
+	// Это критично для корректного перезапуска лаунчера при смене аккаунта
+	killProcess("EpicGamesLauncher.exe")
+	killProcess("EpicWebHelper.exe")
+	killProcess("UnrealCEFSubProcess.exe")
+
+	// Ждем завершения основного процесса
+	waitForExit("EpicGamesLauncher.exe")
+	// Также ждем завершения вспомогательных процессов
+	waitForExit("EpicWebHelper.exe")
+
+	// Даем время на освобождение файлов
+	time.Sleep(500 * time.Millisecond)
 	return nil
 }
 
@@ -101,18 +112,52 @@ func getEpicLauncherPath() (string, error) {
 func StartEpic() {
 	path, err := getEpicLauncherPath()
 	if err != nil {
-		fmt.Printf("Could not get Epic Launcher path: %v. Trying default path.\n", err)
-		// Пробуем стандартный путь как запасной вариант
-		defaultPath := "C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe"
-		if _, statErr := os.Stat(defaultPath); statErr == nil {
-			RunExecutable(defaultPath)
+		fmt.Printf("[Epic] Could not get Epic Launcher path: %v. Trying default path.\n", err)
+		// Пробуем стандартные пути как запасной вариант
+		defaultPaths := []string{
+			"C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
+			"C:\\Program Files\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe",
 		}
+		found := false
+		for _, p := range defaultPaths {
+			if _, statErr := os.Stat(p); statErr == nil {
+				path = p
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Println("[Epic] Could not find Epic Launcher executable")
+			return
+		}
+	}
+
+	// Проверяем существование файла
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		fmt.Printf("[Epic] Epic Launcher not found at: %s\n", path)
 		return
 	}
 
+	fmt.Printf("[Epic] Starting Epic Launcher from: %s\n", path)
+
 	// Небольшая задержка перед запуском, чтобы дать файловой системе "успокоиться" после Kill
-	time.Sleep(500 * time.Millisecond)
-	RunExecutable(path)
+	time.Sleep(2 * time.Second)
+
+	// Используем cmd.exe /C start для более надежного запуска
+	// Это лучше работает в эмуляторах и обходит некоторые проблемы с правами
+	cmd := exec.Command("cmd", "/C", "start", "", path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	err = cmd.Start()
+	if err != nil {
+		fmt.Printf("[Epic] Failed to start via cmd: %v, trying direct start...\n", err)
+		// Запасной вариант - прямой запуск
+		err = StartGameWithArgs(path)
+		if err != nil {
+			fmt.Printf("[Epic] Direct start also failed: %v\n", err)
+		}
+	} else {
+		fmt.Println("[Epic] Start command executed successfully.")
+	}
 }
 
 func GetEpicAccountId() (string, error) {

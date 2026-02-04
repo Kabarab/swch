@@ -26,8 +26,13 @@ export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
 }
 
+<<<<<<< HEAD
 export function GetEpicAuthURL() {
   return window['go']['app']['App']['GetEpicAuthURL']();
+=======
+export function GetEpicFullLibrary() {
+  return window['go']['app']['App']['GetEpicFullLibrary']();
+>>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 }
 
 export function GetLaunchers() {
@@ -144,6 +149,10 @@ export function SwitchLegendaryAccount(arg1) {
 
 export function SwitchToAccount(arg1, arg2) {
   return window['go']['app']['App']['SwitchToAccount'](arg1, arg2);
+}
+
+export function SyncEpicLibrary() {
+  return window['go']['app']['App']['SyncEpicLibrary']();
 }
 
 export function ToggleGameAccountHidden(arg1, arg2, arg3) {

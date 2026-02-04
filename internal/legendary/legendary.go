@@ -347,6 +347,83 @@ func Auth(sid string) error {
 	return nil
 }
 
+// ImportFromEpicLauncher импортирует авторизацию из установленного Epic Games Launcher
+// Это позволяет автоматически использовать токены пользователя без повторного входа
+func ImportFromEpicLauncher() error {
+	bin, err := GetBinary()
+	if err != nil {
+		return fmt.Errorf("legendary binary not found: %w", err)
+	}
+
+	// Проверяем, есть ли данные Epic Launcher
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData == "" {
+		home, _ := os.UserHomeDir()
+		localAppData = filepath.Join(home, "AppData", "Local")
+	}
+
+	epicDataDir := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
+	if _, err := os.Stat(epicDataDir); os.IsNotExist(err) {
+		return fmt.Errorf("Epic Games Launcher data not found. Please login to Epic Games Launcher first")
+	}
+
+	// Импортируем авторизацию
+	// ВАЖНО: --import выходит из Epic Launcher, поэтому предупреждаем об этом
+	fmt.Println("[Legendary] Importing authentication from Epic Games Launcher...")
+	cmd := exec.Command(bin, "auth", "--import")
+	sys.ConfigureCommand(cmd)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return fmt.Errorf("failed to import auth: %s, output: %s", err, string(output))
+	}
+
+	fmt.Println("[Legendary] Successfully imported Epic Games authentication")
+	return nil
+}
+
+// EnsureAuthenticated проверяет авторизацию и автоматически импортирует из Epic Launcher если нужно
+func EnsureAuthenticated() error {
+	// Сначала проверяем, авторизован ли уже Legendary
+	if Status() {
+		fmt.Println("[Legendary] Already authenticated")
+		return nil
+	}
+
+	// Если нет — пытаемся импортировать из Epic Launcher
+	fmt.Println("[Legendary] Not authenticated, trying to import from Epic Launcher...")
+	return ImportFromEpicLauncher()
+}
+
+// GetFullLibrary получает полную библиотеку игр (включая не установленные)
+// Автоматически импортирует авторизацию из Epic Launcher если нужно
+func GetFullLibrary() ([]LegendaryGame, error) {
+	// Убеждаемся, что авторизованы
+	if err := EnsureAuthenticated(); err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	// Получаем список игр
+	bin, err := GetBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(bin, "list-games", "--json")
+	sys.ConfigureCommand(cmd)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list games: %w", err)
+	}
+
+	var games []LegendaryGame
+	if err := json.Unmarshal(output, &games); err != nil {
+		return nil, fmt.Errorf("failed to parse games: %w", err)
+	}
+
+	return games, nil
+}
+
 func Status() bool {
 	bin, err := GetBinary()
 	if err != nil {
