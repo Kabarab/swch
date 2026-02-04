@@ -1,7 +1,7 @@
 // internal/models/models.go
 package models
 
-// EpicGame представляет игру из Legendary
+// EpicGame represents a game from Epic Games
 type EpicGame struct {
 	AppName     string   `json:"app_name"`
 	AppTitle    string   `json:"app_title"`
@@ -49,7 +49,7 @@ type LibraryGame struct {
 	ExePath             string        `json:"exePath"`
 	AvailableOnAccounts []AccountStat `json:"availableOn"`
 	IsInstalled         bool          `json:"isInstalled"`
-	IsPinned bool `json:"isPinned"`
+	IsPinned            bool          `json:"isPinned"`
 	IsMacSupported      bool          `json:"isMacSupported"`
 }
 
@@ -79,4 +79,3 @@ type LauncherGroup struct {
 type Settings struct {
 	Accounts []Account `json:"accounts"`
 }
-

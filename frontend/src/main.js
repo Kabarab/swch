@@ -1,5 +1,4 @@
 // 1. Импорты (все функции из Go)
-<<<<<<< HEAD
 import {
     RemoveGame,
     GetLibrary,
@@ -16,40 +15,15 @@ import {
     UpdateAccountData,
     SelectExe,
     AddCustomGame,
-=======
-import { 
-    RemoveGame, 
-    GetLibrary, 
-    ToggleGamePin, 
-    LaunchGame, 
-    UpdateGameNote, 
-    ToggleGameAccountHidden, 
-    GetLaunchers, 
-    SwitchToAccount, 
-    SaveEpicAccount, 
-    DeleteAccount, 
-    SelectImage, 
-    UpdateAccountData, 
-    SelectExe, 
-    AddCustomGame, 
-    AddCustomGame, 
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
     SetGameImage,
     // EPIC NATIVE
     EpicLogin,
-    EpicLoginAuto,
     SaveRiotAccount,
-<<<<<<< HEAD
-    OpenLegendaryLoginPage,
     GetClipboardText,
     GetEpicAuthURL,
     AuthorizeEpicWithCode,
-
     OpenEpicAuthPage,
     SaveRobloxAccount
-=======
-    GetClipboardText
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 } from '../wailsjs/go/app/App';
 
 // --- Глобальные переменные ---
@@ -619,7 +593,6 @@ async function loadAccounts() {
                     </button>
                     ${showHiddenBtn}
                 </div>`;
-<<<<<<< HEAD
             } else if (group.platform === 'Legendary') {
                 footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
@@ -647,11 +620,6 @@ async function loadAccounts() {
                      ${showHiddenBtn}
                 </div>`;
             }
-
-=======
-            }
-            
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
             if (group.platform === "Epic") iconClass = "fa-bolt";
@@ -685,7 +653,6 @@ window.saveCustomGame = async function () {
     const res = await AddCustomGame(
         document.getElementById('custom-name').value,
         document.getElementById('custom-path').value
-<<<<<<< HEAD
     );
 
     if (res === 'Success') {
@@ -696,13 +663,6 @@ window.saveCustomGame = async function () {
     } else {
         alert(res);
     }
-=======
-    ); 
-    
-    } else { 
-        alert(res); 
-    } 
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 }
 
 // --- Добавление Epic Account ---
@@ -790,114 +750,14 @@ window.openAddAccountModal = function () {
     document.getElementById('add-account-modal').style.display = 'flex';
 }
 
-<<<<<<< HEAD
 // 1. Legendary Login
-window.startLegendaryLogin = async function () {
-=======
+// 1. Epic Native Login (Replaces Legendary)
 // 1. Epic Native Login
-window.startEpicNativeLogin = async function() {
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
-    closeModal('add-account-modal');
-
-    let modal = document.getElementById('epic-native-auth-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'epic-native-auth-modal';
-        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:2000;";
-        modal.innerHTML = `
-        <div style="background:#1e1e1e; padding:25px; border-radius:8px; width:450px; color:#fff; font-family:sans-serif; border:1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-            <h3 style="margin-top:0; margin-bottom:15px; color:#0074e4;"><i class="fa-solid fa-bolt"></i> Epic Games Login</h3>
-            
-            <div style="margin-bottom:20px;">
-                <p style="color:#ccc; font-size:14px; margin-bottom:15px;">Login to your Epic Games account to sync your library.</p>
-                <button id="btn-auto-epic-native" style="width:100%; padding:15px; background:#0074e4; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold; font-size:16px;">
-                    <i class="fa-solid fa-magic"></i> Start Automatic Login
-                </button>
-            </div>
-            
-            <div style="margin-bottom:20px; border-top: 1px solid #333; padding-top:15px;">
-                <p style="color:#888; font-size:12px; margin-bottom:5px;">Or paste SID manually if automatic login fails:</p>
-                <input type="password" id="input-sid-native" placeholder='Paste SID here...' style="width:100%; background:#111; color:#fff; border:1px solid #444; border-radius:4px; padding:10px; margin-bottom:10px;">
-                <button id="btn-submit-sid-native" style="width:100%; padding:10px; background:#333; color:#fff; border:1px solid #555; cursor:pointer; border-radius:4px;">Login with SID</button>
-            </div>
-            
-            <div style="text-align:right;">
-                <button id="btn-cancel-epic-native" style="padding:8px 20px; background:none; border:none; color:#aaa; cursor:pointer;">Cancel</button>
-            </div>
-        </div>`;
-        document.body.appendChild(modal);
-
-        document.getElementById('btn-auto-epic-native').onclick = async () => {
-            const res = await EpicLoginAuto();
-            if (res === "Success") {
-                modal.style.display = 'none';
-                loadLibrary();
-                loadAccounts();
-            } else {
-                alert(res);
-            }
-        };
-<<<<<<< HEAD
-        document.getElementById('btn-cancel-sid').onclick = () => {
-            modal.style.display = 'none';
-            if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
-        };
-        document.getElementById('btn-submit-sid').onclick = async () => {
-            const input = document.getElementById('input-sid').value.trim();
-            if (!input) return;
-=======
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
-
-        document.getElementById('btn-cancel-epic-native').onclick = () => {
-            modal.style.display = 'none';
-        };
-
-        document.getElementById('btn-submit-sid-native').onclick = async () => {
-            const sid = document.getElementById('input-sid-native').value.trim();
-            if (!sid) return;
-            const res = await EpicLogin(sid);
-            if (res === "Success") {
-                modal.style.display = 'none';
-                loadLibrary();
-                loadAccounts();
-            } else {
-                alert(res);
-            }
-        };
-    }
-
-    modal.style.display = 'flex';
-<<<<<<< HEAD
-    document.getElementById('input-sid').value = ''; // Очистка поля
-
-    // Запускаем проверку буфера обмена
-    if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
-    window.legendaryAuthInterval = setInterval(async () => {
-        if (modal.style.display === 'none') {
-            clearInterval(window.legendaryAuthInterval);
-            return;
-        }
-        try {
-            const text = await GetClipboardText();
-            if (text && (text.includes('"authorizationCode"') || text.includes('"sid"') || text.includes('"code"'))) {
-                // Если нашли JSON с кодом
-                document.getElementById('input-sid').value = text;
-
-                // Автоматически нажимаем Login
-                const btn = document.getElementById('btn-submit-sid');
-                if (btn) {
-                    clearInterval(window.legendaryAuthInterval);
-                    btn.click();
-                }
-            }
-        } catch (e) {
-            // ignore
-        }
-    }, 1000);
-=======
-    document.getElementById('input-sid-native').value = '';
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
+window.startEpicNativeLogin = function() {
+    // Redirect to new Epic Auth Modal
+    window.openEpicAuthModal();
 }
+
 
 // 2. Riot Save Logic (Аналогично Epic)
 window.openRiotSaveModal = function () {
@@ -927,35 +787,7 @@ window.doSaveRiot = async function () {
     }
 }
 
-// --- Логика сохранения Legendary (NEW) ---
 
-window.openLegendarySaveModal = function () {
-    document.getElementById('legendary-save-name').value = '';
-    document.getElementById('save-legendary-modal').style.display = 'flex';
-}
-
-window.doSaveLegendary = async function () {
-    const name = document.getElementById('legendary-save-name').value;
-    if (!name) {
-        alert("Please enter a name");
-        return;
-    }
-
-    try {
-        // Вызываем Go функцию SaveLegendaryAccount
-        const result = await SaveLegendaryAccount(name);
-        if (result === "Success") {
-            closeModal('save-legendary-modal');
-            alert("Legendary account saved!");
-            loadAccounts();
-        } else {
-            alert("Error: " + result);
-        }
-    } catch (e) {
-        alert("System error: " + e);
-        console.error(e);
-    }
-}
 
 // --- Логика контекстного меню (ПКМ) ---
 

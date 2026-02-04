@@ -22,29 +22,32 @@ export function DeleteAllEpicAccounts() {
   return window['go']['app']['App']['DeleteAllEpicAccounts']();
 }
 
+export function EpicCheckStatus() {
+  return window['go']['app']['App']['EpicCheckStatus']();
+}
+
+export function EpicLogin(arg1) {
+  return window['go']['app']['App']['EpicLogin'](arg1);
+}
+
+export function EpicLoginAuto() {
+  return window['go']['app']['App']['EpicLoginAuto']();
+}
+
 export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
 }
 
-<<<<<<< HEAD
 export function GetEpicAuthURL() {
   return window['go']['app']['App']['GetEpicAuthURL']();
-=======
-export function GetEpicFullLibrary() {
-  return window['go']['app']['App']['GetEpicFullLibrary']();
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
+}
+
+export function GetEpicLibrary() {
+  return window['go']['app']['App']['GetEpicLibrary']();
 }
 
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
-}
-
-export function GetLegendaryGames() {
-  return window['go']['app']['App']['GetLegendaryGames']();
-}
-
-export function GetLegendaryLibrary() {
-  return window['go']['app']['App']['GetLegendaryLibrary']();
 }
 
 export function GetLibrary() {
@@ -55,42 +58,6 @@ export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }
 
-export function LaunchLegendaryGame(arg1) {
-  return window['go']['app']['App']['LaunchLegendaryGame'](arg1);
-}
-
-export function LegendaryCheckStatus() {
-  return window['go']['app']['App']['LegendaryCheckStatus']();
-}
-
-export function LegendaryInstallGame(arg1) {
-  return window['go']['app']['App']['LegendaryInstallGame'](arg1);
-}
-
-export function LegendaryLaunchGame(arg1) {
-  return window['go']['app']['App']['LegendaryLaunchGame'](arg1);
-}
-
-export function LegendaryLogin(arg1) {
-  return window['go']['app']['App']['LegendaryLogin'](arg1);
-}
-
-export function LegendaryLoginWithBrowser() {
-  return window['go']['app']['App']['LegendaryLoginWithBrowser']();
-}
-
-export function LegendaryLogout() {
-  return window['go']['app']['App']['LegendaryLogout']();
-}
-
-export function LoginLegendaryAccount() {
-  return window['go']['app']['App']['LoginLegendaryAccount']();
-}
-
-export function LoginLegendaryAuto() {
-  return window['go']['app']['App']['LoginLegendaryAuto']();
-}
-
 export function LogoutEpic() {
   return window['go']['app']['App']['LogoutEpic']();
 }
@@ -99,20 +66,12 @@ export function OpenEpicAuthPage() {
   return window['go']['app']['App']['OpenEpicAuthPage']();
 }
 
-export function OpenLegendaryLoginPage() {
-  return window['go']['app']['App']['OpenLegendaryLoginPage']();
-}
-
 export function RemoveGame(arg1, arg2) {
   return window['go']['app']['App']['RemoveGame'](arg1, arg2);
 }
 
 export function SaveEpicAccount(arg1) {
   return window['go']['app']['App']['SaveEpicAccount'](arg1);
-}
-
-export function SaveLegendaryAccount(arg1) {
-  return window['go']['app']['App']['SaveLegendaryAccount'](arg1);
 }
 
 export function SaveRiotAccount(arg1) {
@@ -141,10 +100,6 @@ export function SwitchEpicAccount(arg1) {
 
 export function SwitchEpicAccountWithDeviceAuth(arg1) {
   return window['go']['app']['App']['SwitchEpicAccountWithDeviceAuth'](arg1);
-}
-
-export function SwitchLegendaryAccount(arg1) {
-  return window['go']['app']['App']['SwitchLegendaryAccount'](arg1);
 }
 
 export function SwitchToAccount(arg1, arg2) {

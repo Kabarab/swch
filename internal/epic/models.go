@@ -59,6 +59,11 @@ type CatalogItem struct {
 	KeyImages   []KeyImage `json:"keyImages"`
 	Namespace   string     `json:"namespace"`
 	Categories  []Category `json:"categories"`
+
+	// Extended fields for internal use
+	AppID       string `json:"app_id,omitempty"` // The ID used for launching (ArtifactID)
+	IsInstalled bool   `json:"is_installed"`
+	InstallPath string `json:"install_path"`
 }
 
 type KeyImage struct {

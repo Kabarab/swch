@@ -14,6 +14,7 @@ import (
 	"swch/internal/epic"
 	"swch/internal/models"
 	"swch/internal/scanner"
+
 	"swch/internal/sys"
 	"time"
 
@@ -139,20 +140,17 @@ func (a *App) GetLibrary() []models.LibraryGame {
 	steamGames := a.steam.GetGames()
 	library = append(library, steamGames...)
 
-	// 2. Epic Games - попытка получить полную библиотеку через нативный клиент
-	_ = a.epic.LoadSession() // Загружаем сессию если есть
+	// 2. Epic Games - Native Client
+	// Verify we have a session
+	if err := a.epic.LoadSession(); err != nil {
+		fmt.Println("[App] No active Epic session:", err)
+	}
 
 	nativeEpicGames, err := a.epic.GetFullLibrary()
-	if err == nil && len(nativeEpicGames) > 0 {
-		// Получаем также локальные манифесты для проверки IsInstalled
-		localManifests := scanner.ScanEpicGames()
-		installedMap := make(map[string]string)
-		for _, m := range localManifests {
-			installedMap[m.ID] = m.ExePath
-		}
-
+	if err == nil {
 		for _, item := range nativeEpicGames {
-			imgURL := ""
+			// Find icon
+			imgURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
 			for _, img := range item.KeyImages {
 				if img.Type == "Thumbnail" || img.Type == "DieselGameBox" {
 					imgURL = img.URL
@@ -160,15 +158,14 @@ func (a *App) GetLibrary() []models.LibraryGame {
 				}
 			}
 
-			exePath, isInstalled := installedMap[item.ID]
-
+			// Add to library
 			library = append(library, models.LibraryGame{
-				ID:          item.ID,
+				ID:          item.ID, // Use Catalog ID (usually ArtifactID)
 				Name:        item.Title,
-				Platform:    "Epic",
+				Platform:    "Epic", // Unified Platform
 				IconURL:     imgURL,
-				ExePath:     exePath,
-				IsInstalled: isInstalled,
+				ExePath:     item.InstallPath, // Filled by GetFullLibrary if installed
+				IsInstalled: item.IsInstalled,
 				AvailableOnAccounts: []models.AccountStat{
 					{
 						AccountID:   "epic_native",
@@ -179,13 +176,19 @@ func (a *App) GetLibrary() []models.LibraryGame {
 			})
 		}
 	} else {
-		// Fallback: только установленные игры из манифестов
-		epicGames := scanner.ScanEpicGames()
-		library = append(library, epicGames...)
-
-		// 3. Legendary (Epic CLI) - только если полная библиотека не получена
-		legendaryGames := legendary.ScanLegendaryGames()
-		library = append(library, legendaryGames...)
+		fmt.Println("[App] Failed to fetch Epic library:", err)
+		// Fallback: only installed games from manifests if API fails
+		localManifests, _ := epic.ScanInstalledGames()
+		for _, m := range localManifests {
+			library = append(library, models.LibraryGame{
+				ID:          m.AppID,
+				Name:        m.Name,
+				Platform:    "Epic",
+				IconURL:     "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg",
+				ExePath:     m.InstallPath,
+				IsInstalled: true,
+			})
+		}
 	}
 
 	// 4. Riot Games
@@ -289,16 +292,34 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		}
 	}
 
-	// Epic (Official)
-	epicAccs := scanner.ScanEpicAccounts()
-	filteredEpic := processAccounts(epicAccs)
-	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: filteredEpic})
+	// Epic Games (Native)
+	epicSessions, _ := a.epic.ListSessions()
+	var epicAccs []models.Account
+	for _, s := range epicSessions {
+		epicAccs = append(epicAccs, models.Account{
+			ID:          "epic_" + s.Name,
+			DisplayName: s.DisplayName,
+			Username:    s.Name,
+			Platform:    "Epic",
+		})
+	}
+	// Add current verified session if not in list (optional, but good for UX)
+	if a.epic.Token != nil {
+		found := false
+		for _, acc := range epicAccs {
+			if acc.Username == "active" { // Simplified check
+				found = true
+			}
+		}
+		if !found {
+			// We could add the active one, but usually ListSessions covers saved ones.
+		}
+	}
 
-	// Legendary
-	legendaryAccs := legendary.ScanLegendaryAccounts()
-	filteredLegendary := processAccounts(legendaryAccs)
-	// Добавляем группу Legendary всегда, чтобы интерфейс знал о поддержке
-	groups = append(groups, models.LauncherGroup{Name: "Legendary", Platform: "Legendary", Accounts: filteredLegendary})
+	processAccounts(epicAccs)
+	if len(epicAccs) > 0 {
+		groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: epicAccs})
+	}
 
 	// Riot
 	riotAccs := scanner.ScanRiotAccounts()
@@ -332,7 +353,7 @@ func (a *App) SaveRobloxAccount(name string) string {
 }
 
 func (a *App) SaveEpicAccount(name string) string {
-	err := scanner.SaveCurrentEpicAccount(name)
+	err := a.epic.SaveSessionAs(name)
 	if err != nil {
 		return "Error: " + err.Error()
 	}
@@ -340,7 +361,7 @@ func (a *App) SaveEpicAccount(name string) string {
 }
 
 func (a *App) SwitchEpicAccount(name string) string {
-	err := scanner.SwitchEpicAccount(name)
+	err := a.epic.SwitchSession(name)
 	if err != nil {
 		return "Error: " + err.Error()
 	}
@@ -348,153 +369,53 @@ func (a *App) SwitchEpicAccount(name string) string {
 }
 
 func (a *App) LogoutEpic() string {
-	err := scanner.LogoutEpic()
+	err := a.epic.Logout()
 	if err != nil {
 		return "Error: " + err.Error()
 	}
-	return "Logged out successfully. You can now login to Epic with a new account."
+	return "Logged out successfully."
 }
 
 // GetEpicAuthURL returns the Epic Games login URL for authorization
 func (a *App) GetEpicAuthURL() string {
-	return scanner.GetEpicAuthURL()
+	return epic.GetEpicAuthURL()
 }
 
-// AuthorizeEpicWithCode exchanges an authorization code for device auth credentials
-// and saves them to the specified account
+// AuthorizeEpicWithCode exchanges an authorization code for tokens and saves them
 func (a *App) AuthorizeEpicWithCode(authCode string, accountName string) string {
-	// 1. Exchange auth code for access token
-	fmt.Println("[Epic] Exchanging authorization code for access token...")
-	tokenResp, err := scanner.ExchangeAuthCodeForToken(authCode)
-	if err != nil {
-		fmt.Printf("[Epic] Error exchanging code: %v\n", err)
+	// 1. Login with code
+	fmt.Println("[Epic] Exchanging authorization code...")
+	if err := a.epic.LoginWithExchangeCode(authCode); err != nil {
 		return "Error exchanging code: " + err.Error()
 	}
 
-	fmt.Printf("[Epic] Got access token for account: %s (%s)\n", tokenResp.DisplayName, tokenResp.AccountID)
-
 	// Use display name if account name not provided
 	if accountName == "" {
-		accountName = tokenResp.DisplayName
+		if a.epic.Token != nil {
+			accountName = a.epic.Token.DisplayName
+		} else {
+			accountName = "EpicAccount"
+		}
 	}
 
-	// 2. Create device auth credentials
+	// 2. Create device auth for future persistent login
 	fmt.Println("[Epic] Creating device auth credentials...")
-	deviceAuth, err := scanner.CreateDeviceAuth(tokenResp.AccessToken, tokenResp.AccountID)
-	if err != nil {
-		return "Error creating device auth: " + err.Error()
+	if _, err := a.epic.CreateDeviceAuth(); err != nil {
+		fmt.Printf("[Epic] Warning: Failed to create device auth: %v\n", err)
 	}
 
-	fmt.Printf("[Epic] Device auth created: DeviceID=%s\n", deviceAuth.DeviceID)
-
-	// 3. Save device auth to account directory
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		fmt.Printf("[Epic] Error getting config dir: %v\n", err)
-		return "Error getting config dir: " + err.Error()
+	// 3. Save as named profile
+	fmt.Println("[Epic] Saving session as profile...")
+	if err := a.epic.SaveSessionAs(accountName); err != nil {
+		return "Error saving profile: " + err.Error()
 	}
 
-	accountDir := filepath.Join(configDir, "swch", "epic_accounts", accountName)
-
-	fmt.Printf("[Epic] Saving to account dir: %s\n", accountDir)
-
-	if err := os.MkdirAll(accountDir, 0755); err != nil {
-		fmt.Printf("[Epic] Error creating dir: %v\n", err)
-		return "Error creating account directory: " + err.Error()
-	}
-
-	if err := scanner.SaveDeviceAuth(accountDir, deviceAuth); err != nil {
-		return "Error saving device auth: " + err.Error()
-	}
-
-	// 4. Save meta.json with account name and display name
-	metaPath := filepath.Join(accountDir, "meta.json")
-
-	type MetaData struct {
-		Name        string `json:"name"`
-		DisplayName string `json:"displayName"`
-		AccountID   string `json:"accountId"`
-	}
-
-	meta := MetaData{
-		Name:        accountName,
-		DisplayName: tokenResp.DisplayName,
-		AccountID:   tokenResp.AccountID,
-	}
-
-	metaBytes, err := json.MarshalIndent(meta, "", "  ")
-	if err != nil {
-		return "Error creating meta file: " + err.Error()
-	}
-
-	if err := os.WriteFile(metaPath, metaBytes, 0644); err != nil {
-		return "Error saving meta file: " + err.Error()
-	}
-
-	return fmt.Sprintf("Success: Account '%s' saved with Device Auth!", accountName)
+	return fmt.Sprintf("Success: Account '%s' saved!", accountName)
 }
 
-// SwitchEpicAccountWithDeviceAuth switches to an Epic account using Device Auth
+// SwitchEpicAccountWithDeviceAuth is deprecated, forwards to SwitchEpicAccount
 func (a *App) SwitchEpicAccountWithDeviceAuth(name string) string {
-	home, _ := os.UserHomeDir()
-	accountDir := filepath.Join(home, "Library", "Application Support", "swch", "epic_accounts", name)
-	if runtime.GOOS == "windows" {
-		accountDir = filepath.Join(home, "AppData", "Local", "swch", "epic_accounts", name)
-	}
-
-	// 1. Load device auth
-	deviceAuth, err := scanner.LoadDeviceAuth(accountDir)
-	if err != nil {
-		// Fallback to old method if no device auth
-		fmt.Printf("[Epic] No device auth found, using legacy switch: %v\n", err)
-		return a.SwitchEpicAccount(name)
-	}
-
-	// 2. Get new access token using device auth
-	fmt.Println("[Epic] Logging in with device auth...")
-	tokenResp, err := scanner.LoginWithDeviceAuth(deviceAuth)
-	if err != nil {
-		return "Error logging in with device auth: " + err.Error()
-	}
-
-	fmt.Printf("[Epic] Got access token for: %s\n", tokenResp.DisplayName)
-
-	// 3. Get exchange code
-	fmt.Println("[Epic] Getting exchange code...")
-	exchangeCode, err := scanner.GetExchangeCode(tokenResp.AccessToken)
-	if err != nil {
-		return "Error getting exchange code: " + err.Error()
-	}
-
-	fmt.Printf("[Epic] Got exchange code: %s...\n", exchangeCode[:8])
-
-	// 4. Kill existing Epic launcher
-	sys.KillEpic()
-	time.Sleep(500 * time.Millisecond)
-
-	// 5. Launch Epic with exchange code
-	fmt.Println("[Epic] Launching Epic Games Launcher with exchange code...")
-	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("open", "-a", "Epic Games Launcher", "--args",
-			"-AUTH_TYPE=exchangecode",
-			"-AUTH_LOGIN=unused",
-			"-AUTH_PASSWORD="+exchangeCode)
-		if err := cmd.Start(); err != nil {
-			return "Error launching Epic: " + err.Error()
-		}
-	} else {
-		// Windows
-		epicPath := filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Epic Games", "Launcher", "Portal", "Binaries", "Win64", "EpicGamesLauncher.exe")
-		cmd := exec.Command(epicPath,
-			"-AUTH_TYPE=exchangecode",
-			"-AUTH_LOGIN=unused",
-			"-AUTH_PASSWORD="+exchangeCode)
-		if err := cmd.Start(); err != nil {
-			return "Error launching Epic: " + err.Error()
-		}
-	}
-
-	return "Switched to " + name
+	return a.SwitchEpicAccount(name)
 }
 
 func (a *App) SwitchToAccount(accountName string, platform string) string {
@@ -540,34 +461,15 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 
 	if platform == "Epic" {
 		fmt.Printf("[App] Request to switch Epic account to: %s\n", accountName)
-<<<<<<< HEAD
-		// Use Device Auth method - it will fallback to legacy if no device auth exists
-		result := a.SwitchEpicAccountWithDeviceAuth(accountName)
-		return result
+		err := a.epic.SwitchSession(accountName)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return "Switched to " + accountName
 	}
 
 	if platform == "Legendary" {
-		err := legendary.SwitchLegendaryAccount(accountName)
-		if err != nil {
-			return "Error: " + err.Error()
-		}
-		// Legendary не требует перезапуска процессов, так как это CLI
-		return "Switched to " + accountName
-=======
-		err := scanner.SwitchEpicAccount(accountName)
-		if err != nil {
-			fmt.Printf("[App] Error switching Epic account: %v\n", err)
-			return "Error: " + err.Error()
-		}
-
-		if runtime.GOOS == "darwin" {
-			time.Sleep(1 * time.Second)
-			sys.StartGame("/Applications/Epic Games.app")
-			return "Switched to " + accountName
-		}
-
-		return "Switched to " + accountName + ". Launcher restarting..."
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
+		return "Legendary is deprecated. Please use Epic Games platform."
 	}
 
 	if platform == "Riot" {
@@ -613,13 +515,34 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 	}
 
 	if platform == "Epic" {
+		// Switch to account if needed (optional, assuming user is already switched)
 		if accountName != "" && accountName != "Main Profile" {
-			err := scanner.SwitchEpicAccount(accountName)
-			if err != nil {
-				return "Error switching epic: " + err.Error()
+			if a.epic.Token == nil || a.epic.Token.DisplayName != accountName {
+				_ = a.epic.SwitchSession(accountName)
 			}
 		}
-		sys.StartGame("com.epicgames.launcher://apps/" + gameID + "?action=launch&silent=true")
+
+		// Find installed path from library (re-scan or cache)
+		// For now we assume exePath is passed correctly or we scan.
+		// If exePath is empty, we try to find it.
+		targetPath := exePath
+		if targetPath == "" {
+			// Try to find via manifest
+			installed, _ := epic.ScanInstalledGames()
+			if game, ok := installed[gameID]; ok {
+				targetPath = game.InstallPath
+			}
+		}
+
+		cmd, err := a.epic.GetLaunchCommand(gameID, targetPath)
+		if err != nil {
+			return "Error preparing launch: " + err.Error()
+		}
+
+		err = a.epic.RunExecutable(cmd)
+		if err != nil {
+			return "Error launching: " + err.Error()
+		}
 		return "Launched on Epic"
 	}
 
@@ -883,14 +806,8 @@ func (a *App) EpicLogin(sid string) string {
 	return "Success"
 }
 
-<<<<<<< HEAD
-// LoginLegendaryAuto открывает встроенное окно браузера для автоматического входа
-func (a *App) LoginLegendaryAuto() string {
-	return "Автоматический вход временно недоступен. Пожалуйста, используйте ручной метод или вход через браузер."
-=======
 func (a *App) EpicCheckStatus() bool {
 	return a.epic.LoadSession() == nil
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 }
 
 func (a *App) GetEpicLibrary() []models.GameUI {
@@ -909,89 +826,21 @@ func (a *App) GetEpicLibrary() []models.GameUI {
 			}
 		}
 		result = append(result, models.GameUI{
-			ID: item.ID,
-			Title: item.Title,
-			Image: imgURL,
+			ID:     item.ID,
+			Title:  item.Title,
+			Image:  imgURL,
 			Source: "Epic",
 		})
 	}
 	return result
 }
 
-<<<<<<< HEAD
-// EpicCheckStatus проверяет, залогинен ли пользователь
-func (a *App) LegendaryCheckStatus() bool {
-	return legendary.Status()
-}
-
-// GetEpicLibrary возвращает список игр с картинками
-func (a *App) GetLegendaryLibrary() []models.GameUI {
-	games, err := legendary.ListGames()
-	if err != nil {
-		// Логируем ошибку, возвращаем пустой список
-		return []models.GameUI{}
-	}
-
-	var uiGames []models.GameUI
-	for _, g := range games {
-		img := ""
-		// Ищем подходящую картинку (обычно Thumbnail или BoxArt)
-		for _, image := range g.Metadata.KeyImages {
-			if image.Type == "Thumbnail" || image.Type == "DieselGameBox" {
-				img = image.URL
-				break
-			}
-		}
-
-		uiGames = append(uiGames, models.GameUI{
-			ID:        g.AppName,
-			Title:     g.AppTitle,
-			Installed: g.IsInstalled,
-			Image:     img,
-		})
-	}
-	return uiGames
-}
-func (a *App) LegendaryInstallGame(appName string) string {
-	err := legendary.InstallGame(appName, "")
-	if err != nil {
-		return err.Error()
-	}
-	return "Installation Started"
-}
-
-// EpicLaunchGame запускает игру
-func (a *App) LegendaryLaunchGame(appName string) string {
-	err := legendary.LaunchGame(appName)
-	if err != nil {
-		return err.Error()
-	}
-	return "Launched"
-}
-
-// EpicLogout выходит из аккаунта
-func (a *App) LegendaryLogout() {
-	legendary.Logout()
-}
-
-// LaunchEpicGame запускает игру по её AppName
-func (a *App) LaunchLegendaryGame(id string) {
-	legendary.LaunchGame(id)
-}
-
-func (a *App) OpenLegendaryLoginPage() {
-	url := epicLoginURL
-	wruntime.BrowserOpenURL(a.ctx, url)
-}
-
 // OpenEpicAuthPage opens the Epic Games auth URL in the default browser
 func (a *App) OpenEpicAuthPage() {
-	url := scanner.GetEpicAuthURL()
+	url := epic.GetEpicAuthURL()
 	wruntime.BrowserOpenURL(a.ctx, url)
 }
 
-=======
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
 func (a *App) GetClipboardText() string {
 	text, err := wruntime.ClipboardGetText(a.ctx)
 	if err != nil {
@@ -1000,59 +849,9 @@ func (a *App) GetClipboardText() string {
 	return text
 }
 
-func (a *App) LegendaryLoginWithBrowser() string {
-	err := legendary.LoginWithBrowser()
-	if err != nil {
-		return "Error: " + err.Error()
-	}
-	return "Success"
-}
-
-// GetEpicFullLibrary получает полную библиотеку Epic Games (включая не установленные игры)
-// Автоматически использует токены из Epic Games Launcher если пользователь залогинен
-func (a *App) GetEpicFullLibrary() []models.LibraryGame {
-	var library []models.LibraryGame
-
-	games, err := legendary.GetFullLibrary()
-	if err != nil {
-		fmt.Printf("[Epic] Failed to get library: %v\n", err)
-		return library
-	}
-
-	for _, g := range games {
-		iconURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
-		// Ищем лучшую картинку из метаданных
-		for _, img := range g.Metadata.KeyImages {
-			if img.Type == "DieselGameBox" || img.Type == "Thumbnail" || img.Type == "DieselGameBoxTall" {
-				iconURL = img.URL
-				break
-			}
-		}
-
-		library = append(library, models.LibraryGame{
-			ID:          g.AppName,
-			Name:        g.AppTitle,
-			Platform:    "Epic",
-			IconURL:     iconURL,
-			ExePath:     g.AppName,
-			IsInstalled: g.IsInstalled,
-			AvailableOnAccounts: []models.AccountStat{
-				{
-					AccountID:   "epic_current",
-					DisplayName: "Epic Account",
-					Username:    "Current",
-					IsHidden:    false,
-				},
-			},
-		})
-	}
-
-	return library
-}
-
-// SyncEpicLibrary синхронизирует авторизацию с Epic Launcher
+// SyncEpicLibrary synchronizes authentication with Epic Launcher
 func (a *App) SyncEpicLibrary() string {
-	err := legendary.EnsureAuthenticated()
+	err := a.epic.LoadSession()
 	if err != nil {
 		return "Error: " + err.Error()
 	}

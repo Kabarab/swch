@@ -12,53 +12,31 @@ export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAllEpicAccounts():Promise<string>;
 
+export function EpicCheckStatus():Promise<boolean>;
+
+export function EpicLogin(arg1:string):Promise<string>;
+
+export function EpicLoginAuto():Promise<string>;
+
 export function GetClipboardText():Promise<string>;
 
-<<<<<<< HEAD
 export function GetEpicAuthURL():Promise<string>;
-=======
-export function GetEpicFullLibrary():Promise<Array<models.LibraryGame>>;
->>>>>>> 680a380e908c9ccfac745e3ec2a614537e65a566
+
+export function GetEpicLibrary():Promise<Array<models.GameUI>>;
 
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
-
-export function GetLegendaryGames():Promise<Array<models.GameUI>>;
-
-export function GetLegendaryLibrary():Promise<Array<models.GameUI>>;
 
 export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
-export function LaunchLegendaryGame(arg1:string):Promise<void>;
-
-export function LegendaryCheckStatus():Promise<boolean>;
-
-export function LegendaryInstallGame(arg1:string):Promise<string>;
-
-export function LegendaryLaunchGame(arg1:string):Promise<string>;
-
-export function LegendaryLogin(arg1:string):Promise<string>;
-
-export function LegendaryLoginWithBrowser():Promise<string>;
-
-export function LegendaryLogout():Promise<void>;
-
-export function LoginLegendaryAccount():Promise<string>;
-
-export function LoginLegendaryAuto():Promise<string>;
-
 export function LogoutEpic():Promise<string>;
 
 export function OpenEpicAuthPage():Promise<void>;
 
-export function OpenLegendaryLoginPage():Promise<void>;
-
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 
 export function SaveEpicAccount(arg1:string):Promise<string>;
-
-export function SaveLegendaryAccount(arg1:string):Promise<string>;
 
 export function SaveRiotAccount(arg1:string):Promise<string>;
 
@@ -73,8 +51,6 @@ export function SetGameImage(arg1:string,arg2:string):Promise<string>;
 export function SwitchEpicAccount(arg1:string):Promise<string>;
 
 export function SwitchEpicAccountWithDeviceAuth(arg1:string):Promise<string>;
-
-export function SwitchLegendaryAccount(arg1:string):Promise<string>;
 
 export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
 
