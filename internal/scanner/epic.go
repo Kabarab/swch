@@ -327,7 +327,7 @@ func saveCurrentEpicAccountWindows(name string) error {
 		return fmt.Errorf("failed to copy auth data: %v", err)
 	}
 
-	// --- NEW: Save Config folder ---
+	// --- Save Config folder ---
 	localAppData := os.Getenv("LocalAppData")
 	srcConfigPath := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config")
 	destConfigPath := filepath.Join(destDir, "Config")
@@ -336,13 +336,20 @@ func saveCurrentEpicAccountWindows(name string) error {
 	if _, err := os.Stat(srcConfigPath); err == nil {
 		_ = os.RemoveAll(destConfigPath)
 		if err := copyDir(srcConfigPath, destConfigPath); err != nil {
-			// Warning: Failed to copy config
 			fmt.Printf("[Epic] Copy Config error: %v\n", err)
 		}
 	} else {
 		fmt.Println("[Epic] Source Config not found!")
 	}
-	// -------------------------------
+
+	// --- Save AccountId from registry ---
+	accountId, err := sys.GetEpicAccountId()
+	if err == nil && accountId != "" {
+		fmt.Printf("[Epic] Saving AccountId: %s\n", accountId)
+		os.WriteFile(filepath.Join(destDir, "AccountId.txt"), []byte(accountId), 0644)
+	} else {
+		fmt.Println("[Epic] Warning: Could not get AccountId from registry")
+	}
 
 	meta := EpicAccountData{Name: name}
 	data, _ := json.MarshalIndent(meta, "", "  ")
@@ -373,6 +380,20 @@ func switchEpicAccountWindows(name string) error {
 	fmt.Println("[Epic] Killing Epic...")
 	_ = sys.KillEpic()
 
+	// --- Restore AccountId to registry (CRITICAL!) ---
+	accountIdFile := filepath.Join(accountDir, "AccountId.txt")
+	if data, err := os.ReadFile(accountIdFile); err == nil {
+		accountId := strings.TrimSpace(string(data))
+		if accountId != "" {
+			fmt.Printf("[Epic] Restoring AccountId to registry: %s\n", accountId)
+			if err := sys.SetEpicAccountId(accountId); err != nil {
+				fmt.Printf("[Epic] Warning: Failed to set AccountId in registry: %v\n", err)
+			}
+		}
+	} else {
+		fmt.Println("[Epic] Warning: AccountId.txt not found. Switch might fail.")
+	}
+
 	realDataPath := sys.GetEpicAuthDataDir()
 	fmt.Printf("[Epic] Real Data Path: %s\n", realDataPath)
 	fmt.Println("[Epic] Removing real Data...")
@@ -385,16 +406,14 @@ func switchEpicAccountWindows(name string) error {
 		return err
 	}
 
-	// --- NEW: Restore Config folder ---
+	// --- Restore Config folder ---
 	localAppData := os.Getenv("LocalAppData")
 	realConfigPath := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config")
 	storedConfigPath := filepath.Join(accountDir, "Config")
 
 	fmt.Printf("[Epic] Restoring Config from %s to %s\n", storedConfigPath, realConfigPath)
-	// Always remove real config to avoid mismatches
 	_ = os.RemoveAll(realConfigPath)
 
-	// Check if stored config exists
 	if _, err := os.Stat(storedConfigPath); os.IsNotExist(err) {
 		fmt.Println("[Epic] Stored Config missing!")
 		return fmt.Errorf("saved account is missing Config data. Please login manually and re-save this account")
@@ -404,9 +423,8 @@ func switchEpicAccountWindows(name string) error {
 		fmt.Printf("[Epic] Copy Config error: %v\n", err)
 		return fmt.Errorf("failed to restore config: %v", err)
 	}
-	// ----------------------------------
 
-	// --- NEW: Clear Webcache ---
+	// --- Clear Webcache ---
 	savedDir := filepath.Join(localAppData, "EpicGamesLauncher", "Saved")
 	fmt.Printf("[Epic] Clearing webcache in %s\n", savedDir)
 	entries, _ := os.ReadDir(savedDir)
@@ -417,9 +435,27 @@ func switchEpicAccountWindows(name string) error {
 		}
 	}
 
+	// --- Clear EOS caches (Epic Online Services) ---
+	clearEpicCachesWindows(localAppData)
+
 	fmt.Println("[Epic] Starting Epic...")
 	sys.StartEpic()
 	return nil
+}
+
+// clearEpicCachesWindows очищает дополнительные кэши Epic Online Services
+func clearEpicCachesWindows(localAppData string) {
+	cachePaths := []string{
+		filepath.Join(localAppData, "Epic Games", "Epic Online Services", "UI Helper", "Cache"),
+		filepath.Join(localAppData, "Epic Games", "EOSOverlay", "BrowserCache"),
+	}
+
+	for _, p := range cachePaths {
+		if _, err := os.Stat(p); err == nil {
+			fmt.Printf("[Epic] Clearing EOS cache: %s\n", p)
+			_ = os.RemoveAll(p)
+		}
+	}
 }
 
 func deleteEpicAccountWindows(name string) error {

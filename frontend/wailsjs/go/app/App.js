@@ -22,6 +22,10 @@ export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
 }
 
+export function GetEpicFullLibrary() {
+  return window['go']['app']['App']['GetEpicFullLibrary']();
+}
+
 export function GetLaunchers() {
   return window['go']['app']['App']['GetLaunchers']();
 }
@@ -120,6 +124,10 @@ export function SwitchLegendaryAccount(arg1) {
 
 export function SwitchToAccount(arg1, arg2) {
   return window['go']['app']['App']['SwitchToAccount'](arg1, arg2);
+}
+
+export function SyncEpicLibrary() {
+  return window['go']['app']['App']['SyncEpicLibrary']();
 }
 
 export function ToggleGameAccountHidden(arg1, arg2, arg3) {

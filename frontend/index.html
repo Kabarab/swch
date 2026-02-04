@@ -17,9 +17,6 @@
             <div class="nav-item" onclick="switchTab('accounts')">
                 <i class="fa-solid fa-users"></i> Accounts
             </div>
-            <div class="nav-item" onclick="switchTab('legendary')">
-                <i class="fa-solid fa-terminal"></i> Legendary
-            </div>
             
             <div class="nav-spacer"></div>
             <div class="nav-item action-btn" onclick="openAddGameModal()">
@@ -71,32 +68,6 @@
             <div id="view-accounts" class="view-section" style="display: none;">
                 <div class="header"><div class="title">Accounts</div></div>
                 <div id="launchers-list"></div>
-            </div>
-
-            <div id="view-legendary" class="view-section" style="display: none;">
-                <div class="header">
-                    <div class="title">Legendary (Epic Games CLI)</div>
-                </div>
-                <div class="legendary-container">
-                    <div id="legendary-login-view">
-                        <h3>Login Required</h3>
-                        <p>To use Legendary, you need to authenticate with your Epic Games account.</p>
-                        <button id="legendary-login-browser-btn" class="btn-main" style="width:100%; margin-top:10px;">Login with Browser</button>
-                        <hr style="border-color: #333; margin: 20px 0;">
-                        <p>Alternatively, you can enter your session ID (SID) to log in.</p>
-                        <a href="https://github.com/derrod/legendary/wiki/Authentication" target="_blank">How to get SID?</a>
-                        <input type="password" id="legendary-sid-input" placeholder="Enter SID here..." class="input-field" style="width:100%; margin-top:10px;">
-                        <button id="legendary-login-btn" class="btn-secondary" style="width:100%; margin-top:10px;">Login with SID</button>
-                    </div>
-                    <div id="legendary-main-view" style="display: none;">
-                        <div class="legendary-header">
-                            <button id="legendary-logout-btn" class="btn-secondary">Logout</button>
-                            <button id="legendary-refresh-btn" class="btn-main">Refresh Games</button>
-                        </div>
-                        <div id="legendary-status" style="margin-top:10px; color:#aaa;"></div>
-                        <div id="legendary-games-list" class="grid" style="margin-top:10px;"></div>
-                    </div>
-                </div>
             </div>
         </main>
     </div>
@@ -195,11 +166,11 @@
                 <span class="close" onclick="closeModal('add-account-modal')">&times;</span>
             </div>
             <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
-                <button onclick="startLegendaryLogin()" class="btn-main" style="padding:15px; background:#000; color:white; border:1px solid #444; cursor:pointer; display:flex; align-items:center; gap:10px;">
-                    <i class="fa-solid fa-terminal"></i> 
+                <button onclick="startEpicNativeLogin()" class="btn-main" style="padding:15px; background:#000; color:white; border:1px solid #444; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-bolt"></i> 
                     <div style="text-align:left;">
-                        <div style="font-weight:bold;">Legendary (Epic CLI)</div>
-                        <div style="font-size:11px; color:#aaa;">Login via Browser/Terminal</div>
+                        <div style="font-weight:bold;">Epic Games (Cloud Library)</div>
+                        <div style="font-size:11px; color:#aaa;">Fetch all your games automatically</div>
                     </div>
                 </button>
                 
@@ -222,22 +193,6 @@
         </div>
     </div>
 
-    <div id="save-legendary-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Save Current Legendary Session</h3>
-                <span class="close" onclick="closeModal('save-legendary-modal')">&times;</span>
-            </div>
-            <div style="padding: 20px;">
-                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
-                    1. Login via "Add Account" -> "Legendary" first.<br>
-                    2. Come back here and save the session.
-                </p>
-                <input type="text" id="legendary-save-name" placeholder="Account Name (e.g. MyEpicAcc)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
-                <button onclick="doSaveLegendary()" style="width:100%; margin-top:10px; padding:10px; background:#000; border:1px solid #444; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
-            </div>
-        </div>
-    </div>
 
     <div id="save-riot-modal" class="modal">
         <div class="modal-content">
@@ -261,6 +216,5 @@
     
     <script src="/wailsjs/go/app/App.js"></script>
     <script type="module" src="src/main.js"></script>
-    <script type="module" src="src/legendary.js"></script>
 </body>
 </html>
