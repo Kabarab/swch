@@ -19,9 +19,10 @@ const (
 	// Library URLs
 	EntitlementsURL = EntitlementsHost + "/ecommerceapp/api/public/v1/entitlements"
 
-	// Fortnite Client ID (Commonly used by 3rd party launchers for better compatibility)
-	LauncherAppClientID = "ec684b8c687f479fadea3cb2ad83f5c6"
-	LauncherAppSecret   = "e1f2e83638cf4dc698885cb5d7b278f5"
+	// Default Client ID for Epic Games Launcher
+	// This one is often used for exchange code flow
+	LauncherAppClientID = "34a02cf8f4414e29b15921876da36f9a"
+	LauncherAppSecret   = "1A697711ED0D47C68DA6031A68A78619"
 )
 
 type TokenResponse struct {

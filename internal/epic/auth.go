@@ -70,7 +70,7 @@ func (c *EpicClient) LoginWithExchangeCode(code string) error {
 
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
-	data.Set("token_type", "eg1")
+	// data.Set("token_type", "eg1") // Removing this as it might cause invalid_client with some headers
 
 	return c.requestToken(data)
 }

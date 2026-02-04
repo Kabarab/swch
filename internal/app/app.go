@@ -317,9 +317,9 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	}
 
 	processAccounts(epicAccs)
-	if len(epicAccs) > 0 {
-		groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: epicAccs})
-	}
+	processAccounts(epicAccs)
+	// Always show Epic Games group so users can access the Auth/Add buttons
+	groups = append(groups, models.LauncherGroup{Name: "Epic Games", Platform: "Epic", Accounts: epicAccs})
 
 	// Riot
 	riotAccs := scanner.ScanRiotAccounts()
