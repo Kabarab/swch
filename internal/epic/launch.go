@@ -60,8 +60,19 @@ func (c *EpicClient) GetLaunchCommand(appName string, installPath string) (*exec
 			return exec.Command("open", args...), nil
 		}
 	} else {
-		// Windows logic (placeholder if needed, but we focus on macOS)
-		// Usually we need the actual .exe
+		// Windows logic: If target is a directory, find the .exe
+		if filepath.Ext(targetExe) != ".exe" {
+			files, _ := filepath.Glob(filepath.Join(installPath, "*.exe"))
+			if len(files) > 0 {
+				targetExe = files[0]
+			} else {
+				// Try typical Epic Games structure: Binaries/Win64/*.exe
+				files, _ = filepath.Glob(filepath.Join(installPath, "Binaries", "Win64", "*.exe"))
+				if len(files) > 0 {
+					targetExe = files[0]
+				}
+			}
+		}
 	}
 
 	// Fallback for direct binary launch
