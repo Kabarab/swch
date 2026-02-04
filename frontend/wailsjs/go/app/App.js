@@ -10,6 +10,10 @@ export function AddTorrentGame(arg1, arg2) {
   return window['go']['app']['App']['AddTorrentGame'](arg1, arg2);
 }
 
+export function AuthorizeEpicWithCode(arg1, arg2) {
+  return window['go']['app']['App']['AuthorizeEpicWithCode'](arg1, arg2);
+}
+
 export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
@@ -20,6 +24,10 @@ export function DeleteAllEpicAccounts() {
 
 export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
+}
+
+export function GetEpicAuthURL() {
+  return window['go']['app']['App']['GetEpicAuthURL']();
 }
 
 export function GetLaunchers() {
@@ -78,6 +86,14 @@ export function LoginLegendaryAuto() {
   return window['go']['app']['App']['LoginLegendaryAuto']();
 }
 
+export function LogoutEpic() {
+  return window['go']['app']['App']['LogoutEpic']();
+}
+
+export function OpenEpicAuthPage() {
+  return window['go']['app']['App']['OpenEpicAuthPage']();
+}
+
 export function OpenLegendaryLoginPage() {
   return window['go']['app']['App']['OpenLegendaryLoginPage']();
 }
@@ -98,6 +114,10 @@ export function SaveRiotAccount(arg1) {
   return window['go']['app']['App']['SaveRiotAccount'](arg1);
 }
 
+export function SaveRobloxAccount(arg1) {
+  return window['go']['app']['App']['SaveRobloxAccount'](arg1);
+}
+
 export function SelectExe() {
   return window['go']['app']['App']['SelectExe']();
 }
@@ -112,6 +132,10 @@ export function SetGameImage(arg1, arg2) {
 
 export function SwitchEpicAccount(arg1) {
   return window['go']['app']['App']['SwitchEpicAccount'](arg1);
+}
+
+export function SwitchEpicAccountWithDeviceAuth(arg1) {
+  return window['go']['app']['App']['SwitchEpicAccountWithDeviceAuth'](arg1);
 }
 
 export function SwitchLegendaryAccount(arg1) {

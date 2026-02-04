@@ -5,7 +5,6 @@ go 1.22.0
 require (
 	github.com/andygrunwald/vdf v1.1.0
 	github.com/wailsapp/wails/v2 v2.11.0
-	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	golang.org/x/sys v0.30.0
 )
 

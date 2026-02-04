@@ -58,6 +58,120 @@ func ScanEpicAccounts() []models.Account {
 	return scanEpicAccountsWindows()
 }
 
+// LogoutEpic clears Epic auth data WITHOUT logging into another account
+// This preserves refresh tokens on Epic servers so they remain valid
+func LogoutEpic() error {
+	if runtime.GOOS == "darwin" {
+		return logoutEpicDarwin()
+	}
+	// Windows not implemented yet
+	return fmt.Errorf("logout not implemented for this platform")
+}
+
+// logoutEpicDarwin clears Epic auth data on macOS
+func logoutEpicDarwin() error {
+	fmt.Println("[Epic] Logging out (clearing auth data)...")
+
+	// 1. Kill Epic Games Launcher
+	sys.KillEpic()
+	time.Sleep(500 * time.Millisecond)
+
+	home, _ := os.UserHomeDir()
+
+	// 2. Clear Data/*.dat files (contains tokens)
+	dataDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Data")
+	if entries, err := os.ReadDir(dataDir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".dat") {
+				path := filepath.Join(dataDir, e.Name())
+				fmt.Printf("[Epic] Removing: %s\n", e.Name())
+				_ = os.Remove(path)
+			}
+		}
+	}
+
+	// 3. Clear HTTPStorages
+	clearHTTPStorages()
+
+	// 4. Clear webcache
+	savedDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved")
+	if entries, err := os.ReadDir(savedDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() && strings.HasPrefix(e.Name(), "webcache") {
+				path := filepath.Join(savedDir, e.Name())
+				fmt.Printf("[Epic] Removing webcache: %s\n", e.Name())
+				_ = os.RemoveAll(path)
+			}
+		}
+	}
+
+	// 5. Clear RememberMe and Offline sections from GameUserSettings.ini
+	configPath := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Config", "MacEditor", "GameUserSettings.ini")
+	if data, err := os.ReadFile(configPath); err == nil {
+		content := string(data)
+		// Remove [RememberMe] section data
+		content = clearIniSectionData(content, "RememberMe")
+		// Remove [Offline] section data
+		content = clearIniSectionData(content, "Offline")
+		_ = os.WriteFile(configPath, []byte(content), 0644)
+		fmt.Println("[Epic] Cleared RememberMe and Offline sections")
+	}
+
+	// 6. Clear KeyValueStore.ini AccountId
+	kvPath := filepath.Join(home, "Library", "Application Support", "Epic", "Epic Games", "KeyValueStore.ini")
+	if data, err := os.ReadFile(kvPath); err == nil {
+		content := string(data)
+		// Remove AccountId line
+		lines := strings.Split(content, "\n")
+		var newLines []string
+		for _, line := range lines {
+			if !strings.HasPrefix(line, "AccountId=") {
+				newLines = append(newLines, line)
+			}
+		}
+		_ = os.WriteFile(kvPath, []byte(strings.Join(newLines, "\n")), 0644)
+		fmt.Println("[Epic] Cleared AccountId from KeyValueStore.ini")
+	}
+
+	// 7. Clean Epic state
+	cleanEpicStateDarwin()
+
+	fmt.Println("[Epic] Logout complete. You can now login to a new account.")
+	return nil
+}
+
+// clearIniSectionData removes the Data= line from an INI section
+func clearIniSectionData(content, section string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	inSection := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Check if we're entering the target section
+		if trimmed == "["+section+"]" {
+			inSection = true
+			result = append(result, line)
+			continue
+		}
+
+		// Check if we're leaving the section (new section starts)
+		if inSection && strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			inSection = false
+		}
+
+		// If in section, skip Data= line
+		if inSection && strings.HasPrefix(trimmed, "Data=") {
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
+}
+
 // --- Unified Implementation ---
 
 func getEpicConfigDir() (string, error) {
@@ -110,6 +224,10 @@ func saveCurrentEpicAccountDarwin(name string) error {
 		}
 	}
 
+	// --- NEW: Save Identifiers (MachineId/AccountId) ---
+	// Located in ~/Library/Application Support/Epic/Epic Games/KeyValueStore.ini
+	saveIdentifiers(destDir)
+
 	// 1.5 Save Saved/Auth (Optional but recommended) -> dest/Auth
 	srcSavedAuth := filepath.Join(baseEpicDir, "Saved", "Auth")
 	destAuthPath := filepath.Join(destDir, "Auth")
@@ -145,6 +263,12 @@ func saveCurrentEpicAccountDarwin(name string) error {
 
 	// --- NEW: Save Plists (macOS Preferences) ---
 	savePlists(destDir)
+
+	// --- NEW: Save HTTPStorages (Session Cookies) ---
+	saveHTTPStorages(destDir)
+
+	// --- NEW: Save Webcache (Important for session) ---
+	saveWebcache(destDir)
 
 	meta := EpicAccountData{Name: name}
 	data, _ := json.MarshalIndent(meta, "", "  ")
@@ -233,59 +357,91 @@ func switchEpicAccountDarwin(name string) error {
 		return fmt.Errorf("failed to restore config: %v", err)
 	}
 
+	// --- NEW: Restore Identifiers (MachineId/AccountId) ---
+	restoreIdentifiers(accountDir)
+
 	// --- NEW: Restore Plists (macOS Preferences) ---
 	restorePlists(accountDir)
 
-	// --- NEW: Clear Webcache ---
-	savedDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved")
-	fmt.Printf("[Epic] Clearing webcache in: %s\n", savedDir)
-	entries, _ := os.ReadDir(savedDir)
-	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "webcache") {
-			fmt.Printf("[Epic] Deleting: %s\n", e.Name())
-			_ = os.RemoveAll(filepath.Join(savedDir, e.Name()))
-		}
-	}
+	// --- NEW: Clear and Restore HTTPStorages (Session Cookies) ---
+	clearHTTPStorages()
+	restoreHTTPStorages(accountDir)
+
+	// --- NEW: Restore Webcache (instead of clearing) ---
+	restoreWebcache(accountDir)
 
 	time.Sleep(1 * time.Second) // Даем системе время на обновление кэшей и Keychain
-	fmt.Println("[Epic] Starting Epic Games Launcher...")
-	sys.StartEpic()
+	fmt.Println("[Epic] Account data restored. Launcher will be started by caller...")
+	// NOTE: StartEpic() removed - launcher is started by app.SwitchToAccount to avoid double-launch
 	return nil
 }
 
 func deleteEpicAccountDarwin(name string) error {
 	configDir, err := getEpicConfigDir()
 	if err != nil {
+		fmt.Printf("[Epic] Delete Error: config dir failure: %v\n", err)
 		return err
 	}
-	return os.RemoveAll(filepath.Join(configDir, name))
+	path := filepath.Join(configDir, name)
+	fmt.Printf("[Epic] Deleting account at path: '%s'\n", path)
+	err = os.RemoveAll(path)
+	if err != nil {
+		fmt.Printf("[Epic] Delete failed: %v\n", err)
+	} else {
+		fmt.Printf("[Epic] Delete success for: %s\n", path)
+	}
+	return err
 }
 
 func scanEpicAccountsDarwin() []models.Account {
 	var accounts []models.Account
 	configDir, err := getEpicConfigDir()
 	if err != nil {
+		fmt.Printf("[Scanner] Error getting config dir: %v\n", err)
 		return accounts
 	}
+	fmt.Printf("[Scanner] Scanning Epic accounts in: %s\n", configDir)
 
 	entries, err := os.ReadDir(configDir)
 	if err != nil {
+		fmt.Printf("[Scanner] Error reading directory: %v\n", err)
 		return accounts
 	}
 
 	for _, e := range entries {
 		if e.IsDir() {
 			metaPath := filepath.Join(configDir, e.Name(), "meta.json")
-			if _, err := os.Stat(metaPath); err == nil {
-				accounts = append(accounts, models.Account{
-					ID:          "epic_" + e.Name(),
-					DisplayName: e.Name(),
-					Username:    e.Name(),
-					Platform:    "Epic",
-				})
+			fmt.Printf("[Scanner] Checking entry: %s, MetaPath: %s\n", e.Name(), metaPath)
+
+			data, err := os.ReadFile(metaPath)
+			if err == nil {
+				// Try to unmarshal into our struct
+				var rawMeta map[string]interface{}
+				if err := json.Unmarshal(data, &rawMeta); err == nil {
+					displayName := e.Name() // Default
+					if val, ok := rawMeta["displayName"].(string); ok && val != "" {
+						displayName = val
+					} else if val, ok := rawMeta["name"].(string); ok && val != "" {
+						displayName = val
+					}
+
+					fmt.Printf("[Scanner] Found valid account: %s (ID: epic_%s)\n", displayName, e.Name())
+
+					accounts = append(accounts, models.Account{
+						ID:          "epic_" + e.Name(),
+						DisplayName: displayName,
+						Username:    e.Name(),
+						Platform:    "Epic",
+					})
+				} else {
+					fmt.Printf("[Scanner] JSON Unmarshal error for %s: %v\n", e.Name(), err)
+				}
+			} else {
+				fmt.Printf("[Scanner] Failed to read meta.json for %s: %v\n", e.Name(), err)
 			}
 		}
 	}
+	fmt.Printf("[Scanner] Total accounts found: %d\n", len(accounts))
 	return accounts
 }
 
@@ -588,6 +744,194 @@ func restorePlists(srcDir string) {
 	// Force macOS to reload prefs from disk by killing the prefs daemon
 	// It restarts automatically. This is more reliable than 'defaults read'.
 	exec.Command("killall", "cfprefsd").Run()
+}
+
+// saveHTTPStorages saves the HTTPStorages directory and binarycookies file
+// These contain critical session cookies for Epic authentication
+func saveHTTPStorages(destDir string) {
+	home, _ := os.UserHomeDir()
+
+	// 1. Save binarycookies file
+	srcCookies := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher.binarycookies")
+	destCookies := filepath.Join(destDir, "binarycookies")
+
+	if _, err := os.Stat(srcCookies); err == nil {
+		fmt.Printf("[Epic] Saving binarycookies from %s\n", srcCookies)
+		if err := copyFile(srcCookies, destCookies); err != nil {
+			fmt.Printf("[Epic] Warning: failed to copy binarycookies: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Warning: binarycookies not found at %s\n", srcCookies)
+	}
+
+	// 2. Save HTTPStorages directory (contains sqlite with session data)
+	srcHTTPDir := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher")
+	destHTTPDir := filepath.Join(destDir, "HTTPStorages")
+
+	if _, err := os.Stat(srcHTTPDir); err == nil {
+		fmt.Printf("[Epic] Saving HTTPStorages from %s\n", srcHTTPDir)
+		_ = os.RemoveAll(destHTTPDir)
+		if err := copyDir(srcHTTPDir, destHTTPDir); err != nil {
+			fmt.Printf("[Epic] Warning: failed to copy HTTPStorages: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Warning: HTTPStorages dir not found at %s\n", srcHTTPDir)
+	}
+}
+
+// restoreHTTPStorages restores the HTTPStorages directory and binarycookies file
+func restoreHTTPStorages(srcDir string) {
+	home, _ := os.UserHomeDir()
+
+	// 1. Restore binarycookies file
+	srcCookies := filepath.Join(srcDir, "binarycookies")
+	destCookies := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher.binarycookies")
+
+	if _, err := os.Stat(srcCookies); err == nil {
+		fmt.Printf("[Epic] Restoring binarycookies to %s\n", destCookies)
+		// Remove old file first
+		_ = os.Remove(destCookies)
+		if err := copyFile(srcCookies, destCookies); err != nil {
+			fmt.Printf("[Epic] Warning: failed to restore binarycookies: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Note: No saved binarycookies found (account may have been saved before this feature)\n")
+	}
+
+	// 2. Restore HTTPStorages directory
+	srcHTTPDir := filepath.Join(srcDir, "HTTPStorages")
+	destHTTPDir := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher")
+
+	if _, err := os.Stat(srcHTTPDir); err == nil {
+		fmt.Printf("[Epic] Restoring HTTPStorages to %s\n", destHTTPDir)
+		// Remove and recreate to ensure clean state
+		_ = os.RemoveAll(destHTTPDir)
+		if err := copyDir(srcHTTPDir, destHTTPDir); err != nil {
+			fmt.Printf("[Epic] Warning: failed to restore HTTPStorages: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Note: No saved HTTPStorages found (account may have been saved before this feature)\n")
+	}
+}
+
+// saveWebcache saves all webcache directories from Epic
+// Webcache may contain important session data
+func saveWebcache(destDir string) {
+	home, _ := os.UserHomeDir()
+	savedDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved")
+	destWebcacheDir := filepath.Join(destDir, "Webcache")
+
+	// Remove old saved webcache
+	_ = os.RemoveAll(destWebcacheDir)
+	_ = os.MkdirAll(destWebcacheDir, 0755)
+
+	entries, err := os.ReadDir(savedDir)
+	if err != nil {
+		fmt.Printf("[Epic] Warning: Could not read Saved dir for webcache: %v\n", err)
+		return
+	}
+
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "webcache") {
+			src := filepath.Join(savedDir, e.Name())
+			dst := filepath.Join(destWebcacheDir, e.Name())
+			fmt.Printf("[Epic] Saving webcache: %s\n", e.Name())
+			if err := copyDir(src, dst); err != nil {
+				fmt.Printf("[Epic] Warning: failed to copy webcache %s: %v\n", e.Name(), err)
+			}
+		}
+	}
+}
+
+// restoreWebcache restores all webcache directories
+func restoreWebcache(srcDir string) {
+	home, _ := os.UserHomeDir()
+	savedDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved")
+	srcWebcacheDir := filepath.Join(srcDir, "Webcache")
+
+	// First, clear existing webcache directories
+	entries, err := os.ReadDir(savedDir)
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() && strings.HasPrefix(e.Name(), "webcache") {
+				path := filepath.Join(savedDir, e.Name())
+				fmt.Printf("[Epic] Removing existing webcache: %s\n", e.Name())
+				_ = os.RemoveAll(path)
+			}
+		}
+	}
+
+	// Now restore from saved
+	if _, err := os.Stat(srcWebcacheDir); os.IsNotExist(err) {
+		fmt.Printf("[Epic] Note: No saved webcache found (account may have been saved before this feature)\n")
+		return
+	}
+
+	srcEntries, err := os.ReadDir(srcWebcacheDir)
+	if err != nil {
+		fmt.Printf("[Epic] Warning: Could not read saved webcache dir: %v\n", err)
+		return
+	}
+
+	for _, e := range srcEntries {
+		if e.IsDir() {
+			src := filepath.Join(srcWebcacheDir, e.Name())
+			dst := filepath.Join(savedDir, e.Name())
+			fmt.Printf("[Epic] Restoring webcache: %s\n", e.Name())
+			if err := copyDir(src, dst); err != nil {
+				fmt.Printf("[Epic] Warning: failed to restore webcache %s: %v\n", e.Name(), err)
+			}
+		}
+	}
+}
+
+// saveIdentifiers saves the ~/Library/Application Support/Epic/Epic Games/ folder
+// This folder contains KeyValueStore.ini with MachineId and AccountId
+func saveIdentifiers(destDir string) {
+	home, _ := os.UserHomeDir()
+	srcDir := filepath.Join(home, "Library", "Application Support", "Epic", "Epic Games")
+	destEpicGamesDir := filepath.Join(destDir, "EpicGames") // Save as "EpicGames" in backup
+
+	if _, err := os.Stat(srcDir); err == nil {
+		fmt.Printf("[Epic] Saving Identifiers from %s\n", srcDir)
+		_ = os.RemoveAll(destEpicGamesDir)
+		if err := copyDir(srcDir, destEpicGamesDir); err != nil {
+			fmt.Printf("[Epic] Warning: failed to copy Identifiers: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Warning: Identifiers dir not found at %s\n", srcDir)
+	}
+}
+
+// restoreIdentifiers restores the ~/Library/Application Support/Epic/Epic Games/ folder
+func restoreIdentifiers(srcDir string) {
+	home, _ := os.UserHomeDir()
+	srcEpicGamesDir := filepath.Join(srcDir, "EpicGames")
+	destDir := filepath.Join(home, "Library", "Application Support", "Epic", "Epic Games")
+
+	if _, err := os.Stat(srcEpicGamesDir); err == nil {
+		fmt.Printf("[Epic] Restoring Identifiers to %s\n", destDir)
+		// Clean destination first to ensure no conflicts
+		_ = os.RemoveAll(destDir)
+		if err := copyDir(srcEpicGamesDir, destDir); err != nil {
+			fmt.Printf("[Epic] Warning: failed to restore Identifiers: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Note: No saved Identifiers found (account may have been saved before this feature)\n")
+	}
+
+}
+
+// clearHTTPStorages removes HTTPStorages to ensure clean session state before switch
+func clearHTTPStorages() {
+	home, _ := os.UserHomeDir()
+
+	cookiesPath := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher.binarycookies")
+	httpDirPath := filepath.Join(home, "Library", "HTTPStorages", "com.epicgames.EpicGamesLauncher")
+
+	fmt.Println("[Epic] Clearing HTTPStorages for clean session...")
+	_ = os.Remove(cookiesPath)
+	_ = os.RemoveAll(httpDirPath)
 }
 
 func cleanEpicStateDarwin() {

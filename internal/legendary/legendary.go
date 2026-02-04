@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"swch/internal/models"
 	"swch/internal/sys"
 )
@@ -64,12 +65,20 @@ func ScanLegendaryGames() []models.LibraryGame {
 		return games
 	}
 
+	if !Status() {
+		return games
+	}
+
 	// Run legendary list-games --json
 	cmd := exec.Command(path, "list-games", "--json")
 	sys.ConfigureCommand(cmd)
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Error running legendary:", err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			fmt.Printf("Error running legendary: %s\nStderr: %s\n", err, string(exitErr.Stderr))
+		} else {
+			fmt.Println("Error running legendary:", err)
+		}
 		return games
 	}
 
@@ -345,8 +354,13 @@ func Status() bool {
 	}
 	// 'legendary status' возвращает 0, если вход выполнен, и 1, если нет (обычно)
 	cmd := exec.Command(bin, "status")
-	err = cmd.Run()
-	return err == nil
+	sys.ConfigureCommand(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	outStr := string(output)
+	return !strings.Contains(outStr, "No saved credentials") && !strings.Contains(outStr, "Not logged in")
 }
 
 func ListGames() ([]models.EpicGame, error) {

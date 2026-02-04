@@ -6,11 +6,15 @@ export function AddCustomGame(arg1:string,arg2:string):Promise<string>;
 
 export function AddTorrentGame(arg1:string,arg2:string):Promise<string>;
 
+export function AuthorizeEpicWithCode(arg1:string,arg2:string):Promise<string>;
+
 export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAllEpicAccounts():Promise<string>;
 
 export function GetClipboardText():Promise<string>;
+
+export function GetEpicAuthURL():Promise<string>;
 
 export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
@@ -40,6 +44,10 @@ export function LoginLegendaryAccount():Promise<string>;
 
 export function LoginLegendaryAuto():Promise<string>;
 
+export function LogoutEpic():Promise<string>;
+
+export function OpenEpicAuthPage():Promise<void>;
+
 export function OpenLegendaryLoginPage():Promise<void>;
 
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
@@ -50,6 +58,8 @@ export function SaveLegendaryAccount(arg1:string):Promise<string>;
 
 export function SaveRiotAccount(arg1:string):Promise<string>;
 
+export function SaveRobloxAccount(arg1:string):Promise<string>;
+
 export function SelectExe():Promise<string>;
 
 export function SelectImage():Promise<string>;
@@ -57,6 +67,8 @@ export function SelectImage():Promise<string>;
 export function SetGameImage(arg1:string,arg2:string):Promise<string>;
 
 export function SwitchEpicAccount(arg1:string):Promise<string>;
+
+export function SwitchEpicAccountWithDeviceAuth(arg1:string):Promise<string>;
 
 export function SwitchLegendaryAccount(arg1:string):Promise<string>;
 

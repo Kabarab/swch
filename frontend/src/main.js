@@ -1,19 +1,20 @@
 // 1. Импорты (все функции из Go)
-import { 
-    RemoveGame, 
-    GetLibrary, 
-    ToggleGamePin, 
-    LaunchGame, 
-    UpdateGameNote, 
-    ToggleGameAccountHidden, 
-    GetLaunchers, 
-    SwitchToAccount, 
-    SaveEpicAccount, 
-    DeleteAccount, 
-    SelectImage, 
-    UpdateAccountData, 
-    SelectExe, 
-    AddCustomGame, 
+import {
+    RemoveGame,
+    GetLibrary,
+    ToggleGamePin,
+    LaunchGame,
+    UpdateGameNote,
+    ToggleGameAccountHidden,
+    GetLaunchers,
+    SwitchToAccount,
+    SaveEpicAccount,
+    LogoutEpic,
+    DeleteAccount,
+    SelectImage,
+    UpdateAccountData,
+    SelectExe,
+    AddCustomGame,
     SetGameImage,
     // НОВЫЕ ИМПОРТЫ
     LoginLegendaryAccount,
@@ -22,7 +23,12 @@ import {
     SaveLegendaryAccount,
     SaveRiotAccount,
     OpenLegendaryLoginPage,
-    GetClipboardText
+    GetClipboardText,
+    GetEpicAuthURL,
+    AuthorizeEpicWithCode,
+
+    OpenEpicAuthPage,
+    SaveRobloxAccount
 } from '../wailsjs/go/app/App';
 import { setupLegendary } from './legendary.js';
 
@@ -31,7 +37,7 @@ let globalGames = [];
 let editingTagTarget = { username: '', platform: '', gameId: '' };
 let editingAccountTarget = { username: '', platform: '' };
 let currentModalGameId = '';
-let showHiddenEpic = false;
+let showHiddenAccounts = false;
 
 // Переменные для контекстного меню
 let selectedGameId = null;
@@ -45,6 +51,113 @@ let filterState = {
     searchQuery: ''
 };
 
+// Переключение аккаунта
+window.switchAccount = async function (username, platform) {
+    console.log('[Frontend] switchAccount called:', username, platform);
+    try {
+        const result = await SwitchToAccount(username, platform);
+        console.log('[Frontend] SwitchToAccount result:', result);
+        if (result.startsWith('Error')) {
+            alert('Switch error: ' + result);
+        } else {
+            alert(result);
+        }
+    } catch (e) {
+        console.error('[Frontend] switchAccount exception:', e);
+        alert('Exception during account switch: ' + e);
+    }
+}
+
+// Удаление аккаунта
+// Удаление аккаунта
+window.prepareDeleteAccount = function (event, username, platform) {
+    if (event) event.stopPropagation();
+    window.deleteAccount(username, platform);
+}
+
+window.deleteAccount = async function (username, platform) {
+    console.log('[DEBUG] deleteAccount ENTRY:', username, platform);
+    // confirm() is blocked in Wails - skip confirmation for now
+    try {
+        console.log('[Frontend] Call DeleteAccount:', username, platform);
+        const res = await DeleteAccount(username, platform);
+        console.log('[Frontend] DeleteAccount Res:', res);
+        if (res === "Success") {
+            loadAccounts();
+        } else {
+            alert("Error deleting account: " + res);
+        }
+    } catch (e) {
+        alert('An error occurred while deleting the account: ' + e);
+    }
+}
+
+// Скрытие аккаунта (Soft Delete)
+// Скрытие аккаунта (Soft Delete)
+window.prepareHideAccount = function (event, username, platform) {
+    if (event) event.stopPropagation();
+    window.hideAccount(username, platform);
+}
+
+window.hideAccount = async function (username, platform) {
+    console.log('[DEBUG] hideAccount called for:', username, platform);
+    if (!username || !platform) {
+        console.error('[DEBUG] Missing username or platform');
+        return;
+    }
+
+    // confirm() is blocked in Wails - skip confirmation for now
+
+    const comment = "_swch_hidden_";
+
+    try {
+        console.log('[DEBUG] Calling UpdateAccountData...');
+        const res = await UpdateAccountData(username, platform, comment, "");
+        console.log('[DEBUG] UpdateAccountData result:', res);
+        loadAccounts();
+    } catch (e) {
+        console.error('[DEBUG] hideAccount error:', e);
+        alert('An error occurred while hiding the account: ' + e);
+    }
+}
+
+window.restoreAccount = async function (username, platform) {
+    try {
+        const res = await UpdateAccountData(username, platform, "", "");
+        if (res && (res.startsWith("Error") || res.startsWith("Ошибка"))) {
+            alert("Error restoring account: " + res);
+        } else {
+            loadAccounts();
+        }
+    } catch (e) {
+        alert('An error occurred while restoring the account: ' + e);
+    }
+}
+
+// Редактирование аккаунта
+window.openEditAccount = function (username, platform, currentComment) {
+    editingAccountTarget = { username, platform };
+    document.getElementById('edit-comment').value = currentComment;
+    document.getElementById('edit-avatar-path').value = '';
+    document.getElementById('edit-account-modal').style.display = 'flex';
+}
+
+window.selectNewAvatar = async function () {
+    const path = await SelectImage();
+    if (path) document.getElementById('edit-avatar-path').value = path;
+}
+
+window.saveAccountChanges = async function () {
+    await UpdateAccountData(
+        editingAccountTarget.username,
+        editingAccountTarget.platform,
+        document.getElementById('edit-comment').value,
+        document.getElementById('edit-avatar-path').value
+    );
+    closeModal('edit-account-modal');
+    loadAccounts();
+}
+
 // --- Инициализация ---
 
 // Запуск при старте страницы
@@ -55,45 +168,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const launchersList = document.getElementById('launchers-list');
     if (launchersList) {
-        launchersList.addEventListener('click', function(event) {
-            console.log('[DEBUG] Click detected on accounts list. Target:', event.target);
+        launchersList.addEventListener('click', function (event) {
             const target = event.target;
 
-            // 1. Проверяем кнопку удаления
-            const deleteButton = target.closest('.delete-account-btn');
-            if (deleteButton) {
-                console.log('[DEBUG] Hide button clicked. Username:', deleteButton.dataset.username, 'Platform:', deleteButton.dataset.platform);
-                const username = deleteButton.dataset.username;
-                const platform = deleteButton.dataset.platform;
-                window.hideAccount(username, platform); // Вызываем новую функцию
-                return; // Останавливаем дальнейшую обработку
+            // Проверяем, был ли клик на кнопках действий (у них есть inline onclick, пропускаем)
+            const actionBtn = target.closest('.action-icon-btn');
+            if (actionBtn) {
+                // Inline onclick handlers уже обрабатывают эти кнопки
+                return;
             }
 
-            // 2. Проверяем кнопку редактирования
-            const editButton = target.closest('.edit-account-btn');
-            if (editButton) {
-                console.log('[DEBUG] Edit button found. Username:', editButton.dataset.username);
-                const username = editButton.dataset.username;
-                const platform = editButton.dataset.platform;
-                const comment = editButton.dataset.comment;
-                window.openEditAccount(username, platform, comment);
-                return; // Останавливаем дальнейшую обработку
-            }
-
-            // 3. Если не кнопка, проверяем клик по самой строке для переключения
+            // Клик по строке аккаунта для переключения
             const accountRow = target.closest('.account-row');
             if (accountRow) {
-                console.log('[DEBUG] Account row clicked. Username:', accountRow.dataset.username);
                 const username = accountRow.dataset.username;
                 const platform = accountRow.dataset.platform;
                 const isHidden = accountRow.dataset.hidden === 'true';
 
-                // Убедимся, что клик был по валидной строке с данными
-                if (username && platform) { 
+                if (username && platform) {
                     if (isHidden) {
-                        if (confirm(`Restore account ${username}?`)) {
-                            window.restoreAccount(username, platform);
-                        }
+                        // confirm() auto-closes on macOS Wails - skip confirmation
+                        window.restoreAccount(username, platform);
                     } else {
                         window.switchAccount(username, platform);
                     }
@@ -105,16 +200,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- Функции навигации и интерфейса ---
 
-window.toggleHiddenEpic = function() {
-    showHiddenEpic = !showHiddenEpic;
+window.toggleHiddenAccounts = function () {
+    showHiddenAccounts = !showHiddenAccounts;
     loadAccounts();
 }
 
 // Переключение вкладок (Библиотека / Аккаунты)
-window.switchTab = function(tab) {
+window.switchTab = function (tab) {
     document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
-    
+
     // Подсветка активной кнопки
     if (tab === 'library') {
         document.getElementById('view-library').style.display = 'block';
@@ -132,11 +227,11 @@ window.switchTab = function(tab) {
 }
 
 // Управление модальными окнами
-window.closeModal = function(id) {
+window.closeModal = function (id) {
     document.getElementById(id).style.display = 'none';
 }
 
-window.openAddGameModal = function() {
+window.openAddGameModal = function () {
     document.getElementById('add-game-modal').style.display = 'flex';
 }
 
@@ -154,12 +249,12 @@ async function loadLibrary() {
 }
 
 // Управление фильтрами платформ
-window.toggleFilter = function(btn, platform) {
+window.toggleFilter = function (btn, platform) {
     btn.classList.toggle('active');
-    
+
     // Custom включает в себя и Torrent для удобства пользователя
     const platformsToCheck = platform === 'Custom' ? ['Custom', 'Torrent'] : [platform];
-    
+
     if (btn.classList.contains('active')) {
         // Добавляем платформу(ы) в массив, если их там нет
         platformsToCheck.forEach(p => {
@@ -173,7 +268,7 @@ window.toggleFilter = function(btn, platform) {
 }
 
 // Управление булевыми фильтрами (Installed / macOS)
-window.toggleBooleanFilter = function(btn) {
+window.toggleBooleanFilter = function (btn) {
     btn.classList.toggle('active');
     if (btn.id === 'filter-installed') filterState.onlyInstalled = btn.classList.contains('active');
     if (btn.id === 'filter-macos') filterState.onlyMac = btn.classList.contains('active');
@@ -181,7 +276,7 @@ window.toggleBooleanFilter = function(btn) {
 }
 
 // Применяет фильтры к globalGames и вызывает рендер
-window.applyFilters = function() {
+window.applyFilters = function () {
     const searchInput = document.getElementById('filter-search');
     filterState.searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
 
@@ -268,23 +363,23 @@ function renderGrid(games) {
 }
 
 // Закрепление игры
-window.togglePin = async function(e, gameId) {
+window.togglePin = async function (e, gameId) {
     if (e) e.stopPropagation();
     await ToggleGamePin(gameId);
     loadLibrary(); // Перезагружаем, чтобы обновить состояние isPinned с бэкенда
 }
 
 // Открытие модального окна игры
-window.openGameModal = function(gameId) {
+window.openGameModal = function (gameId) {
     currentModalGameId = gameId;
     const checkbox = document.getElementById('show-hidden-accs');
     if (checkbox) checkbox.checked = false;
-    
+
     renderGameModalContent(gameId);
     document.getElementById('account-modal').style.display = 'flex';
 }
 
-window.refreshGameModal = function() {
+window.refreshGameModal = function () {
     if (currentModalGameId) renderGameModalContent(currentModalGameId);
 }
 
@@ -302,7 +397,7 @@ function renderGameModalContent(gameId) {
 
     const actionVerb = game.isInstalled ? "Launch" : "Install";
     const actionIcon = game.isInstalled ? "fa-play" : "fa-download";
-    
+
     // Проверяем галочку "Show Hidden"
     const checkbox = document.getElementById('show-hidden-accs');
     const showHidden = checkbox ? checkbox.checked : false;
@@ -333,7 +428,7 @@ function renderGameModalContent(gameId) {
             else if (acc.note === 'VAC') noteHtml = `<span class="badge badge-vac"><i class="fa-solid fa-ban"></i> VAC BAN</span>`;
             else if (acc.note) noteHtml = `<span class="badge badge-custom"><i class="fa-solid fa-note-sticky"></i> ${acc.note}</span>`;
 
-            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-eye-slash"; 
+            const hideIcon = acc.isHidden ? "fa-rotate-left" : "fa-eye-slash";
             const hideClass = acc.isHidden ? "toggle-restore-btn" : "toggle-hidden-btn";
             const hideTitle = acc.isHidden ? "Restore account" : "Hide from this game";
 
@@ -361,7 +456,7 @@ function renderGameModalContent(gameId) {
 }
 
 // Запуск игры
-window.launch = async function(account, gameId, platform, exePath) {
+window.launch = async function (account, gameId, platform, exePath) {
     try {
         const res = await LaunchGame(account, gameId, platform, exePath);
         // Если вернулось не "Launched...", значит ошибка
@@ -376,7 +471,7 @@ window.launch = async function(account, gameId, platform, exePath) {
 }
 
 // Скрытие/Показ аккаунта для конкретной игры
-window.toggleGameAccountHidden = async function(username, platform, gameId) {
+window.toggleGameAccountHidden = async function (username, platform, gameId) {
     await ToggleGameAccountHidden(username, platform, gameId);
     // Обновляем данные глобально
     await loadLibrary();
@@ -386,20 +481,20 @@ window.toggleGameAccountHidden = async function(username, platform, gameId) {
 
 // --- Управление заметками (Notes) ---
 
-window.openNoteSelector = function(username, platform, gameId, currentNote) {
+window.openNoteSelector = function (username, platform, gameId, currentNote) {
     editingTagTarget = { username, platform, gameId };
     const isPredefined = ['Main', 'Smurf', 'VAC'].includes(currentNote);
     document.getElementById('custom-note-input').value = isPredefined ? '' : currentNote;
     document.getElementById('note-select-modal').style.display = 'flex';
 }
 
-window.savePredefinedNote = async function(noteType) { 
-    await applyNote(noteType); 
+window.savePredefinedNote = async function (noteType) {
+    await applyNote(noteType);
 }
 
-window.saveCustomNote = async function() { 
-    const text = document.getElementById('custom-note-input').value; 
-    await applyNote(text); 
+window.saveCustomNote = async function () {
+    const text = document.getElementById('custom-note-input').value;
+    await applyNote(text);
 }
 
 async function applyNote(noteText) {
@@ -416,37 +511,35 @@ async function applyNote(noteText) {
 async function loadAccounts() {
     const container = document.getElementById('launchers-list');
     if (!container) return;
-    
+
     container.innerHTML = '<div style="padding:20px">Loading accounts...</div>';
-    
+
     try {
         const launchers = await GetLaunchers();
         container.innerHTML = '';
-        
+
         if (!launchers || launchers.length === 0) {
-            container.innerHTML = '<div style="padd ing:20px">No launchers found.</div>';
+            container.innerHTML = '<div style="padding:20px">No launchers found.</div>';
             return;
         }
-        
+
         launchers.forEach(group => {
             const section = document.createElement('div');
             section.className = 'launcher-section';
-            
+
             let accountsHtml = '';
             const accounts = group.accounts || [];
-            
+
             accounts.forEach(acc => {
-                // Не показывать скрытые аккаунты
+                // Не показывать скрытые аккаунты, если флаг выключен
                 const isHidden = acc.comment && acc.comment.startsWith('_swch_hidden_');
-                if (isHidden) {
-                    if (group.platform !== 'Epic' || !showHiddenEpic) return;
-                }
+                if (isHidden && !showHiddenAccounts) return;
 
                 let avatarHtml = `<div class="acc-avatar">${acc.displayName.charAt(0)}</div>`;
                 if (acc.avatarUrl) {
                     avatarHtml = `<div class="acc-avatar" style="background-image: url('${acc.avatarUrl.replace(/\\/g, '/')}'); background-size: cover; color: transparent;"></div>`;
                 }
-                
+
                 let displayComment = acc.comment;
                 if (isHidden) {
                     const parts = acc.comment.split(':');
@@ -455,7 +548,24 @@ async function loadAccounts() {
                 }
                 const commentHtml = displayComment ? `<div class="acc-comment">${displayComment}</div>` : '';
                 const rowStyle = isHidden ? 'opacity: 0.6;' : '';
-                
+
+                const hideBtnClass = isHidden ? 'restore-account-btn' : 'hide-account-btn';
+                const hideBtnIcon = isHidden ? 'fa-rotate-left' : 'fa-eye-slash';
+                const hideBtnTitle = isHidden ? 'Restore Account' : 'Hide Account';
+
+                // Функция для экранирования строк в JS (для inline onclick)
+                const escapeForJs = (str) => (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const safeUsername = escapeForJs(acc.username);
+                const safePlatform = escapeForJs(group.platform);
+                const safeComment = escapeForJs(acc.comment);
+
+                // Для скрытых аккаунтов используем restoreAccount, для обычных - hideAccount
+                const hideAction = isHidden
+                    ? `event.stopPropagation(); window.restoreAccount('${safeUsername}', '${safePlatform}')`
+                    : `event.stopPropagation(); window.hideAccount('${safeUsername}', '${safePlatform}')`;
+                const deleteAction = `event.stopPropagation(); window.deleteAccount('${safeUsername}', '${safePlatform}')`;
+                const editAction = `event.stopPropagation(); window.openEditAccount('${safeUsername}', '${safePlatform}', '${safeComment}')`;
+
                 accountsHtml += `
                     <div class="account-row interactable" style="${rowStyle}" data-username="${acc.username}" data-platform="${group.platform}" data-hidden="${isHidden}">
                         ${avatarHtml}
@@ -464,45 +574,72 @@ async function loadAccounts() {
                             <div class="acc-login">${acc.username}</div>
                         </div>
                         <div class="acc-actions">
-                            <div class="action-icon-btn edit-account-btn" data-username="${acc.username}" data-platform="${group.platform}" data-comment="${acc.comment || ''}"><i class="fa-solid fa-pen"></i></div>
-                            <div class="action-icon-btn delete-btn delete-account-btn" data-username="${acc.username}" data-platform="${group.platform}"><i class="fa-solid fa-trash"></i></div>
+                            <div class="action-icon-btn edit-account-btn" onclick="${editAction}"><i class="fa-solid fa-pen"></i></div>
+                            <div class="action-icon-btn ${hideBtnClass}" onclick="${hideAction}" title="${hideBtnTitle}"><i class="fa-solid ${hideBtnIcon}"></i></div>
+                            <div class="action-icon-btn delete-btn" onclick="${deleteAction}"><i class="fa-solid fa-trash"></i></div>
                         </div>
                         <div class="acc-action-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
                     </div>`;
             });
-            
+
+
             // Кнопка для добавления (Footer)
             let footerHtml = '';
-            
+
+            const hiddenText = showHiddenAccounts ? "Hide Hidden" : "Show Hidden";
+            const hiddenIcon = showHiddenAccounts ? "fa-eye-slash" : "fa-eye";
+            const showHiddenBtn = `<button onclick="toggleHiddenAccounts()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid ${hiddenIcon}"></i> ${hiddenText}
+                    </button>`;
+
             // Для Epic Games (Official)
             if (group.platform === 'Epic') {
-                const hiddenText = showHiddenEpic ? "Hide Hidden" : "Show Hidden";
-                const hiddenIcon = showHiddenEpic ? "fa-eye-slash" : "fa-eye";
-
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
                     <button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-plus"></i> Add Current
+                        <i class="fa-solid fa-plus"></i> Current
                     </button>
-                    <button onclick="toggleHiddenEpic()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
-                        <i class="fa-solid ${hiddenIcon}"></i> ${hiddenText}
+                    <button onclick="openEpicAuthModal()" style="cursor:pointer; background:none; color:#4f4; border:1px dashed #4f4; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-key"></i> Auth
                     </button>
+                    <button onclick="logoutEpic()" style="cursor:pointer; background:none; color:#f44; border:1px dashed #f44; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    </button>
+                    ${showHiddenBtn}
                 </div>`;
-            }
-            
-            // НОВАЯ КНОПКА ДЛЯ LEGENDARY
-            if (group.platform === 'Legendary') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a;">
-                    <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; width:100%; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-plus"></i> Save Current Session
+            } else if (group.platform === 'Legendary') {
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Save Session
                     </button>
+                    ${showHiddenBtn}
+                </div>`;
+            } else if (group.platform === 'Riot') {
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <button onclick="openRiotSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Save Current
+                    </button>
+                     ${showHiddenBtn}
+                </div>`;
+            } else if (group.platform === 'Roblox') {
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <button onclick="openRobloxSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i> Save Current
+                    </button>
+                     ${showHiddenBtn}
+                </div>`;
+            } else {
+                // Steam и другие
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr; gap:10px;">
+                     ${showHiddenBtn}
                 </div>`;
             }
 
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
-            if (group.platform === "Epic") iconClass = "fa-bolt"; 
+            if (group.platform === "Epic") iconClass = "fa-bolt";
             if (group.platform === "Legendary") iconClass = "fa-terminal"; // Иконка для Legendary
-            
+            if (group.platform === "Roblox") iconClass = "fa-square"; // Иконка для Roblox
+
             section.innerHTML = `
                 <div class="launcher-header">
                     <i class="fa-brands ${iconClass}"></i> ${group.name} 
@@ -519,103 +656,86 @@ async function loadAccounts() {
     }
 }
 
-// Переключение аккаунта
-window.switchAccount = async function(username, platform) { 
-    const result = await SwitchToAccount(username, platform);
-    alert(result);
-}
-
-// Удаление аккаунта
-// Скрывает аккаунт, а не удаляет, помечая его специальным комментарием
-window.hideAccount = async function(username, platform) {
-    const reason = prompt("Reason for hiding (optional, e.g. Ban):", "");
-    if (reason === null) return;
-
-    const comment = reason ? `_swch_hidden_:${reason}` : "_swch_hidden_";
-
-    try {
-        // Используем UpdateAccountData чтобы установить специальный комментарий
-        // Пустой стринг для avatarPath, чтобы он не менялся
-        const res = await UpdateAccountData(username, platform, comment, ""); 
-        
-        if (res && (res.startsWith("Error") || res.startsWith("Ошибка"))) {
-            alert("Ошибка при скрытии аккаунта: " + res);
-        } else {
-            loadAccounts(); // Перезагружаем список, чтобы скрытый аккаунт исчез
-        }
-    } catch (e) {
-        alert('An error occurred while hiding the account: ' + e);
-    }
-}
-
-window.restoreAccount = async function(username, platform) {
-    try {
-        const res = await UpdateAccountData(username, platform, "", ""); 
-        if (res && (res.startsWith("Error") || res.startsWith("Ошибка"))) {
-            alert("Error restoring account: " + res);
-        } else {
-            loadAccounts();
-        }
-    } catch (e) {
-        alert('An error occurred while restoring the account: ' + e);
-    }
-}
-
-// Редактирование аккаунта
-window.openEditAccount = function(username, platform, currentComment) { 
-    editingAccountTarget = { username, platform }; 
-    document.getElementById('edit-comment').value = currentComment; 
-    document.getElementById('edit-avatar-path').value = ''; 
-    document.getElementById('edit-account-modal').style.display = 'flex'; 
-}
-
-window.selectNewAvatar = async function() { 
-    const path = await SelectImage(); 
-    if (path) document.getElementById('edit-avatar-path').value = path; 
-}
-
-window.saveAccountChanges = async function() { 
-    await UpdateAccountData(
-        editingAccountTarget.username, 
-        editingAccountTarget.platform, 
-        document.getElementById('edit-comment').value, 
-        document.getElementById('edit-avatar-path').value
-    ); 
-    closeModal('edit-account-modal'); 
-    loadAccounts(); 
-}
-
 // --- Добавление игр (Custom / Torrent) ---
 
-window.browseFile = async function() { 
-    const path = await SelectExe(); 
-    if (path) document.getElementById('custom-path').value = path; 
+window.browseFile = async function () {
+    const path = await SelectExe();
+    if (path) document.getElementById('custom-path').value = path;
 }
 
-window.saveCustomGame = async function() { 
+window.saveCustomGame = async function () {
     const res = await AddCustomGame(
-        document.getElementById('custom-name').value, 
+        document.getElementById('custom-name').value,
         document.getElementById('custom-path').value
-    ); 
-    
-    if (res === 'Success') { 
-        closeModal('add-game-modal'); 
-        loadLibrary(); 
-        document.getElementById('custom-name').value = ''; 
-        document.getElementById('custom-path').value = ''; 
-    } else { 
-        alert(res); 
-    } 
+    );
+
+    if (res === 'Success') {
+        closeModal('add-game-modal');
+        loadLibrary();
+        document.getElementById('custom-name').value = '';
+        document.getElementById('custom-path').value = '';
+    } else {
+        alert(res);
+    }
 }
 
 // --- Добавление Epic Account ---
 
-window.openEpicSaveModal = function() {
+window.openEpicSaveModal = function () {
     document.getElementById('epic-save-name').value = '';
     document.getElementById('save-epic-modal').style.display = 'flex';
 }
 
-window.doSaveEpic = async function() {
+window.logoutEpic = async function () {
+    // Skip confirm dialog - it auto-closes on macOS Wails
+    try {
+        const result = await LogoutEpic();
+        alert(result);
+        loadAccounts();
+    } catch (e) {
+        alert("Error: " + e);
+    }
+}
+
+// Epic Device Auth flow
+window.openEpicAuthModal = async function () {
+    try {
+        // Open Epic auth URL in system browser using Wails BrowserOpenURL
+        await OpenEpicAuthPage();
+
+        // Show modal for auth code input
+        document.getElementById('epic-auth-modal').style.display = 'flex';
+        document.getElementById('epic-auth-code').value = '';
+        document.getElementById('epic-auth-name').value = '';
+    } catch (e) {
+        alert("Error: " + e);
+    }
+}
+
+window.submitEpicAuthCode = async function () {
+    // Strip quotes if user pasted them from JSON
+    let authCode = document.getElementById('epic-auth-code').value.trim();
+    if (authCode.startsWith('"') && authCode.endsWith('"')) {
+        authCode = authCode.slice(1, -1);
+    }
+    const accountName = document.getElementById('epic-auth-name').value.trim();
+
+    if (!authCode) {
+        alert("Please enter the authorization code");
+        return;
+    }
+
+    try {
+        const result = await AuthorizeEpicWithCode(authCode, accountName);
+        alert(result);
+        document.getElementById('epic-auth-modal').style.display = 'none';
+        loadAccounts();
+    } catch (e) {
+        alert("Error: " + e);
+    }
+}
+
+window.doSaveEpic = async function () {
     const name = document.getElementById('epic-save-name').value;
     if (!name) {
         alert("Please enter a name");
@@ -640,12 +760,12 @@ window.doSaveEpic = async function() {
 // --- ADD ACCOUNT LOGIC (NEW) ---
 
 // Открытие главного меню добавления
-window.openAddAccountModal = function() {
+window.openAddAccountModal = function () {
     document.getElementById('add-account-modal').style.display = 'flex';
 }
 
 // 1. Legendary Login
-window.startLegendaryLogin = async function() {
+window.startLegendaryLogin = async function () {
     closeModal('add-account-modal');
 
     // Создаем модальное окно для ввода SID, если его нет
@@ -696,7 +816,7 @@ window.startLegendaryLogin = async function() {
             }
         };
         document.getElementById('btn-cancel-sid').onclick = () => {
-            modal.style.display = 'none'; 
+            modal.style.display = 'none';
             if (window.legendaryAuthInterval) clearInterval(window.legendaryAuthInterval);
         };
         document.getElementById('btn-submit-sid').onclick = async () => {
@@ -743,7 +863,7 @@ window.startLegendaryLogin = async function() {
             if (text && (text.includes('"authorizationCode"') || text.includes('"sid"') || text.includes('"code"'))) {
                 // Если нашли JSON с кодом
                 document.getElementById('input-sid').value = text;
-                
+
                 // Автоматически нажимаем Login
                 const btn = document.getElementById('btn-submit-sid');
                 if (btn) {
@@ -758,12 +878,12 @@ window.startLegendaryLogin = async function() {
 }
 
 // 2. Riot Save Logic (Аналогично Epic)
-window.openRiotSaveModal = function() {
+window.openRiotSaveModal = function () {
     document.getElementById('riot-save-name').value = '';
     document.getElementById('save-riot-modal').style.display = 'flex';
 }
 
-window.doSaveRiot = async function() {
+window.doSaveRiot = async function () {
     const name = document.getElementById('riot-save-name').value;
     if (!name) {
         alert("Please enter a name");
@@ -787,12 +907,12 @@ window.doSaveRiot = async function() {
 
 // --- Логика сохранения Legendary (NEW) ---
 
-window.openLegendarySaveModal = function() {
+window.openLegendarySaveModal = function () {
     document.getElementById('legendary-save-name').value = '';
     document.getElementById('save-legendary-modal').style.display = 'flex';
 }
 
-window.doSaveLegendary = async function() {
+window.doSaveLegendary = async function () {
     const name = document.getElementById('legendary-save-name').value;
     if (!name) {
         alert("Please enter a name");
@@ -805,7 +925,7 @@ window.doSaveLegendary = async function() {
         if (result === "Success") {
             closeModal('save-legendary-modal');
             alert("Legendary account saved!");
-            loadAccounts(); 
+            loadAccounts();
         } else {
             alert("Error: " + result);
         }
@@ -832,7 +952,7 @@ document.addEventListener('contextmenu', (e) => {
 
     if (card) {
         e.preventDefault();
-        
+
         // Получаем ID и платформу из data-атрибутов
         selectedGameId = card.getAttribute('data-id');
         selectedPlatform = card.getAttribute('data-platform');
@@ -843,10 +963,10 @@ document.addEventListener('contextmenu', (e) => {
         if (!isCustom) {
             if (deleteBtn) deleteBtn.style.display = 'none';
             if (changeIconBtn) changeIconBtn.style.display = 'none';
-             if (!deleteBtn && !changeIconBtn) {
-                 contextMenu.style.display = 'none';
-                 return;
-             }
+            if (!deleteBtn && !changeIconBtn) {
+                contextMenu.style.display = 'none';
+                return;
+            }
         } else {
             if (deleteBtn) deleteBtn.style.display = 'block';
             if (changeIconBtn) changeIconBtn.style.display = 'block';
@@ -865,13 +985,12 @@ document.addEventListener('contextmenu', (e) => {
 if (deleteBtn) {
     deleteBtn.addEventListener('click', async () => {
         if (!selectedGameId || !selectedPlatform) return;
-        const confirmed = confirm(`Удалить эту игру из библиотеки?`);
-        if (!confirmed) return;
+        // confirm() auto-closes on macOS Wails - skip confirmation
 
         try {
             const result = await RemoveGame(selectedGameId, selectedPlatform);
             if (result === "Success") {
-                loadLibrary(); 
+                loadLibrary();
             } else {
                 alert("Ошибка: " + result);
             }
@@ -885,13 +1004,42 @@ if (deleteBtn) {
 if (changeIconBtn) {
     changeIconBtn.addEventListener('click', async () => {
         if (!selectedGameId || !selectedPlatform) return;
-        
+
         const result = await SetGameImage(selectedGameId, selectedPlatform);
-        
+
         if (result && !result.startsWith("Error") && result !== "Cancelled" && result !== "Not supported for this platform") {
-            loadLibrary(); 
+            loadLibrary();
         } else if (result && result.startsWith("Error")) {
             alert(result);
         }
     });
+}
+
+// --- Roblox Logic ---
+window.openRobloxSaveModal = function () {
+    const el = document.getElementById('roblox-save-name');
+    if (el) el.value = '';
+    document.getElementById('save-roblox-modal').style.display = 'flex';
+}
+
+window.doSaveRoblox = async function () {
+    const name = document.getElementById('roblox-save-name').value;
+    if (!name) {
+        alert("Please enter a name");
+        return;
+    }
+
+    try {
+        const result = await SaveRobloxAccount(name);
+        if (result === "Success") {
+            closeModal('save-roblox-modal');
+            alert("Roblox account saved!");
+            loadAccounts();
+        } else {
+            alert("Error: " + result);
+        }
+    } catch (e) {
+        alert("System error: " + e);
+        console.error(e);
+    }
 }

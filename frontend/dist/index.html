@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>swch</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/main-DAhlCNZS.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/main-CDMaXw4q.css">
+  <script type="module" crossorigin src="/assets/main-CJNgde_s.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main--JwZ09kZ.css">
 </head>
+
 <body>
     <div class="app-container">
         <aside class="sidebar">
             <div class="logo"><i class="fa-solid fa-repeat"></i> SWCH</div>
-            
+
             <div class="nav-item" onclick="switchTab('library')">
                 <i class="fa-solid fa-gamepad"></i> Library
             </div>
@@ -21,24 +23,28 @@
             <div class="nav-item" onclick="switchTab('legendary')">
                 <i class="fa-solid fa-terminal"></i> Legendary
             </div>
-            
+
             <div class="nav-spacer"></div>
             <div class="nav-item action-btn" onclick="openAddGameModal()">
                 <i class="fa-solid fa-plus"></i> Add Game
             </div>
-            <div class="nav-item action-btn" onclick="openAddAccountModal()" style="margin-top: 10px; background-color: #444;">
+            <div class="nav-item action-btn" onclick="openAddAccountModal()"
+                style="margin-top: 10px; background-color: #444;">
                 <i class="fa-solid fa-user-plus"></i> Add Account
             </div>
-            </aside>
+        </aside>
 
         <main class="main-content">
             <div id="view-library" class="view-section">
-                <div class="header"><div class="title">Library</div></div>
-                
+                <div class="header">
+                    <div class="title">Library</div>
+                </div>
+
                 <div id="library-filters" class="filters-container">
                     <div class="search-wrapper">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="filter-search" placeholder="Поиск по названию..." class="input-field search-input" oninput="applyFilters()">
+                        <input type="text" id="filter-search" placeholder="Поиск по названию..."
+                            class="input-field search-input" oninput="applyFilters()">
                     </div>
 
                     <div class="filter-group">
@@ -70,7 +76,9 @@
             </div>
 
             <div id="view-accounts" class="view-section" style="display: none;">
-                <div class="header"><div class="title">Accounts</div></div>
+                <div class="header">
+                    <div class="title">Accounts</div>
+                </div>
                 <div id="launchers-list"></div>
             </div>
 
@@ -82,12 +90,16 @@
                     <div id="legendary-login-view">
                         <h3>Login Required</h3>
                         <p>To use Legendary, you need to authenticate with your Epic Games account.</p>
-                        <button id="legendary-login-browser-btn" class="btn-main" style="width:100%; margin-top:10px;">Login with Browser</button>
+                        <button id="legendary-login-browser-btn" class="btn-main"
+                            style="width:100%; margin-top:10px;">Login with Browser</button>
                         <hr style="border-color: #333; margin: 20px 0;">
                         <p>Alternatively, you can enter your session ID (SID) to log in.</p>
-                        <a href="https://github.com/derrod/legendary/wiki/Authentication" target="_blank">How to get SID?</a>
-                        <input type="password" id="legendary-sid-input" placeholder="Enter SID here..." class="input-field" style="width:100%; margin-top:10px;">
-                        <button id="legendary-login-btn" class="btn-secondary" style="width:100%; margin-top:10px;">Login with SID</button>
+                        <a href="https://github.com/derrod/legendary/wiki/Authentication" target="_blank">How to get
+                            SID?</a>
+                        <input type="password" id="legendary-sid-input" placeholder="Enter SID here..."
+                            class="input-field" style="width:100%; margin-top:10px;">
+                        <button id="legendary-login-btn" class="btn-secondary"
+                            style="width:100%; margin-top:10px;">Login with SID</button>
                     </div>
                     <div id="legendary-main-view" style="display: none;">
                         <div class="legendary-header">
@@ -111,7 +123,8 @@
             <div id="modal-accounts-list" class="modal-list"></div>
             <div class="modal-footer-options">
                 <label style="cursor:pointer; display:flex; align-items:center;">
-                    <input type="checkbox" id="show-hidden-accs" onchange="refreshGameModal()" style="margin-right:8px;"> 
+                    <input type="checkbox" id="show-hidden-accs" onchange="refreshGameModal()"
+                        style="margin-right:8px;">
                     Show removed accounts
                 </label>
             </div>
@@ -126,15 +139,22 @@
             </div>
             <div style="padding: 20px;">
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <button class="sticker-btn btn-main" onclick="savePredefinedNote('Main')"><i class="fa-solid fa-crown"></i> MAIN</button>
-                    <button class="sticker-btn btn-smurf" onclick="savePredefinedNote('Smurf')"><i class="fa-solid fa-child"></i> SMURF</button>
-                    <button class="sticker-btn btn-vac" onclick="savePredefinedNote('VAC')"><i class="fa-solid fa-ban"></i> VAC</button>
+                    <button class="sticker-btn btn-main" onclick="savePredefinedNote('Main')"><i
+                            class="fa-solid fa-crown"></i> MAIN</button>
+                    <button class="sticker-btn btn-smurf" onclick="savePredefinedNote('Smurf')"><i
+                            class="fa-solid fa-child"></i> SMURF</button>
+                    <button class="sticker-btn btn-vac" onclick="savePredefinedNote('VAC')"><i
+                            class="fa-solid fa-ban"></i> VAC</button>
                 </div>
                 <div style="border-top: 1px solid #444; padding-top: 15px;">
-                    <input type="text" id="custom-note-input" placeholder="Or type custom note..." class="input-field" style="width:100%; box-sizing:border-box; padding:10px; background:#222; border:1px solid #444; color:white; margin-bottom:10px;">
-                    <button onclick="saveCustomNote()" style="width:100%; padding:8px; background:#0074e4; border:none; color:white; cursor:pointer;">Save Text</button>
+                    <input type="text" id="custom-note-input" placeholder="Or type custom note..." class="input-field"
+                        style="width:100%; box-sizing:border-box; padding:10px; background:#222; border:1px solid #444; color:white; margin-bottom:10px;">
+                    <button onclick="saveCustomNote()"
+                        style="width:100%; padding:8px; background:#0074e4; border:none; color:white; cursor:pointer;">Save
+                        Text</button>
                 </div>
-                <button class="sticker-btn btn-clear" onclick="savePredefinedNote('')"><i class="fa-solid fa-eraser"></i> Clear Tag</button>
+                <button class="sticker-btn btn-clear" onclick="savePredefinedNote('')"><i
+                        class="fa-solid fa-eraser"></i> Clear Tag</button>
             </div>
         </div>
     </div>
@@ -147,13 +167,18 @@
             </div>
             <div style="padding: 20px;">
                 <label style="color:#aaa; font-size:12px;">Comment:</label>
-                <input type="text" id="edit-comment" class="input-field" style="width:100%; margin-bottom:15px; padding:10px; background:#333; border:none; color:white;">
+                <input type="text" id="edit-comment" class="input-field"
+                    style="width:100%; margin-bottom:15px; padding:10px; background:#333; border:none; color:white;">
                 <label style="color:#aaa; font-size:12px;">Custom Avatar:</label>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="edit-avatar-path" class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
-                    <button onclick="selectNewAvatar()" style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
+                    <input type="text" id="edit-avatar-path" class="input-field"
+                        style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
+                    <button onclick="selectNewAvatar()"
+                        style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
                 </div>
-                <button onclick="saveAccountChanges()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Save Changes</button>
+                <button onclick="saveAccountChanges()"
+                    style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Save
+                    Changes</button>
             </div>
         </div>
     </div>
@@ -165,12 +190,17 @@
                 <span class="close" onclick="closeModal('add-game-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <input type="text" id="custom-name" placeholder="Game Name" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <input type="text" id="custom-name" placeholder="Game Name" class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="custom-path" placeholder="Path to .exe" class="input-field" style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
-                    <button onclick="browseFile()" style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
+                    <input type="text" id="custom-path" placeholder="Path to .exe" class="input-field"
+                        style="flex:1; padding:10px; background:#333; border:none; color:white;" readonly>
+                    <button onclick="browseFile()"
+                        style="padding:10px 15px; background:#0074e4; border:none; color:white; cursor:pointer;">Browse</button>
                 </div>
-                <button onclick="saveCustomGame()" style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Add to Library</button>
+                <button onclick="saveCustomGame()"
+                    style="width:100%; margin-top:20px; padding:10px; background:#2d8c58; border:none; color:white; cursor:pointer; font-weight:bold;">Add
+                    to Library</button>
             </div>
         </div>
     </div>
@@ -182,9 +212,41 @@
                 <span class="close" onclick="closeModal('save-epic-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Epic.</p>
-                <input type="text" id="epic-save-name" placeholder="Account Name" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
-                <button onclick="doSaveEpic()" style="width:100%; margin-top:10px; padding:10px; background:#0074e4; border:none; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Epic.
+                </p>
+                <input type="text" id="epic-save-name" placeholder="Account Name" class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveEpic()"
+                    style="width:100%; margin-top:10px; padding:10px; background:#0074e4; border:none; color:white; cursor:pointer; font-weight:bold;">Save
+                    Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="epic-auth-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Epic Device Auth</h3>
+                <span class="close" onclick="closeModal('epic-auth-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p style="color:#4f4; font-size:13px; margin-bottom:15px;">
+                    <i class="fa-solid fa-check-circle"></i> A browser window has opened for Epic login.
+                </p>
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
+                    After logging in, you'll be redirected to a page showing an <strong>authorization code</strong>.<br>
+                    Copy that code and paste it below.
+                </p>
+                <input type="text" id="epic-auth-code" placeholder="Paste authorization code here..."
+                    class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <input type="text" id="epic-auth-name" placeholder="Account Name (optional - uses Epic name if empty)"
+                    class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="submitEpicAuthCode()"
+                    style="width:100%; margin-top:10px; padding:10px; background:#4f4; border:none; color:black; cursor:pointer; font-weight:bold;">
+                    <i class="fa-solid fa-key"></i> Authorize & Save
+                </button>
             </div>
         </div>
     </div>
@@ -196,15 +258,17 @@
                 <span class="close" onclick="closeModal('add-account-modal')">&times;</span>
             </div>
             <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
-                <button onclick="startLegendaryLogin()" class="btn-main" style="padding:15px; background:#000; color:white; border:1px solid #444; cursor:pointer; display:flex; align-items:center; gap:10px;">
-                    <i class="fa-solid fa-terminal"></i> 
+                <button onclick="startLegendaryLogin()" class="btn-main"
+                    style="padding:15px; background:#000; color:white; border:1px solid #444; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-terminal"></i>
                     <div style="text-align:left;">
                         <div style="font-weight:bold;">Legendary (Epic CLI)</div>
                         <div style="font-size:11px; color:#aaa;">Login via Browser/Terminal</div>
                     </div>
                 </button>
-                
-                <button onclick="openEpicSaveModal(); closeModal('add-account-modal')" class="btn-main" style="padding:15px; background:#333; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
+
+                <button onclick="openEpicSaveModal(); closeModal('add-account-modal')" class="btn-main"
+                    style="padding:15px; background:#333; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-bolt"></i>
                     <div style="text-align:left;">
                         <div style="font-weight:bold;">Epic Games Launcher</div>
@@ -212,7 +276,8 @@
                     </div>
                 </button>
 
-                <button onclick="openRiotSaveModal(); closeModal('add-account-modal')" class="btn-main" style="padding:15px; background:#d13639; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                <button onclick="openRiotSaveModal(); closeModal('add-account-modal')" class="btn-main"
+                    style="padding:15px; background:#d13639; color:white; border:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-gamepad"></i>
                     <div style="text-align:left;">
                         <div style="font-weight:bold;">Riot Games Client</div>
@@ -234,8 +299,12 @@
                     1. Login via "Add Account" -> "Legendary" first.<br>
                     2. Come back here and save the session.
                 </p>
-                <input type="text" id="legendary-save-name" placeholder="Account Name (e.g. MyEpicAcc)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
-                <button onclick="doSaveLegendary()" style="width:100%; margin-top:10px; padding:10px; background:#000; border:1px solid #444; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
+                <input type="text" id="legendary-save-name" placeholder="Account Name (e.g. MyEpicAcc)"
+                    class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveLegendary()"
+                    style="width:100%; margin-top:10px; padding:10px; background:#000; border:1px solid #444; color:white; cursor:pointer; font-weight:bold;">Save
+                    Profile</button>
             </div>
         </div>
     </div>
@@ -247,9 +316,31 @@
                 <span class="close" onclick="closeModal('save-riot-modal')">&times;</span>
             </div>
             <div style="padding: 20px;">
-                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Riot Client.</p>
-                <input type="text" id="riot-save-name" placeholder="Account Name (e.g. Main)" class="input-field" style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
-                <button onclick="doSaveRiot()" style="width:100%; margin-top:10px; padding:10px; background:#d13639; border:none; color:white; cursor:pointer; font-weight:bold;">Save Profile</button>
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into Riot
+                    Client.</p>
+                <input type="text" id="riot-save-name" placeholder="Account Name (e.g. Main)" class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveRiot()"
+                    style="width:100%; margin-top:10px; padding:10px; background:#d13639; border:none; color:white; cursor:pointer; font-weight:bold;">Save
+                    Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="save-roblox-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Current Roblox Account</h3>
+                <span class="close" onclick="closeModal('save-roblox-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Make sure you are currently logged into
+                    Roblox (Browser/Player).</p>
+                <input type="text" id="roblox-save-name" placeholder="Account Name (e.g. Main)" class="input-field"
+                    style="width:100%; margin-bottom:10px; padding:10px; background:#333; border:none; color:white;">
+                <button onclick="doSaveRoblox()"
+                    style="width:100%; margin-top:10px; padding:10px; background:#444; border:none; color:white; cursor:pointer; font-weight:bold;">Save
+                    Profile</button>
             </div>
         </div>
     </div>
@@ -259,7 +350,8 @@
             <li id="ctx-delete" class="ctx-item delete">Удалить игру</li>
         </ul>
     </div>
-    
+
     <script src="/wailsjs/go/app/App.js"></script>
 </body>
+
 </html>

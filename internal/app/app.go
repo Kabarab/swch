@@ -18,7 +18,6 @@ import (
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	webview "github.com/webview/webview_go"
 )
 
 type App struct {
@@ -214,11 +213,21 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 		for _, acc := range accs {
 			key := makeKey(acc.Platform, acc.Username)
 			settings, exists := accountSettingsMap[key]
-			if exists && settings.Hidden {
-				continue
+			if acc.Platform == "Epic" {
+				fmt.Printf("[App] ProcessAccount Epic: ID='%s', User='%s', Key='%s', Exists=%v\n", acc.ID, acc.Username, key, exists)
 			}
+
 			if exists {
-				acc.Comment = settings.Comment
+				// Если аккаунт скрыт, добавляем префикс к комментарию
+				if settings.Hidden {
+					if !strings.HasPrefix(settings.Comment, "_swch_hidden_") {
+						acc.Comment = "_swch_hidden_" + settings.Comment
+					} else {
+						acc.Comment = settings.Comment
+					}
+				} else {
+					acc.Comment = settings.Comment
+				}
 				if settings.AvatarPath != "" {
 					acc.AvatarURL = settings.AvatarPath
 				}
@@ -252,6 +261,11 @@ func (a *App) GetLaunchers() []models.LauncherGroup {
 	riotAccs := scanner.ScanRiotAccounts()
 	filteredRiot := processAccounts(riotAccs)
 	groups = append(groups, models.LauncherGroup{Name: "Riot Games", Platform: "Riot", Accounts: filteredRiot})
+
+	// Roblox
+	robloxAccs := scanner.ScanRobloxAccounts()
+	filteredRoblox := processAccounts(robloxAccs)
+	groups = append(groups, models.LauncherGroup{Name: "Roblox", Platform: "Roblox", Accounts: filteredRoblox})
 
 	return groups
 }
@@ -292,6 +306,14 @@ func (a *App) SaveRiotAccount(name string) string {
 	return "Success"
 }
 
+func (a *App) SaveRobloxAccount(name string) string {
+	err := scanner.SaveCurrentRobloxAccount(name)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
+}
+
 func (a *App) SaveEpicAccount(name string) string {
 	err := scanner.SaveCurrentEpicAccount(name)
 	if err != nil {
@@ -306,6 +328,156 @@ func (a *App) SwitchEpicAccount(name string) string {
 		return "Error: " + err.Error()
 	}
 	return "Switched"
+}
+
+func (a *App) LogoutEpic() string {
+	err := scanner.LogoutEpic()
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Logged out successfully. You can now login to Epic with a new account."
+}
+
+// GetEpicAuthURL returns the Epic Games login URL for authorization
+func (a *App) GetEpicAuthURL() string {
+	return scanner.GetEpicAuthURL()
+}
+
+// AuthorizeEpicWithCode exchanges an authorization code for device auth credentials
+// and saves them to the specified account
+func (a *App) AuthorizeEpicWithCode(authCode string, accountName string) string {
+	// 1. Exchange auth code for access token
+	fmt.Println("[Epic] Exchanging authorization code for access token...")
+	tokenResp, err := scanner.ExchangeAuthCodeForToken(authCode)
+	if err != nil {
+		fmt.Printf("[Epic] Error exchanging code: %v\n", err)
+		return "Error exchanging code: " + err.Error()
+	}
+
+	fmt.Printf("[Epic] Got access token for account: %s (%s)\n", tokenResp.DisplayName, tokenResp.AccountID)
+
+	// Use display name if account name not provided
+	if accountName == "" {
+		accountName = tokenResp.DisplayName
+	}
+
+	// 2. Create device auth credentials
+	fmt.Println("[Epic] Creating device auth credentials...")
+	deviceAuth, err := scanner.CreateDeviceAuth(tokenResp.AccessToken, tokenResp.AccountID)
+	if err != nil {
+		return "Error creating device auth: " + err.Error()
+	}
+
+	fmt.Printf("[Epic] Device auth created: DeviceID=%s\n", deviceAuth.DeviceID)
+
+	// 3. Save device auth to account directory
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Printf("[Epic] Error getting config dir: %v\n", err)
+		return "Error getting config dir: " + err.Error()
+	}
+
+	accountDir := filepath.Join(configDir, "swch", "epic_accounts", accountName)
+
+	fmt.Printf("[Epic] Saving to account dir: %s\n", accountDir)
+
+	if err := os.MkdirAll(accountDir, 0755); err != nil {
+		fmt.Printf("[Epic] Error creating dir: %v\n", err)
+		return "Error creating account directory: " + err.Error()
+	}
+
+	if err := scanner.SaveDeviceAuth(accountDir, deviceAuth); err != nil {
+		return "Error saving device auth: " + err.Error()
+	}
+
+	// 4. Save meta.json with account name and display name
+	metaPath := filepath.Join(accountDir, "meta.json")
+
+	type MetaData struct {
+		Name        string `json:"name"`
+		DisplayName string `json:"displayName"`
+		AccountID   string `json:"accountId"`
+	}
+
+	meta := MetaData{
+		Name:        accountName,
+		DisplayName: tokenResp.DisplayName,
+		AccountID:   tokenResp.AccountID,
+	}
+
+	metaBytes, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return "Error creating meta file: " + err.Error()
+	}
+
+	if err := os.WriteFile(metaPath, metaBytes, 0644); err != nil {
+		return "Error saving meta file: " + err.Error()
+	}
+
+	return fmt.Sprintf("Success: Account '%s' saved with Device Auth!", accountName)
+}
+
+// SwitchEpicAccountWithDeviceAuth switches to an Epic account using Device Auth
+func (a *App) SwitchEpicAccountWithDeviceAuth(name string) string {
+	home, _ := os.UserHomeDir()
+	accountDir := filepath.Join(home, "Library", "Application Support", "swch", "epic_accounts", name)
+	if runtime.GOOS == "windows" {
+		accountDir = filepath.Join(home, "AppData", "Local", "swch", "epic_accounts", name)
+	}
+
+	// 1. Load device auth
+	deviceAuth, err := scanner.LoadDeviceAuth(accountDir)
+	if err != nil {
+		// Fallback to old method if no device auth
+		fmt.Printf("[Epic] No device auth found, using legacy switch: %v\n", err)
+		return a.SwitchEpicAccount(name)
+	}
+
+	// 2. Get new access token using device auth
+	fmt.Println("[Epic] Logging in with device auth...")
+	tokenResp, err := scanner.LoginWithDeviceAuth(deviceAuth)
+	if err != nil {
+		return "Error logging in with device auth: " + err.Error()
+	}
+
+	fmt.Printf("[Epic] Got access token for: %s\n", tokenResp.DisplayName)
+
+	// 3. Get exchange code
+	fmt.Println("[Epic] Getting exchange code...")
+	exchangeCode, err := scanner.GetExchangeCode(tokenResp.AccessToken)
+	if err != nil {
+		return "Error getting exchange code: " + err.Error()
+	}
+
+	fmt.Printf("[Epic] Got exchange code: %s...\n", exchangeCode[:8])
+
+	// 4. Kill existing Epic launcher
+	sys.KillEpic()
+	time.Sleep(500 * time.Millisecond)
+
+	// 5. Launch Epic with exchange code
+	fmt.Println("[Epic] Launching Epic Games Launcher with exchange code...")
+	if runtime.GOOS == "darwin" {
+		cmd := exec.Command("open", "-a", "Epic Games Launcher", "--args",
+			"-AUTH_TYPE=exchangecode",
+			"-AUTH_LOGIN=unused",
+			"-AUTH_PASSWORD="+exchangeCode)
+		if err := cmd.Start(); err != nil {
+			return "Error launching Epic: " + err.Error()
+		}
+	} else {
+		// Windows
+		epicPath := filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Epic Games", "Launcher", "Portal", "Binaries", "Win64", "EpicGamesLauncher.exe")
+		cmd := exec.Command(epicPath,
+			"-AUTH_TYPE=exchangecode",
+			"-AUTH_LOGIN=unused",
+			"-AUTH_PASSWORD="+exchangeCode)
+		if err := cmd.Start(); err != nil {
+			return "Error launching Epic: " + err.Error()
+		}
+	}
+
+	return "Switched to " + name
 }
 
 func (a *App) SwitchToAccount(accountName string, platform string) string {
@@ -351,19 +523,9 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 
 	if platform == "Epic" {
 		fmt.Printf("[App] Request to switch Epic account to: %s\n", accountName)
-		err := scanner.SwitchEpicAccount(accountName)
-		if err != nil {
-			fmt.Printf("[App] Error switching Epic account: %v\n", err)
-			return "Error: " + err.Error()
-		}
-
-		if runtime.GOOS == "darwin" {
-			time.Sleep(1 * time.Second)
-			sys.StartGame("/Applications/Epic Games Launcher.app")
-			return "Switched to " + accountName
-		}
-
-		return "Switched to " + accountName + ". Please restart Epic Launcher."
+		// Use Device Auth method - it will fallback to legacy if no device auth exists
+		result := a.SwitchEpicAccountWithDeviceAuth(accountName)
+		return result
 	}
 
 	if platform == "Legendary" {
@@ -381,6 +543,14 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 			return "Error: " + err.Error()
 		}
 		return "Switched to " + accountName + ". Please restart Riot Client."
+	}
+
+	if platform == "Roblox" {
+		err := scanner.SwitchRobloxAccount(accountName)
+		if err != nil {
+			return "Error: " + err.Error()
+		}
+		return "Switched to " + accountName + ". Please restart Roblox."
 	}
 	return "Platform not supported"
 }
@@ -553,8 +723,18 @@ func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string 
 func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) string {
 	loadSettings()
 	key := makeKey(platform, username)
+	fmt.Printf("[App] UpdateAccountData: Structuring key '%s' for User='%s', Plat='%s', Comment='%s'\n", key, username, platform, comment)
 	settings := accountSettingsMap[key]
 	settings.Comment = comment
+
+	// Если comment начинается с _swch_hidden_, устанавливаем флаг Hidden
+	if strings.HasPrefix(comment, "_swch_hidden_") {
+		settings.Hidden = true
+	} else {
+		// Если comment пустой или не содержит маркер скрытия, снимаем флаг
+		settings.Hidden = false
+	}
+
 	if avatarPath != "" {
 		settings.AvatarPath = avatarPath
 	}
@@ -566,6 +746,7 @@ func (a *App) UpdateAccountData(username, platform, comment, avatarPath string) 
 func (a *App) DeleteAccount(username, platform string) string {
 	loadSettings()
 	key := makeKey(platform, username)
+	fmt.Printf("[App] DeleteAccount called for User='%s', Plat='%s'. Key='%s'\n", username, platform, key)
 
 	// Для Steam мы просто скрываем аккаунт, так как физическое удаление из loginusers.vdf
 	// ненадежно (Steam может восстановить его) и scanner все равно его найдет.
@@ -574,7 +755,7 @@ func (a *App) DeleteAccount(username, platform string) string {
 		settings.Hidden = true
 		accountSettingsMap[key] = settings
 		saveSettings()
-		return "Аккаунт скрыт из списка."
+		return "Success"
 	}
 
 	var deleteErr error
@@ -585,13 +766,15 @@ func (a *App) DeleteAccount(username, platform string) string {
 		deleteErr = legendary.DeleteLegendaryAccount(username)
 	case "Riot":
 		deleteErr = scanner.DeleteRiotAccount(username)
+	case "Roblox":
+		deleteErr = scanner.DeleteRobloxAccount(username)
 	default:
 		// This platform doesn't support physical deletion.
 		// We can only remove it from our settings.
 		if _, ok := accountSettingsMap[key]; ok {
 			delete(accountSettingsMap, key)
 			saveSettings()
-			return "Аккаунт успешно удален."
+			return "Success"
 		}
 		// If it's not in settings either, then there's nothing to do.
 		return fmt.Sprintf("Удаление для платформы '%s' не поддерживается, и аккаунт не найден.", platform)
@@ -605,7 +788,7 @@ func (a *App) DeleteAccount(username, platform string) string {
 	delete(accountSettingsMap, key)
 	saveSettings()
 
-	return "Аккаунт успешно удален."
+	return "Success"
 }
 
 func (a *App) DeleteAllEpicAccounts() string {
@@ -690,76 +873,7 @@ func (a *App) LegendaryLogin(sid string) string {
 
 // LoginLegendaryAuto открывает встроенное окно браузера для автоматического входа
 func (a *App) LoginLegendaryAuto() string {
-	// На macOS запуск второго UI-цикла (webview) в том же процессе, где работает Wails,
-	// часто приводит к конфликтам потоков.
-	if runtime.GOOS == "darwin" {
-		return "На macOS автоматический вход внутри приложения может работать нестабильно. Рекомендуется использовать ручной метод."
-	}
-
-	url := epicLoginURL
-	resultCh := make(chan string, 1)
-
-	// Запускаем webview в горутине
-	go func() {
-		// debug=true позволяет использовать инспектор (ПКМ -> Inspect)
-		w := webview.New(true)
-		defer w.Destroy()
-		w.SetTitle("Epic Games Login - Auto")
-		w.SetSize(500, 700, webview.HintNone)
-
-		// Функция, которую вызовет JS, когда найдет код
-		w.Bind("sendAuthData", func(data string) {
-			resultCh <- data
-			w.Terminate()
-		})
-
-		// JS скрипт, который опрашивает содержимое страницы
-		// Epic возвращает JSON прямо в теле страницы
-		script := `
-		setInterval(function() {
-			var text = document.body.innerText;
-			// Проверяем, похоже ли это на JSON с sid или code
-			if (text.trim().startsWith('{') && (text.includes('"sid"') || text.includes('"code"'))) {
-				sendAuthData(text);
-			}
-		}, 500);
-		`
-		w.Init(script)
-		w.Navigate(url)
-		w.Run()
-	}()
-
-	// Ждем результат или таймаут
-	select {
-	case jsonStr := <-resultCh:
-		// Пытаемся залогиниться с полученным JSON (функция Auth сама разберет SID)
-		// Но Auth ожидает чистый SID, поэтому извлечем его
-		// Для простоты передадим весь JSON в LegendaryLogin, если бы она умела парсить,
-		// но сейчас она ждет SID. Сделаем простой парсинг здесь или передадим как есть,
-		// если LegendaryLogin (Auth) умеет работать с JSON (обычно нет).
-		// Лучше использовать существующую логику парсинга на фронте или добавить её сюда.
-		// В данном случае просто передаем JSON, так как LegendaryLogin вызывает Auth(sid),
-		// а Auth передает это в legendary --sid. Если legendary умный, он поймет.
-		// Если нет - нужно распарсить jsonStr.
-
-		var data struct {
-			SID               string `json:"sid"`
-			AuthorizationCode string `json:"authorizationCode"`
-		}
-		json.Unmarshal([]byte(jsonStr), &data)
-
-		if data.SID != "" {
-			return a.LegendaryLogin(data.SID)
-		}
-		if data.AuthorizationCode != "" {
-			return a.LegendaryLogin(data.AuthorizationCode)
-		}
-		// Если SID нет, пробуем передать как есть (вдруг там code)
-		return a.LegendaryLogin(jsonStr)
-
-	case <-time.After(3 * time.Minute):
-		return "Login timed out"
-	}
+	return "Автоматический вход временно недоступен. Пожалуйста, используйте ручной метод или вход через браузер."
 }
 
 func (a *App) GetLegendaryGames() []models.GameUI {
@@ -853,6 +967,12 @@ func (a *App) LaunchLegendaryGame(id string) {
 
 func (a *App) OpenLegendaryLoginPage() {
 	url := epicLoginURL
+	wruntime.BrowserOpenURL(a.ctx, url)
+}
+
+// OpenEpicAuthPage opens the Epic Games auth URL in the default browser
+func (a *App) OpenEpicAuthPage() {
+	url := scanner.GetEpicAuthURL()
 	wruntime.BrowserOpenURL(a.ctx, url)
 }
 
