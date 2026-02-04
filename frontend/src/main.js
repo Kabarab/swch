@@ -335,14 +335,20 @@ function renderGrid(games) {
         if (game.isMacSupported) macBadge = `<i class="fa-brands fa-apple" style="margin-right:5px;" title="macOS Supported"></i>`;
 
         card.innerHTML = `
-            <div class="platform-badge" style="background:${platColor}">
-                ${macBadge}${game.platform}
+            <div class="card-img-wrapper">
+                <img src="${img}" class="card-img" loading="lazy">
+                <div class="platform-badge" style="background:${platColor}">
+                    ${macBadge}${game.platform}
+                </div>
+                ${pinBtn}
+                ${overlay}
             </div>
-            ${pinBtn}
-            ${overlay}
-            <img src="${img}" class="card-img" style="height:150px; width:100%; object-fit:cover;">
             <div class="card-info">
                 <div class="game-title" title="${game.name}">${game.name}</div>
+                <div class="account-count" style="display:flex; justify-content:space-between;">
+                    <span>${game.availableOn ? game.availableOn.length : 0} accounts</span>
+                    ${game.isPinned ? '<i class="fa-solid fa-thumbtack" style="color:#FFD700; font-size:10px;"></i>' : ''}
+                </div>
             </div>
         `;
         list.appendChild(card);
@@ -593,13 +599,6 @@ async function loadAccounts() {
                     </button>
                     ${showHiddenBtn}
                 </div>`;
-            } else if (group.platform === 'Legendary') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <button onclick="openLegendarySaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-plus"></i> Save Session
-                    </button>
-                    ${showHiddenBtn}
-                </div>`;
             } else if (group.platform === 'Riot') {
                 footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <button onclick="openRiotSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
@@ -623,7 +622,6 @@ async function loadAccounts() {
             let iconClass = "fa-gamepad";
             if (group.platform === "Steam") iconClass = "fa-steam";
             if (group.platform === "Epic") iconClass = "fa-bolt";
-            if (group.platform === "Legendary") iconClass = "fa-terminal"; // Иконка для Legendary
             if (group.platform === "Roblox") iconClass = "fa-square"; // Иконка для Roblox
 
             section.innerHTML = `

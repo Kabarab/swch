@@ -3,30 +3,38 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>swch</title>
+    <title>swch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/main-DaecBEsm.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/main-C-b5gdSw.css">
+  <script type="module" crossorigin src="/assets/main-jabB2LZ0.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-BMOm4SlJ.css">
 </head>
 
 <body>
     <div class="app-container">
         <aside class="sidebar">
-            <div class="logo"><i class="fa-solid fa-repeat"></i> SWCH</div>
+            <div class="logo"><i class="fa-solid fa-layer-group"></i> SWCH</div>
 
-            <div class="nav-item" onclick="switchTab('library')">
-                <i class="fa-solid fa-gamepad"></i> Library
+            <div class="nav-group">
+                <div class="nav-item" onclick="switchTab('library')">
+                    <i class="fa-solid fa-gamepad"></i> Library
+                </div>
+                <div class="nav-item" onclick="switchTab('accounts')">
+                    <i class="fa-solid fa-users"></i> Accounts
+                </div>
             </div>
-            <div class="nav-item" onclick="switchTab('accounts')">
-                <i class="fa-solid fa-users"></i> Accounts
-            </div>
+
             <div class="nav-spacer"></div>
-            <div class="nav-item action-btn" onclick="openAddGameModal()">
-                <i class="fa-solid fa-plus"></i> Add Game
-            </div>
-            <div class="nav-item action-btn" onclick="openAddAccountModal()"
-                style="margin-top: 10px; background-color: #444;">
-                <i class="fa-solid fa-user-plus"></i> Add Account
+
+            <div class="nav-group">
+                <div class="btn-sidebar-action" onclick="openAddGameModal()">
+                    <i class="fa-solid fa-plus"></i> Add Game
+                </div>
+                <div class="btn-sidebar-action" onclick="openAddAccountModal()">
+                    <i class="fa-solid fa-user-plus"></i> Add Account
+                </div>
             </div>
         </aside>
 
@@ -71,12 +79,6 @@
                 <div class="grid" id="games-grid"></div>
             </div>
 
-            <div id="view-accounts" class="view-section" style="display: none;">
-                <div class="header">
-                    <div class="title">Accounts</div>
-                </div>
-                <div id="launchers-list"></div>
-            </div>
             <div id="view-accounts" class="view-section" style="display: none;">
                 <div class="header">
                     <div class="title">Accounts</div>
@@ -303,7 +305,7 @@
         </ul>
     </div>
 
-    <script src="/wailsjs/go/app/App.js"></script>
+    <script src="/wailsjs/go/app/App.js"></script>
 </body>
 
 </html>

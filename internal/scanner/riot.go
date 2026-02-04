@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"swch/internal/models"
 	"swch/internal/sys"
@@ -182,4 +183,59 @@ func DeleteRiotAccount(name string) error {
 		return fmt.Errorf("аккаунт '%s' не найден", name)
 	}
 	return os.RemoveAll(accountDir)
+}
+
+// --- Provider Implementation ---
+
+type RiotProvider struct{}
+
+func NewRiotProvider() *RiotProvider {
+	return &RiotProvider{}
+}
+
+func (p *RiotProvider) GetName() string {
+	return "Riot"
+}
+
+func (p *RiotProvider) GetGamesProvider() ([]models.LibraryGame, error) {
+	return ScanRiotGames(), nil
+}
+
+func (p *RiotProvider) GetAccountsProvider() ([]models.Account, error) {
+	return ScanRiotAccounts(), nil
+}
+
+func (p *RiotProvider) SwitchAccount(accountName string) error {
+	if accountName == "" {
+		return fmt.Errorf("account name is empty")
+	}
+	// Riot switches by purely swapping config files, then you must restart client manually usually,
+	// but sys.KillRiot() is called inside SwitchRiotAccount so it handles kill.
+	// app.go said "Please restart Riot Client" in return message.
+	return SwitchRiotAccount(accountName)
+}
+
+func (p *RiotProvider) LaunchGame(gameID string, exePath string) error {
+	// Logic moved from app.go
+	if accountName := ""; accountName != "" { // TODO: pass account name if needed? app.go logic had switch first.
+		// We assume switch happened before if needed.
+	}
+
+	if runtime.GOOS == "darwin" { // Assuming sys.IsMac helper or standard runtime check
+		// We need runtime import or sys helper. Check sys package.
+		// sys_darwin.go doesn't have IsMac but `runtime.GOOS == "darwin"` is standard.
+		// We need to add "runtime" to imports of this file.
+		riotPath := "/Applications/Riot Games/Riot Client.app"
+		if _, err := os.Stat(riotPath); os.IsNotExist(err) {
+			return fmt.Errorf("Riot Client.app not found in Applications")
+		}
+		return sys.StartGameWithArgs(riotPath, "--launch-product="+gameID, "--launch-patchline=live")
+	}
+
+	// Windows logic
+	riotClientPath := "C:\\Riot Games\\Riot Client\\RiotClientServices.exe"
+	if _, err := os.Stat(riotClientPath); os.IsNotExist(err) {
+		return fmt.Errorf("RiotClientServices.exe not found at default location")
+	}
+	return sys.StartGameWithArgs(riotClientPath, "--launch-product="+gameID, "--launch-patchline=live")
 }
