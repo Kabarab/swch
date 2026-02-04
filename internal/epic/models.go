@@ -22,7 +22,7 @@ const (
 	// Default Client ID for Epic Games Launcher
 	// This one is often used for exchange code flow
 	LauncherAppClientID = "34a02cf8f4414e29b15921876da36f9a"
-	LauncherAppSecret   = "daafbccc737745039bc43431f331046f"
+	LauncherAppSecret   = "1A697711ED0D47C68DA6031A68A78619"
 )
 
 type TokenResponse struct {
