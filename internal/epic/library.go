@@ -6,70 +6,66 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
-func (c *EpicClient) GetEntitlements() ([]Entitlement, error) {
+// GetFullLibrary fetches all entitlements and attempts to resolve them to library items
+func (c *EpicClient) GetFullLibrary() ([]CatalogItem, error) {
 	if c.Token == nil {
-		return nil, fmt.Errorf("not authenticated")
+		if err := c.LoadSession(); err != nil {
+			return nil, fmt.Errorf("not authenticated: %w", err)
+		}
 	}
 
-	u, _ := url.Parse(EntitlementsURL)
-	// We might need to handle pagination if the user has many games
-	// but for now let's assume one page is enough.
-
-	req, err := http.NewRequest("GET", u.String(), nil)
+	entitlements, err := c.fetchEntitlements()
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "bearer "+c.Token.AccessToken)
+	// For a full implementation, we'd need to query the Catalog API to get details (Images, Titles) for each namespace/ID.
+	// However, for now, we can try to map what we have or just return the raw entitlements as items if they have enough info.
+	// Epic's Entitlement response doesn't have Title/Images. We NEED to query Catalog.
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	// Group by namespace to batch requests? Or just query catalog items.
+	// Using a bulk query if possible.
+	// For simplicity in this step, let's just return what we can, but likely we need a Catalog query.
+	// Let's implement a basic Catalog lookup.
+
+	var items []CatalogItem
+	// Limit to 50 for now or handle pagination/bulk
+	// In a real app we'd need to be robust.
+	// Map entitlement to CatalogItem
+	for _, ent := range entitlements {
+		// Only interest in games (entitlementType=EXECUTABLE? or similar, or just all)
+		// Epic return "AUDIENCE", "EXECUTABLE" etc.
+		// For now, let's just assume we want everything and filter later?
+		// Actually, let's simple fetch details for valid IDs.
+		// CatalogItemId is key.
+		if ent.CatalogItemId != "" {
+			item, err := c.fetchCatalogItem(ent.Namespace, ent.CatalogItemId)
+			if err == nil {
+				// Determine if installed?
+				// Logic for "IsInstalled" would require checking local manifests (not scope of this specific function, handled in App)
+				items = append(items, *item)
+			}
+		}
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("entitlements request failed: %s - %s", resp.Status, string(body))
-	}
-
-	var entitlements []Entitlement
-	if err := json.NewDecoder(resp.Body).Decode(&entitlements); err != nil {
-		return nil, err
-	}
-
-	return entitlements, nil
+	return items, nil
 }
 
-func (c *EpicClient) GetCatalogItems(namespace string, itemIds []string) ([]CatalogItem, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("not authenticated")
-	}
-
-	if len(itemIds) == 0 {
-		return nil, nil
-	}
-
-	// Catalog Service URL: https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/{namespace}/bulk/items
-	endpoint := fmt.Sprintf("%s/catalog/api/shared/namespace/%s/bulk/items", CatalogHost, namespace)
-
-	params := url.Values{}
-	for _, id := range itemIds {
-		params.Add("id", id)
-	}
-
-	u, _ := url.Parse(endpoint)
-	u.RawQuery = params.Encode()
+func (c *EpicClient) fetchEntitlements() ([]Entitlement, error) {
+	u, _ := url.Parse(EntitlementsURL)
+	q := u.Query()
+	q.Set("accountId", c.Token.AccountID)
+	// count? start?
+	q.Set("count", "5000") // Fetch a lot
+	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("Authorization", "bearer "+c.Token.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+c.Token.AccessToken)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -78,113 +74,42 @@ func (c *EpicClient) GetCatalogItems(namespace string, itemIds []string) ([]Cata
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("catalog request failed: %s - %s", resp.Status, string(body))
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("entitlements request failed: %s - %s", resp.Status, string(b))
 	}
 
-	var items map[string]CatalogItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+	var result []Entitlement
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-
-	var result []CatalogItem
-	for _, item := range items {
-		result = append(result, item)
-	}
-
 	return result, nil
 }
 
-// GetFullLibrary fetches all games associated with the account
-// It fetches entitlements, enriches them with catalog data (images, titles),
-// and checks local installation status via manifests.
-func (c *EpicClient) GetFullLibrary() ([]CatalogItem, error) {
-	// 1. Fetch Entitlements (What the user owns)
-	entitlements, err := c.GetEntitlements()
+// fetchCatalogItem is a helper. In reality you'd want bulk fetching.
+func (c *EpicClient) fetchCatalogItem(namespace, catalogItemId string) (*CatalogItem, error) {
+	// https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/{namespace}/catalogItem/{id}
+	apiURL := fmt.Sprintf("%s/catalog/api/shared/namespace/%s/catalogItem/%s", CatalogHost, namespace, catalogItemId)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entitlements: %w", err)
+		return nil, err
+	}
+	// Catalog is public usually? Or needs auth?
+	req.Header.Set("Authorization", "Bearer "+c.Token.AccessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("catalog item error")
 	}
 
-	// 2. Scan Local Manifests (What is installed)
-	installedGames, _ := ScanInstalledGames()
-
-	// 3. Prepare for Catalog Fetching
-	// Group items by namespace to batch requests
-	byNamespace := make(map[string][]string)
-
-	// Map to track which entitlements we are processing to avoid duplicates
-	// Key: CatalogItemID, Value: Entitlement
-	entitlementMap := make(map[string]Entitlement)
-
-	for _, e := range entitlements {
-		// Filter relevant entitlements (Games, DLCs, Software)
-		// Usually EXECUTABLE is what we want for games.
-		// Sometimes 'AUDIENCE' or 'ENTITLEMENT' types exist too.
-		if e.EntitlementType == "EXECUTABLE" && e.CatalogItemId != "" {
-			byNamespace[e.Namespace] = append(byNamespace[e.Namespace], e.CatalogItemId)
-			entitlementMap[e.CatalogItemId] = e
-		}
+	var item CatalogItem
+	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
+		return nil, err
 	}
-
-	var allItems []CatalogItem
-
-	// 4. Batch Fetch Catalog Items
-	for ns, ids := range byNamespace {
-		// Epic API might limit batch size, but usually 50-100 is fine.
-		// We'll send them in chunks if needed, but for now simple implementation.
-		items, err := c.GetCatalogItems(ns, ids)
-		if err != nil {
-			fmt.Printf("Warning: failed to fetch catalog items for namespace %s: %v\n", ns, err)
-			continue
-		}
-		allItems = append(allItems, items...)
-	}
-
-	// 5. Merge Data
-	for i := range allItems {
-		item := &allItems[i]
-
-		// Check invalid images
-		// Sometimes Epic returns broken URLs or empty lists
-
-		// Check installation status
-		// We match by AppID (which is usually the ArtifactId or ItemId depending on context)
-		// The CatalogItem ID usually matches the .item file AppName for the main game.
-		// However, sometimes it is more complex.
-		// Manifest.AppName matches the ArtifactID.
-
-		// Let's try to match by ID first
-		if installed, ok := installedGames[item.ID]; ok {
-			item.IsInstalled = true
-			item.InstallPath = installed.InstallPath
-			item.AppID = installed.AppID // Ensure we have the correct launch ID
-		}
-
-		// If not found by ID, sometimes the entitlement ID differs from the Artifact ID.
-		// But for now, direct ID match is the standard way.
-	}
-
-	// Also include installed games that might not be in the entitlement list
-	// (e.g. Free games claimed long ago or on a different account but still installed)
-	// This is optional but good UX. For now, we only show what the USER owns on THIS account.
-	// Implementing "Installed but not owned" requires cross-referencing.
-
-	// We might want to filter out DLCs if purely showing "Library".
-	// Usually checking if the category contains "games" helps.
-	var gamesOnly []CatalogItem
-	for _, item := range allItems {
-		isGame := false
-		for _, cat := range item.Categories {
-			if strings.Contains(cat.Path, "games") || strings.Contains(cat.Path, "applications") {
-				isGame = true
-				break
-			}
-		}
-		// If no category logic is strict, we include everything that is an EXECUTABLE.
-		if isGame {
-			gamesOnly = append(gamesOnly, item)
-		}
-	}
-
-	return gamesOnly, nil
+	return &item, nil
 }

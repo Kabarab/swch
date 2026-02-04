@@ -65,6 +65,13 @@ func (c *EpicClient) LoginWithExchangeCode(code string) error {
 			code = sid
 		} else if ac, ok := jsonMap["authorizationCode"].(string); ok {
 			code = ac
+		} else if redirectURL, ok := jsonMap["redirectUrl"].(string); ok {
+			// Epic sometimes returns the code inside a redirectUrl field
+			if parsedURL, err := url.Parse(redirectURL); err == nil {
+				if codeParam := parsedURL.Query().Get("code"); codeParam != "" {
+					code = codeParam
+				}
+			}
 		}
 	}
 

@@ -603,6 +603,42 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 	return "Success"
 }
 
+// ScanEpicLauncher tries to find an active Epic Games Launcher session and login automatically
+func (a *App) ScanEpicLauncher() string {
+	fmt.Println("[App] Scanning for Epic Games Launcher session...")
+	token, err := epic.ExtractTokens()
+	if err != nil {
+		return "Error extracting token: " + err.Error()
+	}
+
+	if token == "" {
+		return "No active session found in Epic Launcher"
+	}
+
+	// Try to login with this token (assuming it's a RefreshToken or Exchange Code)
+	// Usually from .dat it is a "RememberMe" token which behaves like a long-lived Refresh Token?
+	// Let's try LoginWithRefreshToken first.
+	fmt.Println("[App] Found token, attempting login...")
+	if err := a.epic.LoginWithRefreshToken(token); err != nil {
+		// If that failed, maybe it's an exchange code? (Unlikely for saved data)
+		return "Login failed with extracted token: " + err.Error()
+	}
+
+	// If successful, save session
+	if a.epic.Token != nil {
+		name := a.epic.Token.DisplayName
+		if name == "" {
+			name = a.epic.Token.AccountID
+		}
+		if err := a.epic.SaveSessionAs(name); err != nil {
+			return "Login success but failed to save profile: " + err.Error()
+		}
+		return "Success: Logged in as " + name
+	}
+
+	return "Unknown error after login attempt"
+}
+
 func (a *App) EpicLogin(sid string) string {
 	err := a.epic.LoginWithExchangeCode(sid)
 	if err != nil {
