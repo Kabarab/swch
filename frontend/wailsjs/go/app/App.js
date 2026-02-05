@@ -54,6 +54,10 @@ export function GetLibrary() {
   return window['go']['app']['App']['GetLibrary']();
 }
 
+export function InstallAllEpicGames() {
+  return window['go']['app']['App']['InstallAllEpicGames']();
+}
+
 export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }

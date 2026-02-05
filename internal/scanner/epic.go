@@ -16,16 +16,79 @@ import (
 
 // EpicManifest структура файла .item (манифест игры)
 type EpicManifest struct {
-	FormatVersion   int    `json:"FormatVersion"`
-	AppName         string `json:"AppName"`
-	DisplayName     string `json:"DisplayName"`
-	InstallLocation string `json:"InstallLocation"`
-	MainGameAppName string `json:"MainGameAppName"`
+	FormatVersion     int      `json:"FormatVersion"`
+	AppName           string   `json:"AppName"`
+	CatalogItemId     string   `json:"CatalogItemId"`
+	CatalogNamespace  string   `json:"CatalogNamespace"`
+	DisplayName       string   `json:"DisplayName"`
+	InstallLocation   string   `json:"InstallLocation"`
+	InstallSessionId  string   `json:"InstallSessionId"`
+	InstallSize       int64    `json:"InstallSize"`
+	MainGameAppName   string   `json:"MainGameAppName"`
+	AppVersionString  string   `json:"AppVersionString"`
+	LaunchExecutable  string   `json:"LaunchExecutable"`
+	ManifestLocation  string   `json:"ManifestLocation,omitempty"`
+	StagingLocation   string   `json:"StagingLocation,omitempty"`
+	TechnicalType     string   `json:"TechnicalType,omitempty"`
+	VaultThumbnailUrl string   `json:"VaultThumbnailUrl,omitempty"`
+	VaultTitleText    string   `json:"VaultTitleText,omitempty"`
+	InstallTags       []string `json:"InstallTags,omitempty"`
 }
 
 // EpicAccountData хранит метаданные сохраненного аккаунта (для Windows)
 type EpicAccountData struct {
 	Name string `json:"name"`
+}
+
+// --- Public API ---
+
+// FakeInstallGame создает минимальную "заглушку" установки игры Epic,
+// заставляя лаунчер считать её установленной.
+func FakeInstallGame(appName, catalogNamespace, catalogItemId, displayName, installPath string) error {
+	fmt.Printf("[Epic] Фейковая установка игры: %s (%s)\n", displayName, appName)
+
+	// 1. Создаем директорию установки (должна существовать)
+	if err := os.MkdirAll(installPath, 0755); err != nil {
+		return fmt.Errorf("не удалось создать директорию установки: %w", err)
+	}
+
+	// 2. Создаем содержимое манифеста .item
+	manifest := EpicManifest{
+		FormatVersion:    0,
+		AppName:          appName,
+		CatalogItemId:    catalogItemId,
+		CatalogNamespace: catalogNamespace,
+		DisplayName:      displayName,
+		InstallLocation:  installPath,
+		MainGameAppName:  appName,
+		AppVersionString: "1.0.0-fake", // Фейковая версия
+		InstallSessionId: "",           // Опционально, но лучше оставить пустым
+		InstallSize:      1024,         // Маленький размер заглушки
+		LaunchExecutable: "",           // Нет исполняемого файла, вызовет проверку при запуске
+		TechnicalType:    "Universal",  // Стандартный тип
+	}
+
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("не удалось сериализовать манифест: %w", err)
+	}
+
+	// 3. Определяем директорию манифестов (Manifests)
+	manifestsDir := sys.GetEpicManifestsDir()
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		return fmt.Errorf("не удалось создать директорию манифестов: %w", err)
+	}
+
+	// 4. Записываем файл .item
+	manifestFileName := fmt.Sprintf("%s.item", appName)
+	manifestPath := filepath.Join(manifestsDir, manifestFileName)
+
+	if err := os.WriteFile(manifestPath, manifestBytes, 0644); err != nil {
+		return fmt.Errorf("не удалось записать файл манифеста: %w", err)
+	}
+
+	fmt.Printf("[Epic] Манифест записан в: %s\n", manifestPath)
+	return nil
 }
 
 // --- Public API ---

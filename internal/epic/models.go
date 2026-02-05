@@ -53,15 +53,17 @@ type Entitlement struct {
 }
 
 type CatalogItem struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	KeyImages   []KeyImage `json:"keyImages"`
-	Namespace   string     `json:"namespace"`
-	Categories  []Category `json:"categories"`
+	ID               string                 `json:"id"`
+	Title            string                 `json:"title"`
+	Description      string                 `json:"description"`
+	KeyImages        []KeyImage             `json:"keyImages"`
+	Namespace        string                 `json:"namespace"`
+	Categories       []Category             `json:"categories"`
+	ReleaseInfo      []ReleaseInfo          `json:"releaseInfo"`
+	CustomAttributes map[string]interface{} `json:"customAttributes"`
 
 	// Extended fields for internal use
-	AppID       string `json:"app_id,omitempty"` // The ID used for launching (ArtifactID)
+	AppID       string `json:"app_id,omitempty"` // Extract from ReleaseInfo
 	IsInstalled bool   `json:"is_installed"`
 	InstallPath string `json:"install_path"`
 }
@@ -77,6 +79,12 @@ type KeyImage struct {
 
 type Category struct {
 	Path string `json:"path"`
+}
+
+type ReleaseInfo struct {
+	ID       string   `json:"id"`
+	AppID    string   `json:"appId"`
+	Platform []string `json:"platform"`
 }
 
 type ExchangeCodeResponse struct {

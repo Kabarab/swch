@@ -8,6 +8,36 @@ import (
 	"net/url"
 )
 
+// OwnedGameInfo contains minimal info needed for fake install
+type OwnedGameInfo struct {
+	AppName          string
+	CatalogNamespace string
+	CatalogItemId    string
+	DisplayName      string
+}
+
+// FetchOwnedGames returns a list of games owned by the account
+func (c *EpicClient) FetchOwnedGames() ([]OwnedGameInfo, error) {
+	items, err := c.GetFullLibrary()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []OwnedGameInfo
+	for _, item := range items {
+		// We only want games that have an AppID (can be installed)
+		if item.AppID != "" {
+			result = append(result, OwnedGameInfo{
+				AppName:          item.AppID,
+				CatalogNamespace: item.Namespace,
+				CatalogItemId:    item.ID,
+				DisplayName:      item.Title,
+			})
+		}
+	}
+	return result, nil
+}
+
 // GetFullLibrary fetches all entitlements and attempts to resolve them to library items
 func (c *EpicClient) GetFullLibrary() ([]CatalogItem, error) {
 	if c.Token == nil {
@@ -111,5 +141,32 @@ func (c *EpicClient) fetchCatalogItem(namespace, catalogItemId string) (*Catalog
 	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
 		return nil, err
 	}
+
+	// Extract AppID (ArtifactId)
+	// Priority: ReleaseInfo -> CustomAttributes -> MainGameAppName (if we had it)
+	if len(item.ReleaseInfo) > 0 {
+		// Usually the first one or filter by platform
+		for _, ri := range item.ReleaseInfo {
+			if ri.AppID != "" {
+				item.AppID = ri.AppID
+				break
+			}
+		}
+	}
+
+	// Fallback to custom attributes if needed (sometimes "folderName" or similar)
+	if item.AppID == "" && item.CustomAttributes != nil {
+		// Example: checking common keys
+		if folder, ok := item.CustomAttributes["CanRunOffline"].(map[string]interface{}); ok {
+			// This is just a guess, usually ReleaseInfo has it.
+			_ = folder
+		}
+	}
+
+	// If still empty, use CatalogItemId as fallback (might not work for launch but enough for list)
+	// But for FakeInstall we ideally need the real ArtifactName.
+	// Often CatalogNamespace is enough? No, Manifest needs AppName.
+	// Let's assume ReleaseInfo covers 99% of games.
+
 	return &item, nil
 }

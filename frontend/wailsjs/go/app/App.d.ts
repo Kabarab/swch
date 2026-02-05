@@ -28,6 +28,8 @@ export function GetLaunchers():Promise<Array<models.LauncherGroup>>;
 
 export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
+export function InstallAllEpicGames():Promise<string>;
+
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function LogoutEpic():Promise<string>;

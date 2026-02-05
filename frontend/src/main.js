@@ -23,7 +23,8 @@ import {
     GetEpicAuthURL,
     AuthorizeEpicWithCode,
     OpenEpicAuthPage,
-    SaveRobloxAccount
+    SaveRobloxAccount,
+    InstallAllEpicGames
 } from '../wailsjs/go/app/App';
 
 // --- Глобальные переменные ---
@@ -587,17 +588,22 @@ async function loadAccounts() {
 
             // Для Epic Games (Official)
             if (group.platform === 'Epic') {
-                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
-                    <button onclick="openEpicSaveModal()" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-plus"></i> Current
+                footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: repeat(5, 1fr); gap:6px;">
+                    <button onclick="openEpicSaveModal()" title="Save Current Account" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:6px; border-radius:4px;">
+                        <i class="fa-solid fa-plus"></i>
                     </button>
-                    <button onclick="openEpicAuthModal()" style="cursor:pointer; background:none; color:#4f4; border:1px dashed #4f4; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-key"></i> Auth
+                    <button onclick="openEpicAuthModal()" title="Login via Auth Code" style="cursor:pointer; background:none; color:#4f4; border:1px dashed #4f4; padding:6px; border-radius:4px;">
+                        <i class="fa-solid fa-key"></i>
                     </button>
-                    <button onclick="logoutEpic()" style="cursor:pointer; background:none; color:#f44; border:1px dashed #f44; padding:8px; border-radius:4px;">
-                        <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    <button onclick="installAllEpicGames()" title="Minimal Install All Games" style="cursor:pointer; background:none; color:#4af; border:1px dashed #4af; padding:6px; border-radius:4px;">
+                        <i class="fa-solid fa-cloud-arrow-down"></i>
                     </button>
-                    ${showHiddenBtn}
+                    <button onclick="logoutEpic()" title="Logout" style="cursor:pointer; background:none; color:#f44; border:1px dashed #f44; padding:6px; border-radius:4px;">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                    <button onclick="toggleHiddenAccounts()" title="${hiddenText}" style="cursor:pointer; background:none; color:#aaa; border:1px dashed #444; padding:6px; border-radius:4px;">
+                        <i class="fa-solid ${hiddenIcon}"></i>
+                    </button>
                 </div>`;
             } else if (group.platform === 'Riot') {
                 footerHtml = `<div style="padding:10px; text-align:center; border-top:1px solid #2a2a2a; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -738,6 +744,26 @@ window.doSaveEpic = async function () {
     } catch (e) {
         alert("System error: " + e);
         console.error(e);
+    }
+}
+
+
+// --- ADD ACCOUNT LOGIC (NEW) ---
+
+window.installAllEpicGames = async function () {
+    if (!confirm("This will scan your Epic account and 'fake install' all owned games into your library (creating small stub files). Continue?")) {
+        return;
+    }
+    
+    // Show loading state?
+    // alert("Starting process. Please wait..."); // alert blocks execution in some browsers but maybe ok here
+    
+    try {
+        const result = await InstallAllEpicGames();
+        alert(result);
+        loadLibrary(); // Reload library to show new games
+    } catch (e) {
+        alert("Error: " + e);
     }
 }
 

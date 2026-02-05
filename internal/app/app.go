@@ -698,3 +698,47 @@ func (a *App) SyncEpicLibrary() string {
 	}
 	return "Success"
 }
+
+// InstallAllEpicGames fetches all games from the account and performs a fake install for each
+func (a *App) InstallAllEpicGames() string {
+	fmt.Println("[App] Starting InstallAllEpicGames...")
+
+	// 1. Ensure we are logged in
+	if err := a.epic.LoadSession(); err != nil {
+		return "Error: Not logged in. Please login to Epic first."
+	}
+
+	// 2. Fetch owned games
+	games, err := a.epic.FetchOwnedGames()
+	if err != nil {
+		return "Error fetching games: " + err.Error()
+	}
+
+	if len(games) == 0 {
+		return "No games found on this account."
+	}
+
+	fmt.Printf("[App] Found %d games. Starting install...\n", len(games))
+
+	// 3. Install each game
+	successCount := 0
+	failCount := 0
+
+	// Default install location
+	home, _ := os.UserHomeDir()
+	baseInstallDir := filepath.Join(home, "Games", "EpicStub")
+
+	for _, game := range games {
+		installPath := filepath.Join(baseInstallDir, game.DisplayName)
+
+		err := scanner.FakeInstallGame(game.AppName, game.CatalogNamespace, game.CatalogItemId, game.DisplayName, installPath)
+		if err == nil {
+			successCount++
+		} else {
+			fmt.Printf("[App] Failed to install %s: %v\n", game.DisplayName, err)
+			failCount++
+		}
+	}
+
+	return fmt.Sprintf("Finished. Installed: %d, Failed: %d. Please restart Epic Games Launcher.", successCount, failCount)
+}
