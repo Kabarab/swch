@@ -55,11 +55,7 @@ func FindEpicConfigDir() (string, error) {
 		return "", fmt.Errorf("LOCALAPPDATA environment variable not set")
 	}
 	// Epic Games Store stores data in %LOCALAPPDATA%\EpicGamesLauncher\Saved\Data
-	path := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config", "Windows") // Wait, this is Config.
-	// The .dat files for RememberMe are usually in Saved/Data not Config/Windows.
-	// But let's check specifically for the token files.
-	// Usually it's in %LOCALAPPDATA%\EpicGamesLauncher\Saved\Data
-	path = filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
+	path := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
 	return path, nil
 }
 
@@ -67,12 +63,6 @@ func FindEpicConfigDir() (string, error) {
 type EpicTokenFile struct {
 	RememberMe   string `json:"RememberMe,omitempty"`
 	RefreshToken string `json:"RefreshToken,omitempty"`
-	// There might be other fields but we care about these.
-	// Sometimes it is encrypted bytes directly?
-	// Actually, usually Epic stores a JSON where the value of RememberMe is the token.
-	// BUT, the FILE CONTENT itself might be encrypted or just the values?
-	// Research shows Epic uses standard DPAPI on the whole file or value.
-	// Usually existing tools read the file, decrypt the whole content, then parse JSON.
 }
 
 func ExtractTokens() (string, error) {
@@ -114,4 +104,26 @@ func ExtractTokens() (string, error) {
 	}
 
 	return "", fmt.Errorf("no valid token found in Epic Games data")
+}
+
+// TryImportNativeSession attempts to read the Epic Games Launcher's local session
+// and sign in using the extracted token.
+func (c *EpicClient) TryImportNativeSession() error {
+	fmt.Println("[Epic] Attempting to import native session...")
+	token, err := ExtractTokens()
+	if err != nil {
+		fmt.Printf("[Epic] Failed to extract native tokens: %v\n", err)
+		return err
+	}
+
+	fmt.Println("[Epic] Found native token, attempting login...")
+	// The "RememberMe" token can sometimes be used as a refresh token or in a specific flow.
+	// We'll try using it as a refresh token first.
+	if err := c.LoginWithRefreshToken(token); err != nil {
+		fmt.Printf("[Epic] Login with extracted token failed: %v\n", err)
+		return err
+	}
+
+	fmt.Println("[Epic] Successfully imported and refreshed native session")
+	return nil
 }

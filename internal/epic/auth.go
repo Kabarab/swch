@@ -251,7 +251,13 @@ func (c *EpicClient) LoadSession() error {
 		return c.LoginWithDeviceAuth(deviceAuth)
 	}
 
-	return fmt.Errorf("no valid session or device auth found")
+	// 3. If no device auth, try to import native session (Windows only for now)
+	if err := c.TryImportNativeSession(); err == nil {
+		fmt.Println("Successfully imported native session!")
+		return nil
+	}
+
+	return fmt.Errorf("no valid session or device auth found, and native import failed")
 }
 
 func (c *EpicClient) GetExchangeCode() (string, error) {

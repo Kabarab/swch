@@ -15,3 +15,7 @@ func FindEpicConfigDir() (string, error) {
 func ExtractTokens() (string, error) {
 	return "", fmt.Errorf("not supported on this platform")
 }
+
+func (c *EpicClient) TryImportNativeSession() error {
+	return fmt.Errorf("not supported on this platform")
+}
