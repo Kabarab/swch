@@ -3,6 +3,7 @@ package epic
 import (
 	"fmt"
 	"swch/internal/models"
+	"swch/internal/scanner"
 )
 
 // GetName implements PlatformProvider
@@ -21,83 +22,88 @@ func (c *EpicClient) GetGamesProvider() ([]models.LibraryGame, error) {
 		// If auth fails, GetFullLibrary fails.
 	}
 
-	items, err := c.GetFullLibrary()
-	if err != nil {
-		fmt.Println("[Epic] Failed to fetch Epic library:", err)
-		// Fallback: only installed games from manifests
-		localManifests, _ := ScanInstalledGames()
-		var library []models.LibraryGame
-		for _, m := range localManifests {
-			library = append(library, models.LibraryGame{
-				ID:          m.AppID,
-				Name:        m.Name,
-				Platform:    "Epic",
-				IconURL:     "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg",
-				ExePath:     m.InstallPath,
-				IsInstalled: true,
-				// Cannot determine owner without auth, so leave empty or generic
-				AvailableOnAccounts: []models.AccountStat{},
-			})
-		}
-		return library, nil
-	}
-
 	var library []models.LibraryGame
-	for _, item := range items {
-		// Find icon
-		imgURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
-		for _, img := range item.KeyImages {
-			if img.Type == "Thumbnail" || img.Type == "DieselGameBox" {
-				imgURL = img.URL
-				break
+	var libraryMap = make(map[string]bool) // To avoid duplicates if we merge sources
+
+	// 1. Try to fetch full library from API (requires active session)
+	// We do this first because it gives better metadata (images, titles)
+	apiItems, err := c.GetFullLibrary()
+	if err != nil {
+		fmt.Println("[Epic] Note: Failed to fetch API library (not logged in?), falling back to local manifests:", err)
+	} else {
+		for _, item := range apiItems {
+			// Find icon
+			imgURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
+			for _, img := range item.KeyImages {
+				if img.Type == "Thumbnail" || img.Type == "DieselGameBox" {
+					imgURL = img.URL
+					break
+				}
 			}
-		}
 
-		// Use AppID if available (from manifest match), otherwise ID (Catalog ID)
-		gameID := item.ID
-		if item.AppID != "" {
-			gameID = item.AppID
-		}
+			// Use AppID if available (from manifest match), otherwise ID (Catalog ID)
+			gameID := item.ID
+			if item.AppID != "" {
+				gameID = item.AppID
+			}
 
-		userName := "Unknown"
-		if c.Token != nil {
-			userName = c.Token.DisplayName
-		}
+			userName := "Unknown"
+			if c.Token != nil {
+				userName = c.Token.DisplayName
+			}
 
-		library = append(library, models.LibraryGame{
-			ID:          gameID,
-			Name:        item.Title,
-			Platform:    "Epic",
-			IconURL:     imgURL,
-			ExePath:     item.InstallPath,
-			IsInstalled: item.IsInstalled,
-			AvailableOnAccounts: []models.AccountStat{
-				{
-					AccountID:   "epic_native",
-					DisplayName: "Epic Account", // Todo: Use AccountID from token?
-					Username:    userName,
+			libGame := models.LibraryGame{
+				ID:          gameID,
+				Name:        item.Title,
+				Platform:    "Epic",
+				IconURL:     imgURL,
+				ExePath:     item.InstallPath,
+				IsInstalled: item.IsInstalled,
+				AvailableOnAccounts: []models.AccountStat{
+					{
+						AccountID:   "epic_api", // Generic ID for API source
+						DisplayName: "Epic Account",
+						Username:    userName,
+					},
 				},
-			},
-		})
+			}
+			library = append(library, libGame)
+			libraryMap[gameID] = true
+		}
 	}
+
+	// 2. Always scan local manifests for installed games
+	// This ensures we show games even if offline or not logged in via API
+	localManifests := scanner.ScanEpicGames()
+	for _, m := range localManifests {
+		// If we already have this game from API, we might want to update it (e.g. valid ExePath)
+		// or just skip. API usually has better data, but local manifest has correct install path.
+
+		// For now, let's append if not exists, or update path if exists?
+		// Simple approach: Add if not in map.
+		// Note: IDs might differ. Manifest uses AppName. API uses ItemId/AppId.
+		// c.GetFullLibrary tries to match, so ideally they match.
+
+		if !libraryMap[m.ID] {
+			library = append(library, m)
+		}
+	}
+
 	return library, nil
 }
 
 // GetAccountsProvider implements PlatformProvider
 func (c *EpicClient) GetAccountsProvider() ([]models.Account, error) {
-	sessions, err := c.ListSessions()
-	if err != nil {
-		return nil, err
-	}
+	// Use scanner to get native accounts
+	sessions := scanner.ScanEpicAccounts()
+	// No error check needed as it returns empty slice on error
 
 	var accounts []models.Account
 	for _, s := range sessions {
-		accounts = append(accounts, models.Account{
-			ID:          "epic_" + s.Name, // Unique ID for UI
-			DisplayName: s.DisplayName,
-			Username:    s.Name, // Using profile name as username identifier
-			Platform:    "Epic",
-		})
+		// scanner returns models.Account, so we just use them
+		// But valid platform is "Epic"
+		s.Platform = "Epic"
+		accounts = append(accounts, s)
 	}
 
 	// Add current verified session if not in list
@@ -110,7 +116,7 @@ func (c *EpicClient) GetAccountsProvider() ([]models.Account, error) {
 func (c *EpicClient) SwitchAccount(accountName string) error {
 	fmt.Printf("[Epic] Request to switch account to: %s\n", accountName)
 	// If it's already active, maybe check? But SwitchSession handles loading from profile.
-	return c.SwitchSession(accountName)
+	return scanner.SwitchEpicAccount(accountName)
 }
 
 // LaunchGame implements PlatformProvider

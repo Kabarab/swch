@@ -279,7 +279,7 @@ func (a *App) SaveRobloxAccount(name string) string {
 }
 
 func (a *App) SaveEpicAccount(name string) string {
-	err := a.epic.SaveSessionAs(name)
+	err := scanner.SaveCurrentEpicAccount(name)
 	if err != nil {
 		return "Error: " + err.Error()
 	}

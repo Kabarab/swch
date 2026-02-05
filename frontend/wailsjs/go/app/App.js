@@ -82,6 +82,10 @@ export function SaveRobloxAccount(arg1) {
   return window['go']['app']['App']['SaveRobloxAccount'](arg1);
 }
 
+export function ScanEpicLauncher() {
+  return window['go']['app']['App']['ScanEpicLauncher']();
+}
+
 export function SelectExe() {
   return window['go']['app']['App']['SelectExe']();
 }

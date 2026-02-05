@@ -96,31 +96,46 @@ func SetSteamUser(username string) error {
 // --- EPIC GAMES UTILS (macOS) ---
 
 func KillEpic() error {
-	// 1. Агрессивно убиваем ВСЕ процессы Epic.
-	// Используем 'pkill -9 -f', чтобы убить процесс мгновенно (SIGKILL).
-	// -f ищет по всей командной строке, чтобы поймать "EpicGamesLauncher-Mac-Shipping" и "EpicWebHelper".
+	// 1. Попытка graceful shutdown (SIGTERM)
+	// -15 = SIGTERM. Даем приложению шанс сохранить конфиги (GameUserSettings.ini, токены)
+	fmt.Println("[Epic] Sending SIGTERM (Graceful Quit)...")
+	exec.Command("pkill", "-15", "-f", "EpicGamesLauncher").Run()
+	exec.Command("pkill", "-15", "-f", "Epic Games Launcher").Run()
 
-	// Убиваем веб-хелперы (часто именно они держат сессию)
-	exec.Command("pkill", "-9", "-f", "EpicWebHelper").Run()
-	// Убиваем основной процесс
-	exec.Command("pkill", "-9", "-f", "EpicGamesLauncher").Run()
-	// Иногда процесс называется с пробелами
-	exec.Command("pkill", "-9", "-f", "Epic Games Launcher").Run()
-
-	// 2. Цикл ожидания полного завершения (до 2 секунд)
-	// Если мы начнем копировать файлы пока процесс умирает, он может перезаписать их перед смертью.
-	for i := 0; i < 20; i++ {
-		// pgrep возвращает exit code 1 (ошибка), если процесс НЕ найден -> значит он закрылся
+	// 2. Ждем, пока процесс закроется (до 5 секунд)
+	// Epic Games может долго писать на диск
+	for i := 0; i < 50; i++ { // 50 * 100ms = 5 sec
 		err1 := exec.Command("pgrep", "-f", "EpicGamesLauncher").Run()
 		err2 := exec.Command("pgrep", "-f", "Epic Games Launcher").Run()
+		// Если pgrep вернул ошибку, значит процесс НЕ найден -> он закрылся
 		if err1 != nil && err2 != nil {
-			time.Sleep(200 * time.Millisecond)
+			fmt.Println("[Epic] Process exited gracefully.")
+			// Небольшая доп. пауза для гарантии записи файлов
+			time.Sleep(500 * time.Millisecond)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Если спустя 2 секунды процесс всё еще висит
+	fmt.Println("[Epic] Process refused to quit. Forcing SIGKILL...")
+
+	// 3. Если не закрылся — убиваем жестко (Cleanup)
+	exec.Command("pkill", "-9", "-f", "EpicWebHelper").Run()
+	exec.Command("pkill", "-9", "-f", "EpicOnlineServices").Run()
+	exec.Command("pkill", "-9", "-f", "com.epicgames.EpicOnlineServices").Run()
+	exec.Command("pkill", "-9", "-f", "EpicGamesLauncher").Run()
+	exec.Command("pkill", "-9", "-f", "Epic Games Launcher").Run()
+
+	// 4. Финальная проверка
+	for i := 0; i < 20; i++ {
+		err1 := exec.Command("pgrep", "-f", "EpicGamesLauncher").Run()
+		err2 := exec.Command("pgrep", "-f", "Epic Games Launcher").Run()
+		if err1 != nil && err2 != nil {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	return fmt.Errorf("epic games process refuses to die")
 }
 

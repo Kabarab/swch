@@ -194,6 +194,60 @@ func fsCopyDir(src string, dst string) error {
 	return nil
 }
 
+// fsCopyDirExclude recursively copies a directory tree, skipping files/dirs in the exclude list.
+func fsCopyDirExclude(src string, dst string, exclude []string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+
+	si, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !si.IsDir() {
+		return fmt.Errorf("source is not a directory")
+	}
+
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		if err := os.MkdirAll(dst, si.Mode()); err != nil {
+			return err
+		}
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		// Check exclusions
+		skip := false
+		for _, ex := range exclude {
+			if name == ex {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		srcPath := filepath.Join(src, name)
+		dstPath := filepath.Join(dst, name)
+
+		if entry.IsDir() {
+			if err := fsCopyDirExclude(srcPath, dstPath, exclude); err != nil {
+				return err
+			}
+		} else {
+			if err := fsCopyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Helper to get Windows Env vars, returns empty on other OS
 func GetWindowsEnv(key string) string {
 	if runtime.GOOS == "windows" {

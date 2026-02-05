@@ -42,6 +42,8 @@ export function SaveRiotAccount(arg1:string):Promise<string>;
 
 export function SaveRobloxAccount(arg1:string):Promise<string>;
 
+export function ScanEpicLauncher():Promise<string>;
+
 export function SelectExe():Promise<string>;
 
 export function SelectImage():Promise<string>;

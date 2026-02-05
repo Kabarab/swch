@@ -213,6 +213,14 @@ func saveCurrentEpicAccountDarwin(name string) error {
 		return err
 	}
 
+	// --- CRITICAL FIX: Kill Epic BEFORE copying ---
+	// We must ensure the launcher closes gracefully and flushes GameUserSettings.ini/tokens to disk.
+	// Otherwise we copy stale data or hit race conditions.
+	fmt.Println("[Epic] Stopping Epic Games Launcher to flush session data...")
+	if err := sys.KillEpic(); err != nil {
+		fmt.Printf("[Epic] Warning: KillEpic returned error: %v\n", err)
+	}
+
 	// 1. Save Saved/Data (Main Auth) -> dest/Data
 	srcSavedData := filepath.Join(baseEpicDir, "Saved", "Data")
 	destDataPath := filepath.Join(destDir, "Data")
@@ -237,7 +245,7 @@ func saveCurrentEpicAccountDarwin(name string) error {
 		copyDir(srcSavedAuth, destAuthPath)
 	}
 
-	// 2. Save Data (Extra Auth) -> dest/RootData (Exclude Manifests)
+	// RootData saving ENABLED to fix logout issues
 	srcRootData := filepath.Join(baseEpicDir, "Data")
 	destRootDataPath := filepath.Join(destDir, "RootData")
 	_ = os.RemoveAll(destRootDataPath)
@@ -246,22 +254,10 @@ func saveCurrentEpicAccountDarwin(name string) error {
 		copyDirFiltered(srcRootData, destRootDataPath, []string{"Manifests"})
 	}
 
-	// --- NEW: Save Config folder ---
-	srcConfigPath := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Config")
-	destConfigPath := filepath.Join(destDir, "Config")
+	// --- NEW: Save Config (Game Settings, etc) ---
+	saveEpicConfigDarwin(destDir)
 
-	fmt.Printf("[Epic] Saving Config from %s to %s\n", srcConfigPath, destConfigPath)
-	if _, err := os.Stat(srcConfigPath); err == nil {
-		_ = os.RemoveAll(destConfigPath)
-		if err := copyDir(srcConfigPath, destConfigPath); err != nil {
-			// Warning: Failed to copy config
-			fmt.Printf("[Epic] Warning: Failed to copy config: %v\n", err)
-		}
-	} else {
-		fmt.Printf("[Epic] Warning: Source Config dir not found at %s\n", srcConfigPath)
-	}
-
-	// --- NEW: Save Plists (macOS Preferences) ---
+	// --- NEW: Save Plists (Preferences) ---
 	savePlists(destDir)
 
 	// --- NEW: Save HTTPStorages (Session Cookies) ---
@@ -275,6 +271,9 @@ func saveCurrentEpicAccountDarwin(name string) error {
 	if err := os.WriteFile(filepath.Join(destDir, "meta.json"), data, 0644); err != nil {
 		return err
 	}
+
+	// --- NEW: Save Keychain Entry (Session Key) ---
+	saveEpicKeychainEntry(destDir)
 
 	fmt.Println("[Epic] Account saved successfully. Restarting Epic...")
 	sys.StartEpic()
@@ -304,9 +303,12 @@ func switchEpicAccountDarwin(name string) error {
 
 	// --- NEW: Clean System State & Keychain ---
 	cleanEpicStateDarwin()
-	// ОТКЛЮЧАЕМ УДАЛЕНИЕ KEYCHAIN ДЛЯ ТЕСТА GOOGLE LOGIN
-	// Если это поможет, значит проблема была именно в удалении токена.
-	// deleteEpicKeychainEntry()
+
+	// Phase 6: Restore saved keychain entry (Session Key)
+	// ALERT: Always delete existing keychain entries first to ensure "clean slate".
+	// Even if we don't have a backup to restore, we must NOT leave the previous account's key.
+	deleteEpicKeychainEntry()
+	restoreEpicKeychainEntry(accountDir)
 
 	home, _ := os.UserHomeDir()
 	baseEpicDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher")
@@ -317,6 +319,7 @@ func switchEpicAccountDarwin(name string) error {
 
 	storedDataPath := filepath.Join(accountDir, "Data")
 	if _, err := os.Stat(storedDataPath); err == nil {
+		fmt.Println("[Epic] Restoring Saved/Data...")
 		copyDir(storedDataPath, realSavedData)
 	}
 
@@ -325,55 +328,46 @@ func switchEpicAccountDarwin(name string) error {
 	_ = os.RemoveAll(realSavedAuth)
 	storedAuthPath := filepath.Join(accountDir, "Auth")
 	if _, err := os.Stat(storedAuthPath); err == nil {
+		fmt.Println("[Epic] Restoring Saved/Auth...")
 		copyDir(storedAuthPath, realSavedAuth)
 	}
 
-	// 2. Restore RootData (preserving Manifests in target)
-	realRootData := filepath.Join(baseEpicDir, "Data")
-	// We don't delete realRootData fully, we only overwrite/add files,
-	// but to be clean we should probably remove everything EXCEPT Manifests.
-	// For safety, let's just copy over.
-	storedRootDataPath := filepath.Join(accountDir, "RootData")
-	if _, err := os.Stat(storedRootDataPath); err == nil {
-		copyDir(storedRootDataPath, realRootData)
-	}
+	// RESTORED TO "SIMPLE SWAP" STRATEGY (Phase 1 Logic)
+	// We disable RootData, Config, etc. because they cause "Infinite Preparing" loops.
+	// The core auth token is in Saved/Data.
+	// We depend on "Graceful Shutdown" (sys.KillEpic) to ensure Saved/Data is valid.
 
-	// --- NEW: Restore Config folder ---
-	realConfigPath := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Config")
-	storedConfigPath := filepath.Join(accountDir, "Config")
+	/*
+		// RootData restoring DISABLED (Causes Infinite Loop)
+		// ...
+	*/
 
-	fmt.Printf("[Epic] Restoring Config from %s to %s\n", storedConfigPath, realConfigPath)
-	// Always remove real config to avoid mismatches
-	_ = os.RemoveAll(realConfigPath)
-
-	// Check if stored config exists
-	if _, err := os.Stat(storedConfigPath); os.IsNotExist(err) {
-		fmt.Printf("[Epic] Stored Config not found for account %s\n", name)
-		return fmt.Errorf("saved account is missing Config data. Please login manually and re-save this account")
-	}
-
-	if err := copyDir(storedConfigPath, realConfigPath); err != nil {
-		fmt.Printf("[Epic] Failed to restore config: %v\n", err)
-		return fmt.Errorf("failed to restore config: %v", err)
-	}
-
-	// --- NEW: Restore Identifiers (MachineId/AccountId) ---
-	restoreIdentifiers(accountDir)
-
-	// --- NEW: Restore Plists (macOS Preferences) ---
+	// --- NEW: Restore Plists (Preferences) ---
+	// This is critical for "Remember Me" and login state on macOS.
 	restorePlists(accountDir)
 
-	// --- NEW: Clear and Restore HTTPStorages (Session Cookies) ---
+	// --- NEW: Restore Identifiers (MachineID) ---
+	// This ensures the launcher recognizes the "device" associated with the token.
+	restoreIdentifiers(accountDir)
+
+	// --- Aggressive Restoration: Config, HTTPStorages, Webcache ---
+	// User requested replacing "all possible files" to fix login.
+	// Note: Config restoration excludes CrashReportClient to mitigate infinite "Preparing" loop.
+
+	restoreEpicConfigDarwin(accountDir)
+
+	// Clear and Restore HTTPStorages (Cookies)
 	clearHTTPStorages()
 	restoreHTTPStorages(accountDir)
 
-	// --- NEW: Restore Webcache (instead of clearing) ---
+	// Restore Webcache (Session Data)
 	restoreWebcache(accountDir)
 
-	time.Sleep(1 * time.Second) // Даем системе время на обновление кэшей и Keychain
-	fmt.Println("[Epic] Account data restored. Launcher will be started by caller...")
-	// NOTE: StartEpic() removed - launcher is started by app.SwitchToAccount to avoid double-launch
+	fmt.Println("[Epic] Account data restored (Aggressive Restoration: Data + Auth + Plists + Identifiers + Config + HTTP + Webcache).")
+	// Launching Epic Games Launcher
+	sys.StartEpic()
 	return nil
+
 }
 
 func deleteEpicAccountDarwin(name string) error {
@@ -483,20 +477,7 @@ func saveCurrentEpicAccountWindows(name string) error {
 		return fmt.Errorf("failed to copy auth data: %v", err)
 	}
 
-	// --- Save Config folder ---
-	localAppData := os.Getenv("LocalAppData")
-	srcConfigPath := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config")
-	destConfigPath := filepath.Join(destDir, "Config")
-
-	fmt.Printf("[Epic] Saving Config from %s to %s\n", srcConfigPath, destConfigPath)
-	if _, err := os.Stat(srcConfigPath); err == nil {
-		_ = os.RemoveAll(destConfigPath)
-		if err := copyDir(srcConfigPath, destConfigPath); err != nil {
-			fmt.Printf("[Epic] Copy Config error: %v\n", err)
-		}
-	} else {
-		fmt.Println("[Epic] Source Config not found!")
-	}
+	// Config folder saving removed to prevent crashes
 
 	// --- Save AccountId from registry ---
 	accountId, err := sys.GetEpicAccountId()
@@ -562,23 +543,8 @@ func switchEpicAccountWindows(name string) error {
 		return err
 	}
 
-	// --- Restore Config folder ---
+	// Config folder restoring removed to prevent crashes
 	localAppData := os.Getenv("LocalAppData")
-	realConfigPath := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Config")
-	storedConfigPath := filepath.Join(accountDir, "Config")
-
-	fmt.Printf("[Epic] Restoring Config from %s to %s\n", storedConfigPath, realConfigPath)
-	_ = os.RemoveAll(realConfigPath)
-
-	if _, err := os.Stat(storedConfigPath); os.IsNotExist(err) {
-		fmt.Println("[Epic] Stored Config missing!")
-		return fmt.Errorf("saved account is missing Config data. Please login manually and re-save this account")
-	}
-
-	if err := copyDir(storedConfigPath, realConfigPath); err != nil {
-		fmt.Printf("[Epic] Copy Config error: %v\n", err)
-		return fmt.Errorf("failed to restore config: %v", err)
-	}
 
 	// --- Clear Webcache ---
 	savedDir := filepath.Join(localAppData, "EpicGamesLauncher", "Saved")
@@ -989,6 +955,7 @@ func deleteEpicKeychainEntry() {
 		"com.epicgames.EpicGamesLauncher",
 		"Epic Games Launcher",
 		"EpicGames",
+		"Epic",
 	}
 
 	for _, s := range services {
@@ -1037,4 +1004,145 @@ func copyDirFiltered(src, dst string, skip []string) error {
 		}
 	}
 	return nil
+}
+
+func cleanDirFiltered(dir string, skip []string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err // Or return nil if dir doesn't exist? Check usage.
+	}
+
+	skipMap := make(map[string]bool)
+	for _, s := range skip {
+		skipMap[s] = true
+	}
+
+	for _, entry := range entries {
+		if skipMap[entry.Name()] {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		fmt.Printf("[Epic] Cleaning: %s\n", path)
+		if err := os.RemoveAll(path); err != nil {
+			fmt.Printf("[Epic] Warning: failed to remove %s: %v\n", path, err)
+		}
+	}
+	return nil
+}
+
+// saveEpicConfigDarwin saves the Config directory
+func saveEpicConfigDarwin(destDir string) {
+	home, _ := os.UserHomeDir()
+	srcConfigDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Config")
+	destConfigDir := filepath.Join(destDir, "Config")
+
+	if _, err := os.Stat(srcConfigDir); err == nil {
+		fmt.Printf("[Epic] Saving Config from %s\n", srcConfigDir)
+		_ = os.RemoveAll(destConfigDir)
+		if err := copyDir(srcConfigDir, destConfigDir); err != nil {
+			fmt.Printf("[Epic] Warning: failed to copy Config: %v\n", err)
+		}
+	} else {
+		fmt.Printf("[Epic] Warning: Config dir not found at %s\n", srcConfigDir)
+	}
+}
+
+// restoreEpicConfigDarwin restores the Config directory
+func restoreEpicConfigDarwin(srcDir string) {
+	home, _ := os.UserHomeDir()
+	destConfigDir := filepath.Join(home, "Library", "Application Support", "Epic", "EpicGamesLauncher", "Saved", "Config")
+	srcConfigDir := filepath.Join(srcDir, "Config")
+
+	// Always clear existing config to prevent conflicts
+	fmt.Printf("[Epic] Clearing existing Config at %s\n", destConfigDir)
+	_ = os.RemoveAll(destConfigDir)
+
+	if _, err := os.Stat(srcConfigDir); err == nil {
+		fmt.Printf("[Epic] Restoring Config from %s (Excluding CrashReportClient)\n", srcConfigDir)
+		// Exclude huge/garbage folders that cause infinite loops or slow down switching
+		exclude := []string{"CrashReportClient", "Crashes", "Logs"}
+		if err := fsCopyDirExclude(srcConfigDir, destConfigDir, exclude); err != nil {
+			fmt.Printf("[Epic] Warning: failed to restore Config: %v\n", err)
+		}
+	} else {
+		// If no backup exists, we already cleared the live config, which is correct behavior (forces regeneration)
+		fmt.Printf("[Epic] Note: No saved Config found (legacy backup). Live config cleared.\n")
+	}
+}
+
+// saveEpicKeychainEntry extracts the password from Keychain and saves it
+func saveEpicKeychainEntry(destDir string) {
+	services := []string{
+		"EpicGamesLauncher",
+		"com.epicgames.EpicGamesLauncher",
+		"Epic Games Launcher",
+		"EpicGames",
+		"Epic",
+	}
+
+	keychainMap := make(map[string]string)
+
+	for _, s := range services {
+		// -w returns only the password on stdout
+		cmd := exec.Command("security", "find-generic-password", "-s", s, "-w")
+		out, err := cmd.Output()
+		if err == nil && len(out) > 0 {
+			pass := strings.TrimSpace(string(out))
+			if pass != "" {
+				keychainMap[s] = pass
+				fmt.Printf("[Epic] Found keychain entry for service: %s\n", s)
+			}
+		} else {
+			// Verbose log for debugging
+			// fmt.Printf("[Epic] Keychain check failed for %s: %v\n", s, err)
+		}
+	}
+
+	if len(keychainMap) > 0 {
+		data, err := json.MarshalIndent(keychainMap, "", "  ")
+		if err == nil {
+			_ = os.WriteFile(filepath.Join(destDir, "keychain.json"), data, 0600)
+			fmt.Printf("[Epic] Saved %d keychain entries\n", len(keychainMap))
+		}
+	}
+}
+
+// restoreEpicKeychainEntry restores the password to Keychain
+func restoreEpicKeychainEntry(srcDir string) {
+	keychainPath := filepath.Join(srcDir, "keychain.json")
+	data, err := os.ReadFile(keychainPath)
+	if err != nil {
+		fmt.Printf("[Epic] No saved keychain info found at %s. SKIPPING restore (keeping current keychain).\n", keychainPath)
+		return
+	}
+
+	var keychainMap map[string]string
+	if err := json.Unmarshal(data, &keychainMap); err != nil {
+		fmt.Printf("[Epic] Failed to parse keychain info: %v\n", err)
+		return
+	}
+
+	if len(keychainMap) == 0 {
+		fmt.Println("[Epic] Saved keychain info is empty. SKIPPING restore.")
+		return
+	}
+
+	// ONLY delete if we actually have something to restore
+	deleteEpicKeychainEntry() // Clear current entries first
+
+	for s, pass := range keychainMap {
+		if pass == "" {
+			continue
+		}
+		// NOTE: We don't know the exact account name (-a), so we default to the service name or "EpicGamesLauncher".
+		// This might fail if the app strictly requires the original account name (e.g. email).
+		// But often -s is the primary lookup key.
+		// -U updates if exists, -w specifies password
+		cmd := exec.Command("security", "add-generic-password", "-s", s, "-a", s, "-w", pass, "-U")
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("[Epic] Warning: failed to add keychain for %s: %v\n", s, err)
+		} else {
+			fmt.Printf("[Epic] Restored keychain for %s\n", s)
+		}
+	}
 }
