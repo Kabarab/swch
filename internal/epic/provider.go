@@ -15,7 +15,7 @@ func (c *EpicClient) GetName() string {
 func (c *EpicClient) GetGamesProvider() ([]models.LibraryGame, error) {
 	// 1. Verify session (optional, but good practice)
 	if err := c.LoadSession(); err != nil {
-		fmt.Println("[Epic] No active Epic session:", err)
+		fmt.Println("[Epic] Нет активной сессии Epic:", err)
 		// We might still want to return installed games via manifest if no session?
 		// app.go logic had a fallback.
 		// For now, let's try to get full library, which internally does entitlements + manifests.

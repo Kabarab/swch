@@ -605,23 +605,23 @@ func (a *App) AddCustomGame(name string, exePath string) string {
 
 // ScanEpicLauncher tries to find an active Epic Games Launcher session and login automatically
 func (a *App) ScanEpicLauncher() string {
-	fmt.Println("[App] Scanning for Epic Games Launcher session...")
+	fmt.Println("[App] Сканирование сессии Epic Games Launcher...")
 	token, err := epic.ExtractTokens()
 	if err != nil {
-		return "Error extracting token: " + err.Error()
+		return "Ошибка извлечения токена: " + err.Error()
 	}
 
 	if token == "" {
-		return "No active session found in Epic Launcher"
+		return "Активная сессия не найдена в Epic Launcher"
 	}
 
 	// Try to login with this token (assuming it's a RefreshToken or Exchange Code)
 	// Usually from .dat it is a "RememberMe" token which behaves like a long-lived Refresh Token?
 	// Let's try LoginWithRefreshToken first.
-	fmt.Println("[App] Found token, attempting login...")
+	fmt.Println("[App] Токен найден, попытка входа...")
 	if err := a.epic.LoginWithRefreshToken(token); err != nil {
 		// If that failed, maybe it's an exchange code? (Unlikely for saved data)
-		return "Login failed with extracted token: " + err.Error()
+		return "Вход с извлеченным токеном не удался: " + err.Error()
 	}
 
 	// If successful, save session
@@ -631,12 +631,12 @@ func (a *App) ScanEpicLauncher() string {
 			name = a.epic.Token.AccountID
 		}
 		if err := a.epic.SaveSessionAs(name); err != nil {
-			return "Login success but failed to save profile: " + err.Error()
+			return "Вход выполнен, но не удалось сохранить профиль: " + err.Error()
 		}
-		return "Success: Logged in as " + name
+		return "Успешно: Вход выполнен как " + name
 	}
 
-	return "Unknown error after login attempt"
+	return "Неизвестная ошибка после попытки входа"
 }
 
 func (a *App) EpicLogin(sid string) string {
@@ -701,24 +701,24 @@ func (a *App) SyncEpicLibrary() string {
 
 // InstallAllEpicGames fetches all games from the account and performs a fake install for each
 func (a *App) InstallAllEpicGames() string {
-	fmt.Println("[App] Starting InstallAllEpicGames...")
+	fmt.Println("[App] Запуск InstallAllEpicGames...")
 
 	// 1. Ensure we are logged in
 	if err := a.epic.LoadSession(); err != nil {
-		return "Error: Not logged in. Please login to Epic first."
+		return "Ошибка: Не выполнен вход. Пожалуйста, войдите в Epic."
 	}
 
 	// 2. Fetch owned games
 	games, err := a.epic.FetchOwnedGames()
 	if err != nil {
-		return "Error fetching games: " + err.Error()
+		return "Ошибка получения списка игр: " + err.Error()
 	}
 
 	if len(games) == 0 {
-		return "No games found on this account."
+		return "Игры на аккаунте не найдены."
 	}
 
-	fmt.Printf("[App] Found %d games. Starting install...\n", len(games))
+	fmt.Printf("[App] Найдено %d игр. Начало установки...\n", len(games))
 
 	// 3. Install each game
 	successCount := 0
@@ -735,10 +735,10 @@ func (a *App) InstallAllEpicGames() string {
 		if err == nil {
 			successCount++
 		} else {
-			fmt.Printf("[App] Failed to install %s: %v\n", game.DisplayName, err)
+			fmt.Printf("[App] Не удалось установить %s: %v\n", game.DisplayName, err)
 			failCount++
 		}
 	}
 
-	return fmt.Sprintf("Finished. Installed: %d, Failed: %d. Please restart Epic Games Launcher.", successCount, failCount)
+	return fmt.Sprintf("Готово. Установлено: %d, Ошибок: %d. Пожалуйста, перезапустите Epic Games Launcher.", successCount, failCount)
 }

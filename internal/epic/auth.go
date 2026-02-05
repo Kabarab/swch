@@ -252,12 +252,15 @@ func (c *EpicClient) LoadSession() error {
 	}
 
 	// 3. If no device auth, try to import native session (Windows only for now)
+	var importErr error
 	if err := c.TryImportNativeSession(); err == nil {
-		fmt.Println("Successfully imported native session!")
+		fmt.Println("Успешно импортирована нативная сессия!")
 		return nil
+	} else {
+		importErr = err
 	}
 
-	return fmt.Errorf("no valid session or device auth found, and native import failed")
+	return fmt.Errorf("активная сессия не найдена. Ошибка импорта: %v", importErr)
 }
 
 func (c *EpicClient) GetExchangeCode() (string, error) {

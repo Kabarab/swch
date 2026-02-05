@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"swch/internal/sys"
 	"syscall"
 	"unsafe"
 )
@@ -49,81 +50,79 @@ func DecryptData(data []byte) ([]byte, error) {
 	return decrypted, nil
 }
 
-func FindEpicConfigDir() (string, error) {
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData == "" {
-		return "", fmt.Errorf("LOCALAPPDATA environment variable not set")
-	}
-	// Epic Games Store stores data in %LOCALAPPDATA%\EpicGamesLauncher\Saved\Data
-	path := filepath.Join(localAppData, "EpicGamesLauncher", "Saved", "Data")
-	return path, nil
-}
-
-// EpicTokenFile represents the structure of the .dat file (JSON)
-type EpicTokenFile struct {
-	RememberMe   string `json:"RememberMe,omitempty"`
-	RefreshToken string `json:"RefreshToken,omitempty"`
-}
-
+// ExtractTokens returns the raw token string (RememberMe) from Epic's encrypted data.
+// It tries to find it in any .dat file in the data directory.
 func ExtractTokens() (string, error) {
-	dir, err := FindEpicConfigDir()
-	if err != nil {
-		return "", err
-	}
+	// Use sys package for consistent path
+	dir := sys.GetEpicAuthDataDir()
+
+	fmt.Printf("[EpicImport] Сканирование токенов в: %s\n", dir)
 
 	// Iterate over .dat files in the directory
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("не удалось прочитать директорию %s: %w", dir, err)
 	}
+
+	var checkedFiles []string
+	var lastErr error
 
 	for _, entry := range entries {
 		if filepath.Ext(entry.Name()) == ".dat" {
 			path := filepath.Join(dir, entry.Name())
+			checkedFiles = append(checkedFiles, entry.Name())
+
 			data, err := os.ReadFile(path)
 			if err != nil {
+				lastErr = fmt.Errorf("ошибка чтения: %w", err)
 				continue
 			}
 
 			// Try to decrypt
 			decrypted, err := DecryptData(data)
 			if err != nil {
-				// Maybe it wasn't encrypted or failed
+				// Normal, some files might not be DPAPI encrypted or use different keys
+				// lastErr = fmt.Errorf("decrypt fail: %w", err) // Too verbose
 				continue
 			}
 
 			// Try to parse as JSON
 			var tokenFile map[string]interface{}
 			if err := json.Unmarshal(decrypted, &tokenFile); err == nil {
-				// Look for RememberMe or similar keys
+				// Look for RememberMe
 				if val, ok := tokenFile["RememberMe"].(string); ok && val != "" {
+					fmt.Printf("[EpicImport] Найден RememberMe в %s\n", entry.Name())
+					return val, nil
+				}
+				// Also check for "RefreshToken" just in case schema differs
+				if val, ok := tokenFile["RefreshToken"].(string); ok && val != "" {
+					fmt.Printf("[EpicImport] Найден RefreshToken в %s\n", entry.Name())
 					return val, nil
 				}
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no valid token found in Epic Games data")
+	return "", fmt.Errorf("просканировано файлов: %d (%v), валидный токен не найден. Последняя ошибка: %v", len(checkedFiles), checkedFiles, lastErr)
 }
 
 // TryImportNativeSession attempts to read the Epic Games Launcher's local session
 // and sign in using the extracted token.
 func (c *EpicClient) TryImportNativeSession() error {
-	fmt.Println("[Epic] Attempting to import native session...")
+	fmt.Println("[Epic] Попытка импорта нативной сессии...")
 	token, err := ExtractTokens()
 	if err != nil {
-		fmt.Printf("[Epic] Failed to extract native tokens: %v\n", err)
+		fmt.Printf("[Epic] Не удалось извлечь нативные токены: %v\n", err)
 		return err
 	}
 
-	fmt.Println("[Epic] Found native token, attempting login...")
-	// The "RememberMe" token can sometimes be used as a refresh token or in a specific flow.
-	// We'll try using it as a refresh token first.
+	fmt.Println("[Epic] Нативный токен найден, попытка входа...")
+	// The "RememberMe" token can sometimes be used as a refresh token
 	if err := c.LoginWithRefreshToken(token); err != nil {
-		fmt.Printf("[Epic] Login with extracted token failed: %v\n", err)
-		return err
+		fmt.Printf("[Epic] Вход с извлеченным токеном не удался: %v\n", err)
+		return fmt.Errorf("вход по токену не удался: %w", err)
 	}
 
-	fmt.Println("[Epic] Successfully imported and refreshed native session")
+	fmt.Println("[Epic] Успешный импорт и обновление нативной сессии")
 	return nil
 }
