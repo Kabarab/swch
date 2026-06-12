@@ -93,13 +93,13 @@ try {
       page.waitForSelector('p:has-text("Incorrect response.")').then(async () => {
         console.error('Incorrect response for captcha!');
       }).catch(_ => { });
-      await page.fill('#email', email);
+      await page.locator('input[type="email"]:visible, #email:visible').first().fill(email);
       
-      const passwordInput = page.locator('#password, input[type="password"]').first();
+      const passwordInput = page.locator('input[type="password"]:visible, #password:visible').first();
       // If the login is split into two steps, we need to click submit to show the password field
       if (!await passwordInput.isVisible()) {
         console.log('Password field not visible, clicking continue/submit...');
-        await page.click('button[type="submit"]');
+        await page.locator('button[type="submit"]:visible').first().click();
         // Wait for password field to appear
         await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(e => {
           console.log('Password field did not appear after clicking submit:', e.message);
@@ -110,7 +110,7 @@ try {
       if (!password) await notifyBrowserLogin();
       else {
         await passwordInput.fill(password);
-        await page.click('button[type="submit"]');
+        await page.locator('button[type="submit"]:visible').first().click();
       }
       const error = page.locator('#form-error-message');
       error.waitFor().then(async () => {
@@ -123,7 +123,7 @@ try {
         // TODO locator for text (email or app?)
         const otp = cfg.eg_otpkey && authenticator.generate(cfg.eg_otpkey) || await prompt({ type: 'text', message: 'Enter two-factor sign in code', validate: n => n.toString().length == 6 || 'The code must be 6 digits!' }); // can't use type: 'number' since it strips away leading zeros and codes sometimes have them
         await page.locator('input[name="code-input-0"]').pressSequentially(otp.toString());
-        await page.click('button[type="submit"]');
+        await page.locator('button[type="submit"]:visible').first().click();
       }).catch(_ => { });
     }
     await page.waitForURL(URL_CLAIM);

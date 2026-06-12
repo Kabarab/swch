@@ -59,13 +59,13 @@ try {
     const password = email && (cfg.eg_password || await prompt({ type: 'password', message: 'Enter password' }));
     if (email && password) {
       // await page.click('text=Sign in with Epic Games');
-      await page.fill('#email', email);
+      await page.locator('input[type="email"]:visible, #email:visible').first().fill(email);
       
-      const passwordInput = page.locator('#password, input[type="password"]').first();
+      const passwordInput = page.locator('input[type="password"]:visible, #password:visible').first();
       // If the login is split into two steps, we need to click submit to show the password field
       if (!await passwordInput.isVisible()) {
         console.log('Password field not visible, clicking continue/submit...');
-        await page.click('button[type="submit"]');
+        await page.locator('button[type="submit"]:visible').first().click();
         // Wait for password field to appear
         await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(e => {
           console.log('Password field did not appear after clicking submit:', e.message);
@@ -73,7 +73,7 @@ try {
       }
 
       await passwordInput.fill(password);
-      await page.click('button[type="submit"]');
+      await page.locator('button[type="submit"]:visible').first().click();
       page.waitForSelector('#h_captcha_challenge_login_prod iframe').then(() => {
         console.error('Got a captcha during login (likely due to too many attempts)! You may solve it in the browser, get a new IP or try again in a few hours.');
         notify('unrealengine: got captcha during login. Please check.');
@@ -84,7 +84,7 @@ try {
         // TODO locator for text (email or app?)
         const otp = cfg.eg_otpkey && authenticator.generate(cfg.eg_otpkey) || await prompt({ type: 'text', message: 'Enter two-factor sign in code', validate: n => n.toString().length == 6 || 'The code must be 6 digits!' }); // can't use type: 'number' since it strips away leading zeros and codes sometimes have them
         await page.locator('input[name="code-input-0"]').pressSequentially(otp.toString());
-        await page.click('button[type="submit"]');
+        await page.locator('button[type="submit"]:visible').first().click();
       }).catch(_ => { });
     } else {
       console.log('Waiting for you to login in the browser.');
