@@ -19,6 +19,47 @@ func ConfigureCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }
 
+// ListProcessPaths возвращает пути исполняемых файлов всех запущенных процессов.
+// Используется трекером игрового времени.
+func ListProcessPaths() ([]string, error) {
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"Get-Process | Where-Object { $_.Path } | Select-Object -ExpandProperty Path")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	if err == nil {
+		var paths []string
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				paths = append(paths, line)
+			}
+		}
+		return paths, nil
+	}
+
+	// Fallback: tasklist выдаёт только имена exe-файлов (без путей),
+	// трекер умеет сопоставлять и по имени файла
+	fb := exec.Command("tasklist", "/fo", "csv", "/nh")
+	fb.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	fbOut, fbErr := fb.Output()
+	if fbErr != nil {
+		return nil, fmt.Errorf("failed to list processes: %w", err)
+	}
+	var names []string
+	for _, line := range strings.Split(string(fbOut), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\",\"", 2)
+		name := strings.Trim(parts[0], "\"")
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}
+
 // --- STEAM UTILS ---
 
 func GetSteamPath() (string, error) {

@@ -34,6 +34,14 @@ export function EpicLoginAuto() {
   return window['go']['app']['App']['EpicLoginAuto']();
 }
 
+export function FetchGameMetadata(arg1, arg2) {
+  return window['go']['app']['App']['FetchGameMetadata'](arg1, arg2);
+}
+
+export function GetAllCategories() {
+  return window['go']['app']['App']['GetAllCategories']();
+}
+
 export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
 }
@@ -98,8 +106,20 @@ export function SelectImage() {
   return window['go']['app']['App']['SelectImage']();
 }
 
+export function SetGameCategories(arg1, arg2) {
+  return window['go']['app']['App']['SetGameCategories'](arg1, arg2);
+}
+
+export function SetGameCompletionStatus(arg1, arg2) {
+  return window['go']['app']['App']['SetGameCompletionStatus'](arg1, arg2);
+}
+
 export function SetGameImage(arg1, arg2) {
   return window['go']['app']['App']['SetGameImage'](arg1, arg2);
+}
+
+export function SetGameUserScore(arg1, arg2) {
+  return window['go']['app']['App']['SetGameUserScore'](arg1, arg2);
 }
 
 export function SwitchEpicAccount(arg1) {
@@ -120,6 +140,10 @@ export function SyncEpicLibrary() {
 
 export function ToggleGameAccountHidden(arg1, arg2, arg3) {
   return window['go']['app']['App']['ToggleGameAccountHidden'](arg1, arg2, arg3);
+}
+
+export function ToggleGameHidden(arg1) {
+  return window['go']['app']['App']['ToggleGameHidden'](arg1);
 }
 
 export function ToggleGamePin(arg1) {

@@ -15,7 +15,18 @@ type AccountSettings struct {
 }
 
 type GameSettings struct {
-	Pinned bool `json:"pinned"`
+	Pinned bool `json:"pinned"` // Избранное (Favorite в терминах Playnite)
+	Hidden bool `json:"hidden,omitempty"`
+	// Пользовательские категории игры (Playnite-style categories)
+	Categories []string `json:"categories,omitempty"`
+	// Статус прохождения: notPlayed, planToPlay, playing, played, beaten, completed, onHold, abandoned
+	CompletionStatus string `json:"completionStatus,omitempty"`
+	// Оценка пользователя от 1 до 10 (0 = не задана)
+	UserScore int `json:"userScore,omitempty"`
+	// Статистика игрового времени
+	PlaytimeSeconds int64 `json:"playtimeSeconds,omitempty"`
+	PlayCount       int   `json:"playCount,omitempty"`
+	LastPlayed      int64 `json:"lastPlayed,omitempty"` // unix-время последнего запуска
 }
 
 type Manager struct {
@@ -91,4 +102,25 @@ func (m *Manager) SetGameSettings(id string, settings GameSettings) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.Games[id] = settings
+}
+
+// UpdateGameSettings атомарно читает, изменяет и сохраняет настройки игры.
+// Используется из нескольких горутин (например, трекером игрового времени).
+func (m *Manager) UpdateGameSettings(id string, fn func(*GameSettings)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s := m.Games[id]
+	fn(&s)
+	m.Games[id] = s
+}
+
+// AllGameSettings возвращает копию всех настроек игр.
+func (m *Manager) AllGameSettings() map[string]GameSettings {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]GameSettings, len(m.Games))
+	for k, v := range m.Games {
+		out[k] = v
+	}
+	return out
 }

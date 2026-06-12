@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/main-8HyeH2kf.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/main-BMOm4SlJ.css">
+  <script type="module" crossorigin src="/assets/main-CwdfplGk.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-DojYE4N_.css">
 </head>
 
 <body>
@@ -23,6 +23,9 @@
                 </div>
                 <div class="nav-item" onclick="switchTab('accounts')">
                     <i class="fa-solid fa-users"></i> Accounts
+                </div>
+                <div class="nav-item" onclick="switchTab('stats')">
+                    <i class="fa-solid fa-chart-simple"></i> Statistics
                 </div>
             </div>
 
@@ -47,24 +50,11 @@
                 <div id="library-filters" class="filters-container">
                     <div class="search-wrapper">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="filter-search" placeholder="Поиск по названию..."
+                        <input type="text" id="filter-search" placeholder="Поиск (название, жанр, категория)..."
                             class="input-field search-input" oninput="applyFilters()">
                     </div>
 
-                    <div class="filter-group">
-                        <button class="filter-tag active" onclick="toggleFilter(this, 'Steam')" data-type="platform">
-                            <i class="fa-brands fa-steam"></i> Steam
-                        </button>
-                        <button class="filter-tag active" onclick="toggleFilter(this, 'Epic')" data-type="platform">
-                            <i class="fa-solid fa-bolt"></i> Epic
-                        </button>
-                        <button class="filter-tag active" onclick="toggleFilter(this, 'Riot')" data-type="platform">
-                            <i class="fa-solid fa-gamepad"></i> Riot
-                        </button>
-                        <button class="filter-tag active" onclick="toggleFilter(this, 'Custom')" data-type="platform">
-                            <i class="fa-solid fa-folder"></i> Custom
-                        </button>
-                    </div>
+                    <div class="filter-group" id="platform-filters"></div>
 
                     <div class="filter-group right">
                         <button class="filter-tag" id="filter-installed" onclick="toggleBooleanFilter(this)">
@@ -73,10 +63,38 @@
                         <button class="filter-tag" id="filter-macos" onclick="toggleBooleanFilter(this)">
                             <i class="fa-brands fa-apple"></i> macOS
                         </button>
+                        <button class="filter-tag" id="filter-favorites" onclick="toggleBooleanFilter(this)">
+                            <i class="fa-solid fa-star"></i> Избранное
+                        </button>
+                        <button class="filter-tag" id="filter-hidden" onclick="toggleBooleanFilter(this)"
+                            title="Показать только скрытые игры">
+                            <i class="fa-solid fa-eye-slash"></i> Скрытые
+                        </button>
+                    </div>
+
+                    <div class="filter-group">
+                        <select id="filter-category" class="filter-select" onchange="applyFilters()">
+                            <option value="">Все категории</option>
+                        </select>
+                        <select id="sort-select" class="filter-select" onchange="applyFilters()">
+                            <option value="name">По названию</option>
+                            <option value="lastPlayed">Недавно сыгранные</option>
+                            <option value="playtime">По времени в игре</option>
+                            <option value="playCount">По числу запусков</option>
+                            <option value="userScore">По оценке</option>
+                            <option value="platform">По платформе</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="grid" id="games-grid"></div>
+            </div>
+
+            <div id="view-stats" class="view-section" style="display: none;">
+                <div class="header">
+                    <div class="title">Statistics</div>
+                </div>
+                <div id="stats-content"></div>
             </div>
 
             <div id="view-accounts" class="view-section" style="display: none;">
@@ -89,18 +107,87 @@
     </div>
 
     <div id="account-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content game-details-content">
             <div class="modal-header">
                 <h3 id="modal-game-title">Launch</h3>
                 <span class="close" onclick="closeModal('account-modal')">&times;</span>
             </div>
-            <div id="modal-accounts-list" class="modal-list"></div>
-            <div class="modal-footer-options">
-                <label style="cursor:pointer; display:flex; align-items:center;">
-                    <input type="checkbox" id="show-hidden-accs" onchange="refreshGameModal()"
-                        style="margin-right:8px;">
-                    Show removed accounts
-                </label>
+            <div class="game-details-body">
+                <div class="gd-hero">
+                    <div class="gd-cover-wrapper">
+                        <img id="gd-cover" class="gd-cover" src="" alt="">
+                    </div>
+                    <div class="gd-info">
+                        <div id="gd-badges" class="gd-badges"></div>
+                        <div id="gd-sub" class="gd-sub"></div>
+                        <div class="gd-stats">
+                            <div class="gd-stat">
+                                <span class="gd-stat-value" id="gd-playtime">—</span>
+                                <span class="gd-stat-label">время в игре</span>
+                            </div>
+                            <div class="gd-stat">
+                                <span class="gd-stat-value" id="gd-playcount">0</span>
+                                <span class="gd-stat-label">запусков</span>
+                            </div>
+                            <div class="gd-stat">
+                                <span class="gd-stat-value" id="gd-lastplayed">—</span>
+                                <span class="gd-stat-label">последний запуск</span>
+                            </div>
+                        </div>
+                        <div class="gd-controls">
+                            <select id="gd-completion" class="filter-select" title="Статус прохождения"></select>
+                            <div id="gd-score" class="gd-score" title="Моя оценка"></div>
+                        </div>
+                        <div id="gd-categories" class="gd-categories"></div>
+                        <div class="gd-actions">
+                            <button id="gd-play" class="gd-btn gd-btn-play">
+                                <i class="fa-solid fa-play"></i> Играть
+                            </button>
+                            <button id="gd-fav" class="gd-btn" title="Избранное">
+                                <i class="fa-solid fa-star"></i>
+                            </button>
+                            <button id="gd-hide" class="gd-btn" title="Скрыть игру">
+                                <i class="fa-solid fa-eye-slash"></i>
+                            </button>
+                            <button id="gd-meta" class="gd-btn" title="Загрузить метаданные">
+                                <i class="fa-solid fa-cloud-arrow-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="gd-description" class="gd-description"></div>
+                <div class="gd-accounts-header" id="gd-accounts-header">
+                    <i class="fa-solid fa-users"></i> Запуск с аккаунтом
+                </div>
+                <div id="modal-accounts-list" class="modal-list"></div>
+                <div class="modal-footer-options">
+                    <label style="cursor:pointer; display:flex; align-items:center;">
+                        <input type="checkbox" id="show-hidden-accs" onchange="refreshGameModal()"
+                            style="margin-right:8px;">
+                        Show removed accounts
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="categories-modal" class="modal" style="z-index: 2100;">
+        <div class="modal-content" style="max-width: 380px;">
+            <div class="modal-header">
+                <h3>Категории игры</h3>
+                <span class="close" onclick="closeModal('categories-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <div id="cat-list" class="cat-list"></div>
+                <div style="display:flex; gap:8px; margin-top:14px;">
+                    <input type="text" id="cat-input" placeholder="Новая категория..." class="input-field"
+                        style="flex:1;">
+                    <button id="cat-add-btn" class="gd-btn" style="width:auto; padding:0 16px;">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <div id="cat-suggestions" class="cat-suggestions"></div>
+                <button id="cat-save-btn" class="btn-main" style="margin-top:16px;">Сохранить</button>
             </div>
         </div>
     </div>
@@ -300,8 +387,12 @@
     </div>
     <div id="context-menu" class="context-menu">
         <ul>
-            <li id="ctx-change-icon" class="ctx-item">Изменить иконку</li>
-            <li id="ctx-delete" class="ctx-item delete">Удалить игру</li>
+            <li id="ctx-details" class="ctx-item"><i class="fa-solid fa-circle-info"></i> Сведения об игре</li>
+            <li id="ctx-favorite" class="ctx-item"><i class="fa-solid fa-star"></i> Избранное</li>
+            <li id="ctx-hidden" class="ctx-item"><i class="fa-solid fa-eye-slash"></i> Скрыть</li>
+            <li id="ctx-categories" class="ctx-item"><i class="fa-solid fa-tags"></i> Категории…</li>
+            <li id="ctx-change-icon" class="ctx-item"><i class="fa-solid fa-image"></i> Изменить иконку</li>
+            <li id="ctx-delete" class="ctx-item delete"><i class="fa-solid fa-trash"></i> Удалить игру</li>
         </ul>
     </div>
 

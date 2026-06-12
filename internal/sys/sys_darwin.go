@@ -8,12 +8,30 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
 // ConfigureCommand для macOS не требует специальных настроек (в отличие от Windows)
 func ConfigureCommand(cmd *exec.Cmd) {
 	// No-op
+}
+
+// ListProcessPaths возвращает пути исполняемых файлов всех запущенных процессов.
+// Используется трекером игрового времени.
+func ListProcessPaths() ([]string, error) {
+	out, err := exec.Command("ps", "-axo", "comm=").Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list processes: %w", err)
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths, nil
 }
 
 // --- STEAM UTILS (macOS) ---

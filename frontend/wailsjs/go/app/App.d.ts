@@ -18,6 +18,10 @@ export function EpicLogin(arg1:string):Promise<string>;
 
 export function EpicLoginAuto():Promise<string>;
 
+export function FetchGameMetadata(arg1:string,arg2:string):Promise<models.GameMetadata>;
+
+export function GetAllCategories():Promise<Array<string>>;
+
 export function GetClipboardText():Promise<string>;
 
 export function GetEpicAuthURL():Promise<string>;
@@ -50,7 +54,13 @@ export function SelectExe():Promise<string>;
 
 export function SelectImage():Promise<string>;
 
+export function SetGameCategories(arg1:string,arg2:Array<string>):Promise<string>;
+
+export function SetGameCompletionStatus(arg1:string,arg2:string):Promise<string>;
+
 export function SetGameImage(arg1:string,arg2:string):Promise<string>;
+
+export function SetGameUserScore(arg1:string,arg2:number):Promise<string>;
 
 export function SwitchEpicAccount(arg1:string):Promise<string>;
 
@@ -61,6 +71,8 @@ export function SwitchToAccount(arg1:string,arg2:string):Promise<string>;
 export function SyncEpicLibrary():Promise<string>;
 
 export function ToggleGameAccountHidden(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function ToggleGameHidden(arg1:string):Promise<string>;
 
 export function ToggleGamePin(arg1:string):Promise<string>;
 

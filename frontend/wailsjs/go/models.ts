@@ -139,6 +139,30 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class GameMetadata {
+	    gameId: string;
+	    found: boolean;
+	    description: string;
+	    genres: string[];
+	    releaseDate: string;
+	    developers: string[];
+	    error?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new GameMetadata(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.found = source["found"];
+	        this.description = source["description"];
+	        this.genres = source["genres"];
+	        this.releaseDate = source["releaseDate"];
+	        this.developers = source["developers"];
+	        this.error = source["error"];
+	    }
+	}
 	export class LibraryGame {
 	    id: string;
 	    name: string;
@@ -149,6 +173,17 @@ export namespace models {
 	    isInstalled: boolean;
 	    isPinned: boolean;
 	    isMacSupported: boolean;
+	    isHidden: boolean;
+	    categories: string[];
+	    completionStatus: string;
+	    userScore: number;
+	    playtimeSeconds: number;
+	    playCount: number;
+	    lastPlayed: number;
+	    description: string;
+	    genres: string[];
+	    releaseDate: string;
+	    developers: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new LibraryGame(source);
@@ -165,6 +200,17 @@ export namespace models {
 	        this.isInstalled = source["isInstalled"];
 	        this.isPinned = source["isPinned"];
 	        this.isMacSupported = source["isMacSupported"];
+	        this.isHidden = source["isHidden"];
+	        this.categories = source["categories"];
+	        this.completionStatus = source["completionStatus"];
+	        this.userScore = source["userScore"];
+	        this.playtimeSeconds = source["playtimeSeconds"];
+	        this.playCount = source["playCount"];
+	        this.lastPlayed = source["lastPlayed"];
+	        this.description = source["description"];
+	        this.genres = source["genres"];
+	        this.releaseDate = source["releaseDate"];
+	        this.developers = source["developers"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

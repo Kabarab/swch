@@ -51,6 +51,32 @@ type LibraryGame struct {
 	IsInstalled         bool          `json:"isInstalled"`
 	IsPinned            bool          `json:"isPinned"`
 	IsMacSupported      bool          `json:"isMacSupported"`
+
+	// Playnite-style поля библиотеки
+	IsHidden         bool     `json:"isHidden"`
+	Categories       []string `json:"categories"`
+	CompletionStatus string   `json:"completionStatus"`
+	UserScore        int      `json:"userScore"`
+	PlaytimeSeconds  int64    `json:"playtimeSeconds"`
+	PlayCount        int      `json:"playCount"`
+	LastPlayed       int64    `json:"lastPlayed"`
+
+	// Метаданные (из кэша metadata)
+	Description string   `json:"description"`
+	Genres      []string `json:"genres"`
+	ReleaseDate string   `json:"releaseDate"`
+	Developers  []string `json:"developers"`
+}
+
+// GameMetadata — результат загрузки метаданных игры (Playnite-style metadata download)
+type GameMetadata struct {
+	GameID      string   `json:"gameId"`
+	Found       bool     `json:"found"`
+	Description string   `json:"description"`
+	Genres      []string `json:"genres"`
+	ReleaseDate string   `json:"releaseDate"`
+	Developers  []string `json:"developers"`
+	Error       string   `json:"error,omitempty"`
 }
 
 type Account struct {

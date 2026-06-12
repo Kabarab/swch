@@ -11,8 +11,10 @@ import (
 	"strings"
 	"swch/internal/epic"
 	"swch/internal/interfaces"
+	"swch/internal/metadata"
 	"swch/internal/models"
 	"swch/internal/scanner"
+	"swch/internal/tracker"
 	"sync"
 
 	"swch/internal/sys"
@@ -28,6 +30,13 @@ type App struct {
 	providers map[string]interfaces.PlatformProvider
 	epic      *epic.EpicClient
 	settings  *settings.Manager
+	tracker   *tracker.Tracker
+	meta      *metadata.Store
+
+	// Индекс последней отсканированной библиотеки (id -> игра),
+	// нужен трекеру времени, чтобы знать имя и путь установки при запуске
+	gameIndex   map[string]models.LibraryGame
+	gameIndexMu sync.RWMutex
 }
 
 const epicLoginURL = "https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode"
@@ -72,8 +81,11 @@ func NewApp() *App {
 	settingsMgr := settings.NewManager()
 
 	return &App{
-		epic:     epicClient,
-		settings: settingsMgr,
+		epic:      epicClient,
+		settings:  settingsMgr,
+		tracker:   tracker.NewTracker(settingsMgr),
+		meta:      metadata.NewStore(),
+		gameIndex: make(map[string]models.LibraryGame),
 		providers: map[string]interfaces.PlatformProvider{
 			"Steam":           steamScanner,
 			"Epic":            epicClient,
@@ -89,6 +101,10 @@ func NewApp() *App {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	// После завершения игровой сессии сообщаем фронтенду, что статистика обновилась
+	a.tracker.SetUpdateHandler(func(gameID string) {
+		wruntime.EventsEmit(a.ctx, "library-updated", gameID)
+	})
 }
 
 func runCSharpSwitcher(username string, gameID string) string {
@@ -167,6 +183,20 @@ func (a *App) GetLibrary() []models.LibraryGame {
 		game := &library[i]
 		gSet := a.settings.GetGameSettings(game.ID)
 		game.IsPinned = gSet.Pinned
+		game.IsHidden = gSet.Hidden
+		game.Categories = gSet.Categories
+		game.CompletionStatus = gSet.CompletionStatus
+		game.UserScore = gSet.UserScore
+		game.PlaytimeSeconds = gSet.PlaytimeSeconds
+		game.PlayCount = gSet.PlayCount
+		game.LastPlayed = gSet.LastPlayed
+
+		if meta, ok := a.meta.Get(game.ID); ok {
+			game.Description = meta.Description
+			game.Genres = meta.Genres
+			game.ReleaseDate = meta.ReleaseDate
+			game.Developers = meta.Developers
+		}
 
 		for j := range game.AvailableOnAccounts {
 			acc := &game.AvailableOnAccounts[j]
@@ -195,6 +225,15 @@ func (a *App) GetLibrary() []models.LibraryGame {
 		}
 		return library[i].Name < library[j].Name
 	})
+
+	// Обновляем индекс для трекера игрового времени
+	a.gameIndexMu.Lock()
+	a.gameIndex = make(map[string]models.LibraryGame, len(library))
+	for _, g := range library {
+		a.gameIndex[g.ID] = g
+	}
+	a.gameIndexMu.Unlock()
+
 	return library
 }
 
@@ -372,6 +411,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		if err != nil {
 			return "Error launching: " + err.Error()
 		}
+		a.trackLaunch(gameID, exePath)
 		return "Launched on " + platform
 	}
 
@@ -381,11 +421,29 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 			if err != nil {
 				return "Error launch: " + err.Error()
 			}
+			a.trackLaunch(gameID, exePath)
 			return "Launched Game"
 		}
 	}
 
 	return "Platform not supported"
+}
+
+// trackLaunch запускает учёт игрового времени для игры (Playnite-style playtime tracking)
+func (a *App) trackLaunch(gameID, exePath string) {
+	name := gameID
+	target := exePath
+
+	a.gameIndexMu.RLock()
+	if g, ok := a.gameIndex[gameID]; ok {
+		name = g.Name
+		if target == "" {
+			target = g.ExePath
+		}
+	}
+	a.gameIndexMu.RUnlock()
+
+	a.tracker.RecordLaunch(gameID, name, target)
 }
 
 func (a *App) AddTorrentGame(name string, exePath string) string {
@@ -439,6 +497,109 @@ func (a *App) ToggleGamePin(gameID string) string {
 	a.settings.SetGameSettings(gameID, settings)
 	a.settings.Save()
 	return "Success"
+}
+
+// ToggleGameHidden скрывает/показывает игру во всей библиотеке (Playnite-style hidden games)
+func (a *App) ToggleGameHidden(gameID string) string {
+	a.settings.UpdateGameSettings(gameID, func(s *settings.GameSettings) {
+		s.Hidden = !s.Hidden
+	})
+	a.settings.Save()
+	return "Success"
+}
+
+// SetGameCategories задаёт пользовательские категории игры
+func (a *App) SetGameCategories(gameID string, categories []string) string {
+	clean := make([]string, 0, len(categories))
+	seen := make(map[string]bool)
+	for _, c := range categories {
+		c = strings.TrimSpace(c)
+		key := strings.ToLower(c)
+		if c == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		clean = append(clean, c)
+	}
+	a.settings.UpdateGameSettings(gameID, func(s *settings.GameSettings) {
+		s.Categories = clean
+	})
+	a.settings.Save()
+	return "Success"
+}
+
+// GetAllCategories возвращает все категории, использованные в библиотеке
+func (a *App) GetAllCategories() []string {
+	set := make(map[string]bool)
+	for _, s := range a.settings.AllGameSettings() {
+		for _, c := range s.Categories {
+			set[c] = true
+		}
+	}
+	cats := make([]string, 0, len(set))
+	for c := range set {
+		cats = append(cats, c)
+	}
+	sort.Strings(cats)
+	return cats
+}
+
+// SetGameCompletionStatus задаёт статус прохождения игры
+// (notPlayed, planToPlay, playing, played, beaten, completed, onHold, abandoned)
+func (a *App) SetGameCompletionStatus(gameID string, status string) string {
+	a.settings.UpdateGameSettings(gameID, func(s *settings.GameSettings) {
+		s.CompletionStatus = status
+	})
+	a.settings.Save()
+	return "Success"
+}
+
+// SetGameUserScore задаёт оценку игры от 0 (сброс) до 10
+func (a *App) SetGameUserScore(gameID string, score int) string {
+	if score < 0 {
+		score = 0
+	}
+	if score > 10 {
+		score = 10
+	}
+	a.settings.UpdateGameSettings(gameID, func(s *settings.GameSettings) {
+		s.UserScore = score
+	})
+	a.settings.Save()
+	return "Success"
+}
+
+// FetchGameMetadata загружает описание, жанры и дату выхода игры.
+// Для Steam — через Steam Store API; результат кэшируется на диске.
+func (a *App) FetchGameMetadata(gameID string, platform string) models.GameMetadata {
+	result := models.GameMetadata{GameID: gameID}
+
+	fill := func(m metadata.Meta) {
+		result.Found = true
+		result.Description = m.Description
+		result.Genres = m.Genres
+		result.ReleaseDate = m.ReleaseDate
+		result.Developers = m.Developers
+	}
+
+	if m, ok := a.meta.Get(gameID); ok && m.Description != "" {
+		fill(m)
+		return result
+	}
+
+	if platform != "Steam" {
+		result.Error = "Автозагрузка метаданных пока доступна только для Steam"
+		return result
+	}
+
+	m, err := metadata.FetchSteam(gameID)
+	if err != nil {
+		result.Error = "Не удалось загрузить метаданные: " + err.Error()
+		return result
+	}
+	a.meta.Put(gameID, m)
+	fill(m)
+	return result
 }
 
 func (a *App) ToggleGameAccountHidden(username, platform, gameID string) string {
