@@ -761,7 +761,20 @@ func (a *App) InstallAllEpicGames() string {
 
 // --- FREE GAMES CLAIMER INTEGRATION ---
 
-const claimerPath = "/Users/nazarzukov/vtvin/free-games-claimer"
+func (a *App) getClaimerPath() string {
+	// First check if any profile has CLAIMER_PATH set
+	for _, p := range a.settings.Profiles {
+		if path, ok := p.Config["CLAIMER_PATH"]; ok && path != "" {
+			return path
+		}
+	}
+	// Fallback to default dynamic path
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/Users/nazarzukov/vtvin/free-games-claimer"
+	}
+	return filepath.Join(home, "vtvin", "free-games-claimer")
+}
 
 func parseEnvFile(filePath string) (map[string]string, error) {
 	result := make(map[string]string)
@@ -838,7 +851,8 @@ func findNodePath() (string, error) {
 }
 
 func (a *App) ensureDependencies(nodePath string) error {
-	nodeModulesPath := filepath.Join(claimerPath, "node_modules")
+	cPath := a.getClaimerPath()
+	nodeModulesPath := filepath.Join(cPath, "node_modules")
 	if _, err := os.Stat(nodeModulesPath); err == nil {
 		return nil
 	}
@@ -864,7 +878,7 @@ func (a *App) ensureDependencies(nodePath string) error {
 	}
 
 	cmd := exec.Command(npmPath, "install")
-	cmd.Dir = claimerPath
+	cmd.Dir = cPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("npm install failed: %s", string(output)))
@@ -876,7 +890,7 @@ func (a *App) ensureDependencies(nodePath string) error {
 }
 
 func (a *App) GetClaimerConfig() (map[string]string, error) {
-	envPath := filepath.Join(claimerPath, "data", "config.env")
+	envPath := filepath.Join(a.getClaimerPath(), "data", "config.env")
 	if _, err := os.Stat(envPath); os.IsNotExist(err) {
 		return make(map[string]string), nil
 	}
@@ -884,7 +898,7 @@ func (a *App) GetClaimerConfig() (map[string]string, error) {
 }
 
 func (a *App) SaveClaimerConfig(config map[string]string) string {
-	envPath := filepath.Join(claimerPath, "data", "config.env")
+	envPath := filepath.Join(a.getClaimerPath(), "data", "config.env")
 	err := writeEnvFile(envPath, config)
 	if err != nil {
 		return "Error saving config: " + err.Error()
@@ -898,12 +912,92 @@ func (a *App) IsClaimerRunning() bool {
 	return a.claimerIsRunning
 }
 
+func (a *App) GetClaimerProfiles() []settings.ClaimerProfile {
+	// If Profiles is empty, try to migrate from data/config.env
+	if len(a.settings.Profiles) == 0 {
+		envPath := filepath.Join(a.getClaimerPath(), "data", "config.env")
+		if _, err := os.Stat(envPath); err == nil {
+			if cfg, err := parseEnvFile(envPath); err == nil && len(cfg) > 0 {
+				a.settings.Profiles = append(a.settings.Profiles, settings.ClaimerProfile{
+					Name:     "Default",
+					Config:   cfg,
+					Selected: true,
+				})
+				a.settings.Save()
+			}
+		}
+	}
+	return a.settings.Profiles
+}
+
+func (a *App) SaveClaimerProfile(name string, config map[string]string) string {
+	if name == "" {
+		return "Error: Profile name cannot be empty"
+	}
+	
+	found := false
+	for i, p := range a.settings.Profiles {
+		if p.Name == name {
+			a.settings.Profiles[i].Config = config
+			found = true
+			break
+		}
+	}
+	if !found {
+		a.settings.Profiles = append(a.settings.Profiles, settings.ClaimerProfile{
+			Name:     name,
+			Config:   config,
+			Selected: true,
+		})
+	}
+	a.settings.Save()
+	return "Success"
+}
+
+func (a *App) DeleteClaimerProfile(name string) string {
+	for i, p := range a.settings.Profiles {
+		if p.Name == name {
+			a.settings.Profiles = append(a.settings.Profiles[:i], a.settings.Profiles[i+1:]...)
+			a.settings.Save()
+			return "Success"
+		}
+	}
+	return "Error: Profile not found"
+}
+
+func (a *App) ToggleClaimerProfileSelected(name string) string {
+	for i, p := range a.settings.Profiles {
+		if p.Name == name {
+			a.settings.Profiles[i].Selected = !a.settings.Profiles[i].Selected
+			a.settings.Save()
+			return "Success"
+		}
+	}
+	return "Error: Profile not found"
+}
+
 func (a *App) RunClaimerScript(scriptName string) string {
 	a.claimerMu.Lock()
 	if a.claimerIsRunning {
 		a.claimerMu.Unlock()
 		return "A script is already running"
 	}
+
+	// Make sure we trigger migrations first so we have at least one profile
+	a.GetClaimerProfiles()
+
+	var selected []settings.ClaimerProfile
+	for _, p := range a.settings.Profiles {
+		if p.Selected {
+			selected = append(selected, p)
+		}
+	}
+
+	if len(selected) == 0 {
+		a.claimerMu.Unlock()
+		return "Error: No accounts selected. Please select at least one account to run the script."
+	}
+
 	a.claimerIsRunning = true
 	a.claimerMu.Unlock()
 
@@ -924,6 +1018,7 @@ func (a *App) RunClaimerScript(scriptName string) string {
 			return
 		}
 
+		cPath := a.getClaimerPath()
 		err = a.ensureDependencies(nodePath)
 		if err != nil {
 			wruntime.EventsEmit(a.ctx, "claimer-log", "Error installing dependencies: "+err.Error())
@@ -931,47 +1026,77 @@ func (a *App) RunClaimerScript(scriptName string) string {
 		}
 
 		scriptFile := scriptName + ".js"
-		scriptPath := filepath.Join(claimerPath, scriptFile)
+		scriptPath := filepath.Join(cPath, scriptFile)
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 			wruntime.EventsEmit(a.ctx, "claimer-log", "Error: script file "+scriptFile+" does not exist in claimer folder")
 			return
 		}
 
-		wruntime.EventsEmit(a.ctx, "claimer-log", "Starting claimer script: "+scriptName)
+		for idx, profile := range selected {
+			wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%d/%d] Starting claimer script: %s for account: %s", idx+1, len(selected), scriptName, profile.Name))
 
-		cmd := exec.Command(nodePath, scriptFile)
-		cmd.Dir = claimerPath
-		sys.ConfigureCommand(cmd)
+			cmd := exec.Command(nodePath, scriptFile)
+			cmd.Dir = cPath
+			sys.ConfigureCommand(cmd)
 
-		stdoutPipe, err := cmd.StdoutPipe()
-		if err != nil {
-			wruntime.EventsEmit(a.ctx, "claimer-log", "Error creating stdout pipe: "+err.Error())
-			return
-		}
-		cmd.Stderr = cmd.Stdout
+			cmd.Env = os.Environ()
+			for k, v := range profile.Config {
+				if v != "" {
+					cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+				}
+			}
 
-		a.claimerMu.Lock()
-		a.claimerCmd = cmd
-		a.claimerMu.Unlock()
+			// Generate safe profile name
+			safeName := ""
+			for _, ch := range profile.Name {
+				if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
+					safeName += string(ch)
+				}
+			}
+			if safeName == "" {
+				safeName = "default"
+			}
+			browserDir := filepath.Join(cPath, "data", "browser_"+safeName)
+			cmd.Env = append(cmd.Env, "BROWSER_DIR="+browserDir)
 
-		if err := cmd.Start(); err != nil {
-			wruntime.EventsEmit(a.ctx, "claimer-log", "Error starting process: "+err.Error())
-			return
-		}
-
-		reader := bufio.NewReader(stdoutPipe)
-		for {
-			line, err := reader.ReadString('\n')
+			stdoutPipe, err := cmd.StdoutPipe()
 			if err != nil {
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Error creating stdout pipe: %v", profile.Name, err))
+				continue
+			}
+			cmd.Stderr = cmd.Stdout
+
+			a.claimerMu.Lock()
+			a.claimerCmd = cmd
+			a.claimerMu.Unlock()
+
+			if err := cmd.Start(); err != nil {
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Error starting process: %v", profile.Name, err))
+				continue
+			}
+
+			reader := bufio.NewReader(stdoutPipe)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					break
+				}
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] %s", profile.Name, strings.TrimRight(line, "\r\n")))
+			}
+
+			if err := cmd.Wait(); err != nil {
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Process finished with status: %v", profile.Name, err))
+			} else {
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Process finished successfully.", profile.Name))
+			}
+
+			a.claimerMu.Lock()
+			isStopped := a.claimerCmd == nil
+			a.claimerMu.Unlock()
+			if isStopped {
+				wruntime.EventsEmit(a.ctx, "claimer-log", "Execution aborted by user.")
 				break
 			}
-			wruntime.EventsEmit(a.ctx, "claimer-log", strings.TrimRight(line, "\r\n"))
-		}
-
-		if err := cmd.Wait(); err != nil {
-			wruntime.EventsEmit(a.ctx, "claimer-log", "Process finished with status: "+err.Error())
-		} else {
-			wruntime.EventsEmit(a.ctx, "claimer-log", "Process finished successfully.")
 		}
 	}()
 
@@ -993,6 +1118,8 @@ func (a *App) StopClaimerScript() string {
 		wruntime.EventsEmit(a.ctx, "claimer-log", "Failed to send SIGINT. Killing process...")
 		a.claimerCmd.Process.Kill()
 	}
+
+	a.claimerCmd = nil
 
 	return "Success"
 }

@@ -20,11 +20,19 @@ type GameSettings struct {
 	Pinned bool `json:"pinned"`
 }
 
+type ClaimerProfile struct {
+	Name     string            `json:"name"`
+	Config   map[string]string `json:"config"`
+	Selected bool              `json:"selected"`
+}
+
 type Manager struct {
 	AccountsFile string
 	GamesFile    string
+	ProfilesFile string
 	Accounts     map[string]AccountSettings
 	Games        map[string]GameSettings
+	Profiles     []ClaimerProfile
 	mu           sync.RWMutex
 }
 
@@ -38,8 +46,10 @@ func NewManager() *Manager {
 	m := &Manager{
 		AccountsFile: "accounts_settings.json",
 		GamesFile:    "games_settings.json",
+		ProfilesFile: "claimer_profiles.json",
 		Accounts:     make(map[string]AccountSettings),
 		Games:        make(map[string]GameSettings),
+		Profiles:     []ClaimerProfile{},
 	}
 	m.Load()
 	return m
@@ -55,6 +65,9 @@ func (m *Manager) Load() {
 	if data, err := os.ReadFile(m.GamesFile); err == nil {
 		json.Unmarshal(data, &m.Games)
 	}
+	if data, err := os.ReadFile(m.ProfilesFile); err == nil {
+		json.Unmarshal(data, &m.Profiles)
+	}
 }
 
 func (m *Manager) Save() {
@@ -66,6 +79,9 @@ func (m *Manager) Save() {
 
 	gData, _ := json.MarshalIndent(m.Games, "", "  ")
 	os.WriteFile(m.GamesFile, gData, 0644)
+
+	pData, _ := json.MarshalIndent(m.Profiles, "", "  ")
+	os.WriteFile(m.ProfilesFile, pData, 0644)
 }
 
 func (m *Manager) GetAccountSettings(key string) AccountSettings {

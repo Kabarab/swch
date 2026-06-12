@@ -22,6 +22,10 @@ export function DeleteAllEpicAccounts() {
   return window['go']['app']['App']['DeleteAllEpicAccounts']();
 }
 
+export function DeleteClaimerProfile(arg1) {
+  return window['go']['app']['App']['DeleteClaimerProfile'](arg1);
+}
+
 export function EpicCheckStatus() {
   return window['go']['app']['App']['EpicCheckStatus']();
 }
@@ -36,6 +40,10 @@ export function EpicLoginAuto() {
 
 export function GetClaimerConfig() {
   return window['go']['app']['App']['GetClaimerConfig']();
+}
+
+export function GetClaimerProfiles() {
+  return window['go']['app']['App']['GetClaimerProfiles']();
 }
 
 export function GetClipboardText() {
@@ -90,6 +98,10 @@ export function SaveClaimerConfig(arg1) {
   return window['go']['app']['App']['SaveClaimerConfig'](arg1);
 }
 
+export function SaveClaimerProfile(arg1, arg2) {
+  return window['go']['app']['App']['SaveClaimerProfile'](arg1, arg2);
+}
+
 export function SaveEpicAccount(arg1) {
   return window['go']['app']['App']['SaveEpicAccount'](arg1);
 }
@@ -136,6 +148,10 @@ export function SwitchToAccount(arg1, arg2) {
 
 export function SyncEpicLibrary() {
   return window['go']['app']['App']['SyncEpicLibrary']();
+}
+
+export function ToggleClaimerProfileSelected(arg1) {
+  return window['go']['app']['App']['ToggleClaimerProfileSelected'](arg1);
 }
 
 export function ToggleGameAccountHidden(arg1, arg2, arg3) {

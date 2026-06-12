@@ -30,7 +30,11 @@ import {
     SaveClaimerConfig,
     RunClaimerScript,
     StopClaimerScript,
-    IsClaimerRunning
+    IsClaimerRunning,
+    GetClaimerProfiles,
+    SaveClaimerProfile,
+    DeleteClaimerProfile,
+    ToggleClaimerProfileSelected
 } from '../wailsjs/go/app/App';
 
 // --- Глобальные переменные ---
@@ -244,6 +248,7 @@ window.switchTab = function (tab) {
         document.getElementById('view-claimer').style.display = 'block';
         document.querySelector('.nav-item[onclick="switchTab(\'claimer\')"]').classList.add('active');
         window.checkClaimerStatus();
+        window.loadClaimerProfiles();
     }
 }
 
@@ -1086,23 +1091,133 @@ const configKeys = [
     "EG_EMAIL", "EG_PASSWORD", "EG_OTPKEY", "EG_PARENTALPIN",
     "GOG_EMAIL", "GOG_PASSWORD",
     "PG_EMAIL", "PG_PASSWORD", "PG_OTPKEY", "PG_REDEEM", "PG_CLAIMDLC",
-    "NOTIFY"
+    "NOTIFY", "CLAIMER_PATH", "PROFILE_NAME"
 ];
 
-window.openClaimerConfigModal = async function () {
+window.loadClaimerProfiles = async function () {
     try {
-        const config = await GetClaimerConfig();
-        
-        configKeys.forEach(key => {
-            const input = document.getElementById(`cfg-${key}`);
-            if (input) {
-                if (input.type === "checkbox") {
-                    input.checked = config[key] === "1";
-                } else {
-                    input.value = config[key] || "";
+        const profiles = await GetClaimerProfiles() || [];
+        const container = document.getElementById('claimer-profiles-list');
+        if (!container) return;
+
+        container.innerHTML = '';
+        if (profiles.length === 0) {
+            container.innerHTML = `<div style="color:#777; font-size:12px; padding: 5px;">No accounts configured. Click 'Add Account' to create one.</div>`;
+            return;
+        }
+
+        profiles.forEach(p => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.background = 'rgba(255,255,255,0.03)';
+            row.style.border = '1px solid rgba(255,255,255,0.05)';
+            row.style.padding = '8px 12px';
+            row.style.borderRadius = '6px';
+            
+            const left = document.createElement('div');
+            left.style.display = 'flex';
+            left.style.alignItems = 'center';
+            left.style.gap = '8px';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = p.selected;
+            checkbox.style.cursor = 'pointer';
+            checkbox.onchange = async () => {
+                await ToggleClaimerProfileSelected(p.name);
+                window.loadClaimerProfiles();
+            };
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.innerText = p.name;
+            nameSpan.style.fontSize = '14px';
+            nameSpan.style.fontWeight = '500';
+            
+            left.appendChild(checkbox);
+            left.appendChild(nameSpan);
+            
+            const right = document.createElement('div');
+            right.style.display = 'flex';
+            right.style.gap = '8px';
+            
+            const editBtn = document.createElement('button');
+            editBtn.innerHTML = '<i class="fa-solid fa-pen" style="font-size:11px;"></i>';
+            editBtn.className = 'console-clear-btn';
+            editBtn.style.padding = '4px 8px';
+            editBtn.style.margin = '0';
+            editBtn.onclick = () => window.openClaimerConfigModal(false, p);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can" style="font-size:11px;"></i>';
+            deleteBtn.className = 'console-clear-btn';
+            deleteBtn.style.padding = '4px 8px';
+            deleteBtn.style.margin = '0';
+            deleteBtn.style.color = '#e74c3c';
+            deleteBtn.style.borderColor = 'rgba(231,76,60,0.2)';
+            deleteBtn.onclick = async () => {
+                if (confirm(`Are you sure you want to delete account "${p.name}"?`)) {
+                    await DeleteClaimerProfile(p.name);
+                    window.loadClaimerProfiles();
                 }
+            };
+            
+            right.appendChild(editBtn);
+            if (p.name !== "Default") {
+                right.appendChild(deleteBtn);
             }
+            
+            row.appendChild(left);
+            row.appendChild(right);
+            container.appendChild(row);
         });
+    } catch (e) {
+        console.error("Error loading claimer profiles:", e);
+    }
+};
+
+window.openClaimerConfigModal = async function (isAdd, profile = null) {
+    try {
+        const titleEl = document.getElementById('claimer-modal-title');
+        const nameInput = document.getElementById('cfg-PROFILE_NAME');
+        
+        if (isAdd) {
+            titleEl.innerText = "Add New Claimer Account";
+            nameInput.value = "";
+            nameInput.disabled = false;
+            nameInput.placeholder = "e.g. My Alt Account";
+            
+            // Clear other fields or set to defaults
+            configKeys.forEach(key => {
+                if (key === "PROFILE_NAME") return;
+                const input = document.getElementById(`cfg-${key}`);
+                if (input) {
+                    if (input.type === "checkbox") {
+                        input.checked = (key === "SHOW");
+                    } else {
+                        input.value = "";
+                    }
+                }
+            });
+        } else {
+            titleEl.innerText = `Configure Account: ${profile.name}`;
+            nameInput.value = profile.name;
+            nameInput.disabled = true;
+            
+            const config = profile.config || {};
+            configKeys.forEach(key => {
+                if (key === "PROFILE_NAME") return;
+                const input = document.getElementById(`cfg-${key}`);
+                if (input) {
+                    if (input.type === "checkbox") {
+                        input.checked = config[key] === "1";
+                    } else {
+                        input.value = config[key] || "";
+                    }
+                }
+            });
+        }
 
         document.getElementById('claimer-config-modal').style.display = 'flex';
     } catch (e) {
@@ -1113,8 +1228,16 @@ window.openClaimerConfigModal = async function () {
 window.saveClaimerSettings = async function (event) {
     if (event) event.preventDefault();
 
+    const nameInput = document.getElementById('cfg-PROFILE_NAME');
+    const profileName = nameInput.value.trim();
+    if (!profileName) {
+        alert("Please enter a profile name.");
+        return;
+    }
+
     const config = {};
     configKeys.forEach(key => {
+        if (key === "PROFILE_NAME") return;
         const input = document.getElementById(`cfg-${key}`);
         if (input) {
             if (input.type === "checkbox") {
@@ -1126,10 +1249,10 @@ window.saveClaimerSettings = async function (event) {
     });
 
     try {
-        const res = await SaveClaimerConfig(config);
+        const res = await SaveClaimerProfile(profileName, config);
         if (res === "Success") {
             closeModal('claimer-config-modal');
-            alert("Configuration saved successfully!");
+            window.loadClaimerProfiles();
         } else {
             alert("Error saving configuration: " + res);
         }

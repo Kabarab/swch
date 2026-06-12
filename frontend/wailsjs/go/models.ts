@@ -188,3 +188,24 @@ export namespace models {
 
 }
 
+export namespace settings {
+	
+	export class ClaimerProfile {
+	    name: string;
+	    config: Record<string, string>;
+	    selected: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClaimerProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.config = source["config"];
+	        this.selected = source["selected"];
+	    }
+	}
+
+}
+

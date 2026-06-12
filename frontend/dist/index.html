@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script type="module" crossorigin src="/assets/main-Cdos2QmK.js"></script>
+  <script type="module" crossorigin src="/assets/main-BAph4Tam.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/main-BXiVVGU-.css">
 </head>
 
@@ -110,41 +110,54 @@
             <div id="view-claimer" class="view-section" style="display: none;">
                 <div class="header">
                     <div class="title">Free Games Claimer</div>
-                    <button class="btn-sidebar-action" onclick="openClaimerConfigModal()" style="margin: 0; padding: 10px 20px; font-size: 14px; border-radius: 8px;">
-                        <i class="fa-solid fa-cog"></i> Configure
+                    <button class="btn-sidebar-action" onclick="openClaimerConfigModal(true)" style="margin: 0; padding: 10px 20px; font-size: 14px; border-radius: 8px;">
+                        <i class="fa-solid fa-plus"></i> Add Account
                     </button>
                 </div>
 
                 <div class="claimer-container">
-                    <div class="claimer-controls-panel">
-                        <h3>Available Scripts</h3>
-                        <div class="claimer-buttons-grid">
-                            <button class="claimer-btn btn-epic" onclick="runClaimer('epic-games')">
-                                <i class="fa-solid fa-bolt"></i> Epic Games Store
-                            </button>
-                            <button class="claimer-btn btn-gog" onclick="runClaimer('gog')">
-                                <i class="fa-solid fa-gamepad"></i> GOG.com
-                            </button>
-                            <button class="claimer-btn btn-prime" onclick="runClaimer('prime-gaming')">
-                                <i class="fa-solid fa-crown"></i> Prime Gaming
-                            </button>
-                            <button class="claimer-btn btn-unreal" onclick="runClaimer('unrealengine')">
-                                <i class="fa-solid fa-cubes"></i> Unreal Engine Assets
-                            </button>
-                            <button class="claimer-btn btn-steam" onclick="runClaimer('steam-games')">
-                                <i class="fa-brands fa-steam"></i> Steam Promo Games
-                            </button>
-                            <button class="claimer-btn btn-aliexpress" onclick="runClaimer('aliexpress')">
-                                <i class="fa-solid fa-shopping-cart"></i> AliExpress
-                            </button>
-                        </div>
-                        <div class="claimer-status-bar">
-                            <div class="claimer-status-info">
-                                <span>Status: <strong id="claimer-status-text">Idle</strong></span>
+                    <div class="claimer-controls-panel" style="display:flex; flex-direction:column; gap:20px; overflow-y:auto;">
+                        <!-- Profiles Section -->
+                        <div class="claimer-profiles-section" style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 15px; display:flex; flex-direction:column;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <h3 style="margin:0; font-size:16px;">Claimer Accounts</h3>
                             </div>
-                            <button id="btn-stop-claimer" class="claimer-stop-btn" onclick="stopClaimer()" disabled>
-                                <i class="fa-solid fa-stop"></i> Stop Script
-                            </button>
+                            <div id="claimer-profiles-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; padding-right:5px;">
+                                <!-- Profile rows will be injected here -->
+                            </div>
+                        </div>
+
+                        <!-- Scripts Section -->
+                        <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+                            <h3 style="margin-top:0; margin-bottom:15px; font-size:16px;">Available Scripts (runs for selected accounts)</h3>
+                            <div class="claimer-buttons-grid">
+                                <button class="claimer-btn btn-epic" onclick="runClaimer('epic-games')">
+                                    <i class="fa-solid fa-bolt"></i> Epic Games Store
+                                </button>
+                                <button class="claimer-btn btn-gog" onclick="runClaimer('gog')">
+                                    <i class="fa-solid fa-gamepad"></i> GOG.com
+                                </button>
+                                <button class="claimer-btn btn-prime" onclick="runClaimer('prime-gaming')">
+                                    <i class="fa-solid fa-crown"></i> Prime Gaming
+                                </button>
+                                <button class="claimer-btn btn-unreal" onclick="runClaimer('unrealengine')">
+                                    <i class="fa-solid fa-cubes"></i> Unreal Engine Assets
+                                </button>
+                                <button class="claimer-btn btn-steam" onclick="runClaimer('steam-games')">
+                                    <i class="fa-brands fa-steam"></i> Steam Promo Games
+                                </button>
+                                <button class="claimer-btn btn-aliexpress" onclick="runClaimer('aliexpress')">
+                                    <i class="fa-solid fa-shopping-cart"></i> AliExpress
+                                </button>
+                            </div>
+                            <div class="claimer-status-bar" style="margin-top:15px; padding-top:15px;">
+                                <div class="claimer-status-info">
+                                    <span>Status: <strong id="claimer-status-text">Idle</strong></span>
+                                </div>
+                                <button id="btn-stop-claimer" class="claimer-stop-btn" onclick="stopClaimer()" disabled>
+                                    <i class="fa-solid fa-stop"></i> Stop Script
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -376,12 +389,17 @@
     <div id="claimer-config-modal" class="modal">
         <div class="modal-content" style="max-width: 600px; width: 600px;">
             <div class="modal-header">
-                <h3>Claimer Configuration</h3>
+                <h3 id="claimer-modal-title">Claimer Configuration</h3>
                 <span class="close" onclick="closeModal('claimer-config-modal')">&times;</span>
             </div>
             <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
                 <form id="claimer-config-form" onsubmit="saveClaimerSettings(event)">
                     
+                    <div id="cfg-profile-name-container" style="margin-bottom: 15px;">
+                        <label style="color:#aaa; font-size:12px;">Account / Profile Name:</label>
+                        <input type="text" id="cfg-PROFILE_NAME" class="input-field" placeholder="e.g. Main Account" required>
+                    </div>
+
                     <h4 style="margin-top:0; border-bottom: 1px solid #333; padding-bottom: 5px; color:#fff;">General Settings</h4>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px;">
                         <div>
@@ -469,6 +487,12 @@
                     <div style="margin-bottom: 15px;">
                         <label style="color:#aaa; font-size:12px;">Apprise NOTIFY URL:</label>
                         <input type="text" id="cfg-NOTIFY" class="input-field" placeholder="tgram://... or mailto://...">
+                    </div>
+
+                    <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-top:15px; color:#fff;">Advanced</h4>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color:#aaa; font-size:12px;">Custom Claimer Path (optional, overrides default):</label>
+                        <input type="text" id="cfg-CLAIMER_PATH" class="input-field" placeholder="e.g. C:\Users\name\vtvin\free-games-claimer">
                     </div>
 
                     <button type="submit" class="btn-main" style="margin-top:10px;">Save Configuration</button>
