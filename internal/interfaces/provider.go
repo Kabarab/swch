@@ -37,3 +37,17 @@ type SessionSnapshotter interface {
 	ListSessions() ([]string, error)
 	DeleteSession(accountName string) error
 }
+
+// LocalLibraryScanner — поиск установленных игр по локальным папкам и
+// манифестам лаунчера (steamapps/appmanifest_*.acf, EGS Data/Manifests/*.item).
+// Работает без сессии и без сети.
+type LocalLibraryScanner interface {
+	ScanInstalledGames() ([]models.LibraryGame, error)
+}
+
+// RemoteLibraryProvider — получение купленных игр через API магазина.
+// Токены берутся из сохраненных сессий модуля аккаунтов; результат включает
+// и неустановленные игры (IsInstalled=false).
+type RemoteLibraryProvider interface {
+	GetRemoteLibrary() ([]models.LibraryGame, error)
+}

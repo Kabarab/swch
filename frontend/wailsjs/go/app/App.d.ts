@@ -49,6 +49,8 @@ export function LogoutEpic():Promise<string>;
 
 export function OpenEpicAuthPage():Promise<void>;
 
+export function RefreshLibrary():Promise<string>;
+
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 
 export function RestoreAccountSession(arg1:string,arg2:string):Promise<string>;

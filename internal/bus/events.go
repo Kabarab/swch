@@ -7,6 +7,9 @@ const (
 	EventSwitcherStatus = "switcher:status" // payload: switcher.Status — прогресс шагов
 	EventSwitcherDone   = "switcher:done"   // payload: switcher.Status — итог (OK=true/false)
 
+	// Library (internal/services/library)
+	EventLibraryRefreshProgress = "library:refresh:progress" // payload: library.Progress — по источнику
+
 	// Существующие каналы app.go. Значения совпадают с историческими строками,
 	// чтобы не ломать текущий фронтенд; app.go мигрирует на константы в Phase A.
 	EventClaimerLog     = "claimer-log"

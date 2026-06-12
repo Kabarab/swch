@@ -19,6 +19,7 @@ import (
 	"swch/internal/interfaces"
 	"swch/internal/models"
 	"swch/internal/scanner"
+	"swch/internal/services/library"
 	"swch/internal/services/switcher"
 	"sync"
 
@@ -35,6 +36,7 @@ type App struct {
 	bus              *bus.WailsEmitter
 	providers        map[string]interfaces.PlatformProvider
 	switcher         *switcher.Service
+	library          *library.Service
 	epic             *epic.EpicClient
 	settings         *settings.Manager
 	claimerCmd       *exec.Cmd
@@ -98,6 +100,12 @@ func NewApp(claimerFS embed.FS) *App {
 
 	emitter := bus.NewWailsEmitter()
 
+	// Кэш агрегированной библиотеки живет в UserConfigDir/swch
+	libraryCachePath := ""
+	if configDir, err := os.UserConfigDir(); err == nil {
+		libraryCachePath = filepath.Join(configDir, "swch", "library_cache.json")
+	}
+
 	return &App{
 		bus:       emitter,
 		epic:      epicClient,
@@ -105,12 +113,17 @@ func NewApp(claimerFS embed.FS) *App {
 		claimerFS: claimerFS,
 		providers: providers,
 		switcher:  switcher.NewService(providers, emitter),
+		library:   library.NewService(providers, emitter, libraryCachePath),
 	}
 }
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.bus.SetContext(ctx)
+
+	// Фоновое обновление библиотеки при старте: UI сразу получает кэш,
+	// по завершении рескана придет событие library-updated
+	a.library.RefreshAsync()
 }
 
 func runCSharpSwitcher(username string, gameID string) string {
@@ -142,28 +155,9 @@ func runCSharpSwitcher(username string, gameID string) string {
 }
 
 func (a *App) GetLibrary() []models.LibraryGame {
-	// loadSettings removed
-	var library []models.LibraryGame
-
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	// 1. Providers Scan (Steam, Epic, Riot)
-	for name, provider := range a.providers {
-		wg.Add(1)
-		go func(n string, p interfaces.PlatformProvider) {
-			defer wg.Done()
-			games, err := p.GetGamesProvider()
-			if err != nil {
-				fmt.Printf("[App] Error parsing games from %s: %v\n", n, err)
-				return
-			}
-			mu.Lock()
-			library = append(library, games...)
-			mu.Unlock()
-		}(name, provider)
-	}
-	wg.Wait()
+	// Агрегированная библиотека всех провайдеров — из кэша library-сервиса
+	// (мгновенно; фоновый рескан стартует в Startup и через RefreshLibrary)
+	library := a.library.Get()
 
 	// 5. Custom & Torrent Games
 	customGames := scanner.LoadCustomGames()
@@ -228,6 +222,14 @@ func (a *App) GetLibrary() []models.LibraryGame {
 		return library[i].Name < library[j].Name
 	})
 	return library
+}
+
+// RefreshLibrary запускает фоновое пересканирование всех провайдеров
+// (локальные манифесты + API магазинов). UI продолжает работать с кэшем;
+// по завершении фронтенд получит событие library-updated.
+func (a *App) RefreshLibrary() string {
+	a.library.RefreshAsync()
+	return "Refreshing"
 }
 
 func (a *App) GetLaunchers() []models.LauncherGroup {

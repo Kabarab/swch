@@ -94,6 +94,10 @@ export function OpenEpicAuthPage() {
   return window['go']['app']['App']['OpenEpicAuthPage']();
 }
 
+export function RefreshLibrary() {
+  return window['go']['app']['App']['RefreshLibrary']();
+}
+
 export function RemoveGame(arg1, arg2) {
   return window['go']['app']['App']['RemoveGame'](arg1, arg2);
 }
