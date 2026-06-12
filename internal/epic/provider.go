@@ -11,85 +11,85 @@ func (c *EpicClient) GetName() string {
 	return "Epic"
 }
 
-// GetGamesProvider implements PlatformProvider
-func (c *EpicClient) GetGamesProvider() ([]models.LibraryGame, error) {
-	// 1. Verify session (optional, but good practice)
+// ScanInstalledGames implements interfaces.LocalLibraryScanner:
+// установленные игры из локальных манифестов EGS (Data/Manifests/*.item).
+// Работает без сессии и без сети.
+func (c *EpicClient) ScanInstalledGames() ([]models.LibraryGame, error) {
+	return scanner.ScanEpicGames(), nil
+}
+
+// GetRemoteLibrary implements interfaces.RemoteLibraryProvider: купленные игры
+// через Epic API (entitlements + catalog). Токены берутся из сохраненной
+// сессии модуля аккаунтов (LoadSession).
+func (c *EpicClient) GetRemoteLibrary() ([]models.LibraryGame, error) {
 	if err := c.LoadSession(); err != nil {
-		fmt.Println("[Epic] Нет активной сессии Epic:", err)
-		// We might still want to return installed games via manifest if no session?
-		// app.go logic had a fallback.
-		// For now, let's try to get full library, which internally does entitlements + manifests.
-		// If auth fails, GetFullLibrary fails.
+		return nil, fmt.Errorf("нет активной сессии Epic: %w", err)
 	}
 
-	var library []models.LibraryGame
-	var libraryMap = make(map[string]bool) // To avoid duplicates if we merge sources
-
-	// 1. Try to fetch full library from API (requires active session)
-	// We do this first because it gives better metadata (images, titles)
 	apiItems, err := c.GetFullLibrary()
 	if err != nil {
+		return nil, fmt.Errorf("ошибка получения библиотеки Epic: %w", err)
+	}
+
+	userName := "Unknown"
+	if c.Token != nil {
+		userName = c.Token.DisplayName
+	}
+
+	var games []models.LibraryGame
+	for _, item := range apiItems {
+		games = append(games, apiItemToLibraryGame(item, userName))
+	}
+	return games, nil
+}
+
+// apiItemToLibraryGame приводит CatalogItem из Epic API к единому формату.
+func apiItemToLibraryGame(item CatalogItem, userName string) models.LibraryGame {
+	// Find icon
+	imgURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
+	for _, img := range item.KeyImages {
+		if img.Type == "Thumbnail" || img.Type == "DieselGameBox" {
+			imgURL = img.URL
+			break
+		}
+	}
+
+	// Use AppID if available (from manifest match), otherwise ID (Catalog ID)
+	gameID := item.ID
+	if item.AppID != "" {
+		gameID = item.AppID
+	}
+
+	return models.LibraryGame{
+		ID:          gameID,
+		Name:        item.Title,
+		Platform:    "Epic",
+		IconURL:     imgURL,
+		ExePath:     item.InstallPath,
+		IsInstalled: item.IsInstalled,
+		AvailableOnAccounts: []models.AccountStat{
+			{
+				AccountID:   "epic_api", // Generic ID for API source
+				DisplayName: "Epic Account",
+				Username:    userName,
+			},
+		},
+	}
+}
+
+// GetGamesProvider implements PlatformProvider (legacy-формат "все одним
+// списком"). services/library использует гранулярные методы напрямую.
+func (c *EpicClient) GetGamesProvider() ([]models.LibraryGame, error) {
+	remote, err := c.GetRemoteLibrary()
+	if err != nil {
 		fmt.Println("[Epic] Note: Failed to fetch API library (not logged in?), falling back to local manifests:", err)
-	} else {
-		for _, item := range apiItems {
-			// Find icon
-			imgURL := "https://upload.wikimedia.org/wikipedia/commons/3/31/Epic_Games_logo.svg"
-			for _, img := range item.KeyImages {
-				if img.Type == "Thumbnail" || img.Type == "DieselGameBox" {
-					imgURL = img.URL
-					break
-				}
-			}
-
-			// Use AppID if available (from manifest match), otherwise ID (Catalog ID)
-			gameID := item.ID
-			if item.AppID != "" {
-				gameID = item.AppID
-			}
-
-			userName := "Unknown"
-			if c.Token != nil {
-				userName = c.Token.DisplayName
-			}
-
-			libGame := models.LibraryGame{
-				ID:          gameID,
-				Name:        item.Title,
-				Platform:    "Epic",
-				IconURL:     imgURL,
-				ExePath:     item.InstallPath,
-				IsInstalled: item.IsInstalled,
-				AvailableOnAccounts: []models.AccountStat{
-					{
-						AccountID:   "epic_api", // Generic ID for API source
-						DisplayName: "Epic Account",
-						Username:    userName,
-					},
-				},
-			}
-			library = append(library, libGame)
-			libraryMap[gameID] = true
-		}
 	}
 
-	// 2. Always scan local manifests for installed games
-	// This ensures we show games even if offline or not logged in via API
-	localManifests := scanner.ScanEpicGames()
-	for _, m := range localManifests {
-		// If we already have this game from API, we might want to update it (e.g. valid ExePath)
-		// or just skip. API usually has better data, but local manifest has correct install path.
-
-		// For now, let's append if not exists, or update path if exists?
-		// Simple approach: Add if not in map.
-		// Note: IDs might differ. Manifest uses AppName. API uses ItemId/AppId.
-		// c.GetFullLibrary tries to match, so ideally they match.
-
-		if !libraryMap[m.ID] {
-			library = append(library, m)
-		}
-	}
-
-	return library, nil
+	// Локальные манифесты добавляются всегда: игры видны даже оффлайн.
+	// API дает лучшие метаданные, манифест — корректный путь установки;
+	// MergeLibraries объединяет их по ID.
+	installed, _ := c.ScanInstalledGames()
+	return models.MergeLibraries(remote, installed), nil
 }
 
 // GetAccountsProvider implements PlatformProvider

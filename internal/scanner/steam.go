@@ -31,6 +31,8 @@ const cacheFileName = "steam_cache.json"
 
 type SteamScanner struct {
 	Path string
+	// StorageOverride подменяет каталог хранения снапшотов сессий (для тестов).
+	StorageOverride string
 }
 
 func NewSteamScanner() *SteamScanner {
@@ -278,60 +280,40 @@ func ensureGameNamesLoaded() {
 	}
 }
 
-// enrichCacheFromAccounts запрашивает XML-списки игр из профилей
-func (s *SteamScanner) enrichCacheFromAccounts(accounts []models.Account) {
+// fetchOwnedGamesXML запрашивает список купленных игр аккаунта через
+// Steam Community XML API (steamcommunity.com/profiles/<id64>/games?xml=1).
+// Пустой результат — профиль скрыт, сеть недоступна или ID невалиден.
+func (s *SteamScanner) fetchOwnedGamesXML(acc models.Account) []steamGameXML {
+	id3, err := strconv.ParseInt(acc.ID, 10, 64)
+	if err != nil {
+		return nil
+	}
+	id64 := id3 + 76561197960265728
+	url := fmt.Sprintf("https://steamcommunity.com/profiles/%d/games?xml=1", id64)
+
+	req, _ := http.NewRequest("GET", url, nil)
+	// User-Agent важен, иначе Steam блокирует
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
 	client := &http.Client{Timeout: 5 * time.Second}
-	updated := false
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
 
-	for _, acc := range accounts {
-		id3, err := strconv.ParseInt(acc.ID, 10, 64)
-		if err != nil {
-			continue
-		}
-		id64 := id3 + 76561197960265728
-		url := fmt.Sprintf("https://steamcommunity.com/profiles/%d/games?xml=1", id64)
-
-		req, _ := http.NewRequest("GET", url, nil)
-		// User-Agent важен, иначе Steam блокирует
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			continue
-		}
-
-		// Декодируем XML
-		var list steamGamesListXML
-		if err := xml.NewDecoder(resp.Body).Decode(&list); err != nil {
-			continue
-		}
-
-		if list.Error != "" {
-			continue // Профиль скрыт или ошибка
-		}
-
-		cacheMutex.Lock()
-		for _, g := range list.Games.Game {
-			if g.AppID != "" && g.Name != "" {
-				// Если такого нет или имя "Steam App...", обновляем
-				curr, exists := appNameCache[g.AppID]
-				if !exists || strings.HasPrefix(curr, "Steam App") {
-					appNameCache[g.AppID] = g.Name
-					updated = true
-				}
-			}
-		}
-		cacheMutex.Unlock()
+	if resp.StatusCode != 200 {
+		return nil
 	}
 
-	if updated {
-		saveCacheToFile()
+	var list steamGamesListXML
+	if err := xml.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return nil
 	}
+	if list.Error != "" {
+		return nil // Профиль скрыт или ошибка
+	}
+	return list.Games.Game
 }
 
 // fetchSingleGameName запрашивает имя игры через Store API
@@ -354,23 +336,19 @@ func fetchSingleGameName(appID string) string {
 	return ""
 }
 
-func (s *SteamScanner) GetGames() []models.LibraryGame {
+// ScanInstalledGames implements interfaces.LocalLibraryScanner:
+// парсит appmanifest_*.acf во всех библиотеках steamapps (включая
+// дополнительные диски из libraryfolders.vdf). Сеть не используется:
+// имена берутся из манифестов, владельцы — из локальных userdata-конфигов.
+func (s *SteamScanner) ScanInstalledGames() ([]models.LibraryGame, error) {
 	var games []models.LibraryGame
 	if s.Path == "" {
-		return games
+		return games, fmt.Errorf("steam path not found")
 	}
 
-	ensureGameNamesLoaded()
 	accounts := s.GetAccounts()
 
-	// 1. Попытка получить имена через профили пользователей (XML метод)
-	s.enrichCacheFromAccounts(accounts)
-
-	libraryPaths := s.getLibraryFolders()
-	installedAppIDs := make(map[string]bool)
-
-	// --- 1. Установленные игры ---
-	for _, libPath := range libraryPaths {
+	for _, libPath := range s.getLibraryFolders() {
 		steamAppsPath := filepath.Join(libPath, "steamapps")
 		files, err := os.ReadDir(steamAppsPath)
 		if err != nil {
@@ -378,179 +356,243 @@ func (s *SteamScanner) GetGames() []models.LibraryGame {
 		}
 
 		for _, f := range files {
-			if strings.HasPrefix(f.Name(), "appmanifest_") && strings.HasSuffix(f.Name(), ".acf") {
-				data := parseVdf(filepath.Join(steamAppsPath, f.Name()))
-				if data == nil {
-					continue
-				}
-				appState, ok := data["AppState"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				name, _ := appState["name"].(string)
-				appID, _ := appState["appid"].(string)
-				installDir, _ := appState["installdir"].(string)
-				fullPath := filepath.Join(steamAppsPath, "common", installDir)
-
-				var owners []models.AccountStat
-				for _, acc := range accounts {
-					if s.ownsGame(acc.ID, appID) {
-						owners = append(owners, models.AccountStat{
-							AccountID:   acc.ID,
-							DisplayName: acc.DisplayName,
-							Username:    acc.Username,
-						})
-					}
-				}
-
-				isMacSupported := false
-				if runtime.GOOS == "darwin" {
-					isMacSupported = true
-				}
-
-				games = append(games, models.LibraryGame{
-					ID:                  appID,
-					Name:                name,
-					Platform:            "Steam",
-					IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
-					ExePath:             fullPath,
-					AvailableOnAccounts: owners,
-					IsInstalled:         true,
-					IsMacSupported:      isMacSupported,
-				})
-				installedAppIDs[appID] = true
+			if !strings.HasPrefix(f.Name(), "appmanifest_") || !strings.HasSuffix(f.Name(), ".acf") {
+				continue
 			}
-		}
-	}
-
-	// --- 2. Неустановленные игры ---
-	for _, acc := range accounts {
-		configFiles := []string{
-			filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf"),
-			filepath.Join(s.Path, "userdata", acc.ID, "7", "remote", "sharedconfig.vdf"),
-		}
-
-		for _, path := range configFiles {
-			data := parseVdf(path)
+			data := parseVdf(filepath.Join(steamAppsPath, f.Name()))
 			if data == nil {
 				continue
 			}
-
-			var apps map[string]interface{}
-			if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
-				if soft, ok := store["Software"].(map[string]interface{}); ok {
-					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
-						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
-							apps, _ = steam["apps"].(map[string]interface{})
-						}
-					}
-				}
-			} else if root, ok := data["UserRoamableConfigStore"].(map[string]interface{}); ok {
-				if soft, ok := root["Software"].(map[string]interface{}); ok {
-					if valve, ok := soft["Valve"].(map[string]interface{}); ok {
-						if steam, ok := valve["Steam"].(map[string]interface{}); ok {
-							apps, _ = steam["Apps"].(map[string]interface{})
-						}
-					}
-				}
-			}
-
-			if apps == nil {
+			appState, ok := data["AppState"].(map[string]interface{})
+			if !ok {
 				continue
 			}
 
-			for appID, appData := range apps {
-				if _, exists := installedAppIDs[appID]; exists {
-					continue
-				}
-				if _, err := strconv.Atoi(appID); err != nil {
-					continue
-				}
+			name, _ := appState["name"].(string)
+			appID, _ := appState["appid"].(string)
+			installDir, _ := appState["installdir"].(string)
+			fullPath := filepath.Join(steamAppsPath, "common", installDir)
 
-				gameName := ""
-				if details, ok := appData.(map[string]interface{}); ok {
-					if n, ok := details["name"].(string); ok && n != "" {
-						gameName = n
-					} else if common, ok := details["common"].(map[string]interface{}); ok {
-						if cn, ok := common["name"].(string); ok && cn != "" {
-							gameName = cn
-						}
-					}
-				}
-
-				// Если имени нет в конфиге, берем из кэша
-				if gameName == "" {
-					cacheMutex.RLock()
-					if name, found := appNameCache[appID]; found {
-						gameName = name
-					}
-					cacheMutex.RUnlock()
-				}
-
-				ownerStat := models.AccountStat{
-					AccountID:   acc.ID,
-					DisplayName: acc.DisplayName,
-					Username:    acc.Username,
-				}
-
-				foundIdx := -1
-				for i, g := range games {
-					if g.ID == appID {
-						foundIdx = i
-						break
-					}
-				}
-
-				if foundIdx != -1 {
-					games[foundIdx].AvailableOnAccounts = append(games[foundIdx].AvailableOnAccounts, ownerStat)
-					if (games[foundIdx].Name == "" || strings.HasPrefix(games[foundIdx].Name, "Steam App")) && gameName != "" {
-						games[foundIdx].Name = gameName
-					}
-				} else {
-					if gameName == "" {
-						gameName = fmt.Sprintf("Steam App %s", appID)
-					}
-
-					isMacSupported := false
-					games = append(games, models.LibraryGame{
-						ID:                  appID,
-						Name:                gameName,
-						Platform:            "Steam",
-						IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
-						ExePath:             "",
-						AvailableOnAccounts: []models.AccountStat{ownerStat},
-						IsInstalled:         false,
-						IsMacSupported:      isMacSupported,
+			var owners []models.AccountStat
+			for _, acc := range accounts {
+				if s.ownsGame(acc.ID, appID) {
+					owners = append(owners, models.AccountStat{
+						AccountID:   acc.ID,
+						DisplayName: acc.DisplayName,
+						Username:    acc.Username,
 					})
 				}
 			}
+
+			isMacSupported := false
+			if runtime.GOOS == "darwin" {
+				isMacSupported = true
+			}
+
+			games = append(games, models.LibraryGame{
+				ID:                  appID,
+				Name:                name,
+				Platform:            "Steam",
+				IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
+				ExePath:             fullPath,
+				AvailableOnAccounts: owners,
+				IsInstalled:         true,
+				IsMacSupported:      isMacSupported,
+			})
+		}
+	}
+	return games, nil
+}
+
+// ownedGamesFromConfigs извлекает владение играми из локальных userdata-конфигов
+// аккаунта (localconfig.vdf, sharedconfig.vdf) — это оффлайн-зеркало списка
+// покупок. Возвращает map[appID]имя (имя может быть пустым).
+func (s *SteamScanner) ownedGamesFromConfigs(acc models.Account) map[string]string {
+	result := make(map[string]string)
+	configFiles := []string{
+		filepath.Join(s.Path, "userdata", acc.ID, "config", "localconfig.vdf"),
+		filepath.Join(s.Path, "userdata", acc.ID, "7", "remote", "sharedconfig.vdf"),
+	}
+
+	for _, path := range configFiles {
+		data := parseVdf(path)
+		if data == nil {
+			continue
+		}
+
+		var apps map[string]interface{}
+		if store, ok := data["UserLocalConfigStore"].(map[string]interface{}); ok {
+			if soft, ok := store["Software"].(map[string]interface{}); ok {
+				if valve, ok := soft["Valve"].(map[string]interface{}); ok {
+					if steam, ok := valve["Steam"].(map[string]interface{}); ok {
+						apps, _ = steam["apps"].(map[string]interface{})
+					}
+				}
+			}
+		} else if root, ok := data["UserRoamableConfigStore"].(map[string]interface{}); ok {
+			if soft, ok := root["Software"].(map[string]interface{}); ok {
+				if valve, ok := soft["Valve"].(map[string]interface{}); ok {
+					if steam, ok := valve["Steam"].(map[string]interface{}); ok {
+						apps, _ = steam["Apps"].(map[string]interface{})
+					}
+				}
+			}
+		}
+
+		if apps == nil {
+			continue
+		}
+
+		for appID, appData := range apps {
+			if _, err := strconv.Atoi(appID); err != nil {
+				continue
+			}
+
+			gameName := ""
+			if details, ok := appData.(map[string]interface{}); ok {
+				if n, ok := details["name"].(string); ok && n != "" {
+					gameName = n
+				} else if common, ok := details["common"].(map[string]interface{}); ok {
+					if cn, ok := common["name"].(string); ok && cn != "" {
+						gameName = cn
+					}
+				}
+			}
+
+			if existing, found := result[appID]; !found || (existing == "" && gameName != "") {
+				result[appID] = gameName
+			}
+		}
+	}
+	return result
+}
+
+// maxStoreNameLookups ограничивает количество одиночных запросов к Store API
+// за один рескан: иначе большая библиотека без имен упрется в rate limit.
+const maxStoreNameLookups = 25
+
+// GetRemoteLibrary implements interfaces.RemoteLibraryProvider: купленные игры
+// по каждому найденному аккаунту (IsInstalled=false; установка определяется
+// при мерже с ScanInstalledGames). Источники владения:
+//  1. Steam Community XML API — полный список покупок (нужен открытый профиль);
+//  2. локальные userdata-конфиги — оффлайн-зеркало владения.
+//
+// Имена: XML/конфиг -> общий кэш имен -> Store API (с лимитом).
+func (s *SteamScanner) GetRemoteLibrary() ([]models.LibraryGame, error) {
+	if s.Path == "" {
+		return nil, fmt.Errorf("steam path not found")
+	}
+
+	ensureGameNamesLoaded()
+	accounts := s.GetAccounts()
+
+	type ownedGame struct {
+		name   string
+		owners []models.AccountStat
+	}
+	owned := make(map[string]*ownedGame)
+	var order []string // стабильный порядок появления
+	cacheUpdated := false
+
+	addOwned := func(appID, name string, acc models.Account) {
+		if appID == "" {
+			return
+		}
+		g, found := owned[appID]
+		if !found {
+			g = &ownedGame{}
+			owned[appID] = g
+			order = append(order, appID)
+		}
+		if g.name == "" && name != "" {
+			g.name = name
+		}
+		for _, o := range g.owners {
+			if o.AccountID == acc.ID {
+				return
+			}
+		}
+		g.owners = append(g.owners, models.AccountStat{
+			AccountID:   acc.ID,
+			DisplayName: acc.DisplayName,
+			Username:    acc.Username,
+		})
+	}
+
+	for _, acc := range accounts {
+		// 1. Community XML API: полный список купленных игр аккаунта
+		for _, g := range s.fetchOwnedGamesXML(acc) {
+			addOwned(g.AppID, g.Name, acc)
+			if g.AppID != "" && g.Name != "" {
+				cacheMutex.Lock()
+				if curr, exists := appNameCache[g.AppID]; !exists || strings.HasPrefix(curr, "Steam App") {
+					appNameCache[g.AppID] = g.Name
+					cacheUpdated = true
+				}
+				cacheMutex.Unlock()
+			}
+		}
+		// 2. Локальные конфиги: работает оффлайн и при закрытом профиле
+		for appID, name := range s.ownedGamesFromConfigs(acc) {
+			addOwned(appID, name, acc)
 		}
 	}
 
-	// --- 3. FINAL FALLBACK: Проверяем игры без имени через Store API ---
-	// Это спасет ситуацию, если профиль скрыт, а игра есть в конфиге
-	cacheUpdated := false
-	for i := range games {
-		if strings.HasPrefix(games[i].Name, "Steam App") {
-			// Пробуем скачать имя напрямую из магазина
-			realName := fetchSingleGameName(games[i].ID)
-			if realName != "" {
-				games[i].Name = realName
-
-				// Сохраняем в кэш
+	// Разрешение имен: кэш -> Store API (ограниченно)
+	storeLookups := 0
+	var games []models.LibraryGame
+	for _, appID := range order {
+		g := owned[appID]
+		name := g.name
+		if name == "" {
+			cacheMutex.RLock()
+			name = appNameCache[appID]
+			cacheMutex.RUnlock()
+		}
+		if (name == "" || strings.HasPrefix(name, "Steam App")) && storeLookups < maxStoreNameLookups {
+			storeLookups++
+			if realName := fetchSingleGameName(appID); realName != "" {
+				name = realName
 				cacheMutex.Lock()
-				appNameCache[games[i].ID] = realName
+				appNameCache[appID] = realName
 				cacheMutex.Unlock()
 				cacheUpdated = true
 			}
 		}
+		if name == "" {
+			name = fmt.Sprintf("Steam App %s", appID)
+		}
+
+		games = append(games, models.LibraryGame{
+			ID:                  appID,
+			Name:                name,
+			Platform:            "Steam",
+			IconURL:             fmt.Sprintf("https://cdn.cloudflare.steamstatic.com/steam/apps/%s/header.jpg", appID),
+			ExePath:             "",
+			AvailableOnAccounts: g.owners,
+			IsInstalled:         false,
+		})
 	}
+
 	if cacheUpdated {
 		saveCacheToFile()
 	}
+	return games, nil
+}
 
-	return games
+// GetGames — прежний формат "все одним списком" (установленные + купленные).
+// Сохранен для обратной совместимости; services/library использует
+// гранулярные ScanInstalledGames/GetRemoteLibrary напрямую.
+func (s *SteamScanner) GetGames() []models.LibraryGame {
+	installed, err := s.ScanInstalledGames()
+	if err != nil {
+		return installed
+	}
+	remote, err := s.GetRemoteLibrary()
+	if err != nil {
+		return installed
+	}
+	return models.MergeLibraries(installed, remote)
 }
 
 // ... остальной код (checkMacSupport, getLibraryFolders и т.д.) без изменений ...
@@ -764,7 +806,10 @@ func (s *SteamScanner) GetAccountsProvider() ([]models.Account, error) {
 	return s.GetAccounts(), nil
 }
 
-// SwitchAccount implements PlatformProvider
+// SwitchAccount implements PlatformProvider.
+// Legacy-путь "все в одном": kill -> activate -> start. Гранулярные шаги
+// (KillLauncher/ActivateAccount/StartLauncher) живут в steam_session.go,
+// их по отдельности оркеструет switcher.Service.
 func (s *SteamScanner) SwitchAccount(accountName string) error {
 	if accountName == "UNKNOWN" {
 		return fmt.Errorf("login not found")
@@ -773,24 +818,19 @@ func (s *SteamScanner) SwitchAccount(accountName string) error {
 	fmt.Printf("[Steam] Switching account (%s)...\n", runtime.GOOS)
 
 	// 1. Kill Steam
-	sys.KillSteam()
+	if err := s.KillLauncher(); err != nil {
+		return fmt.Errorf("failed to kill steam: %w", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
-	// 2. Registry VDF (AutoLoginUser)
-	if err := sys.SetSteamUser(accountName); err != nil {
-		fmt.Println("[Steam] Error setting registry user:", err)
+	// 2. Registry (AutoLoginUser) + LoginUsers VDF (MostRecent)
+	if err := s.ActivateAccount(accountName); err != nil {
 		return err
 	}
 
-	// 3. LoginUsers VDF (MostRecent)
-	if err := s.SetUserActive(accountName); err != nil {
-		return fmt.Errorf("error updating VDF: %w", err)
-	}
-
 	fmt.Println("[Steam] Configs updated. Launching Steam...")
-	sys.StartGame("steam://open/main")
-	return nil
+	return s.StartLauncher()
 }
 
 // LaunchGame implements PlatformProvider

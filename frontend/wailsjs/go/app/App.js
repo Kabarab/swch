@@ -18,6 +18,10 @@ export function DeleteAccount(arg1, arg2) {
   return window['go']['app']['App']['DeleteAccount'](arg1, arg2);
 }
 
+export function DeleteAccountSession(arg1, arg2) {
+  return window['go']['app']['App']['DeleteAccountSession'](arg1, arg2);
+}
+
 export function DeleteAllEpicAccounts() {
   return window['go']['app']['App']['DeleteAllEpicAccounts']();
 }
@@ -78,6 +82,10 @@ export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }
 
+export function ListAccountSessions(arg1) {
+  return window['go']['app']['App']['ListAccountSessions'](arg1);
+}
+
 export function LogoutEpic() {
   return window['go']['app']['App']['LogoutEpic']();
 }
@@ -86,12 +94,24 @@ export function OpenEpicAuthPage() {
   return window['go']['app']['App']['OpenEpicAuthPage']();
 }
 
+export function RefreshLibrary() {
+  return window['go']['app']['App']['RefreshLibrary']();
+}
+
 export function RemoveGame(arg1, arg2) {
   return window['go']['app']['App']['RemoveGame'](arg1, arg2);
 }
 
+export function RestoreAccountSession(arg1, arg2) {
+  return window['go']['app']['App']['RestoreAccountSession'](arg1, arg2);
+}
+
 export function RunClaimerScript(arg1) {
   return window['go']['app']['App']['RunClaimerScript'](arg1);
+}
+
+export function SaveAccountSession(arg1, arg2) {
+  return window['go']['app']['App']['SaveAccountSession'](arg1, arg2);
 }
 
 export function SaveClaimerConfig(arg1) {
