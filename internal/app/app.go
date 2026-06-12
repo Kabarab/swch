@@ -443,6 +443,13 @@ func (a *App) DeleteAccountSession(platform string, accountName string) string {
 }
 
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {
+	if accountName != "" {
+		res := a.SwitchToAccount(accountName, platform)
+		if strings.HasPrefix(res, "Error") {
+			return "Error switching account: " + res
+		}
+	}
+
 	// Provider Launch Logic
 	if provider, ok := a.providers[platform]; ok {
 		err := provider.LaunchGame(gameID, exePath)
