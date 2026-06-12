@@ -28,6 +28,18 @@ export const handleSIGINT = (context = null) => process.on('SIGINT', async () =>
 });
 
 import { launchPersistentContext } from 'cloakbrowser';
+import { chromium } from 'playwright-core';
+
+// Monkey-patch to strip '--no-sandbox' from Chromium arguments on Windows and macOS.
+// Anti-bot systems (like Arkose/Cloudflare/Turnstile) immediately flag and block
+// browsers running in a compromised security state with '--no-sandbox' enabled.
+const originalLaunch = chromium.launchPersistentContext;
+chromium.launchPersistentContext = async function(userDataDir, options) {
+  if (options && options.args && (process.platform === 'win32' || process.platform === 'darwin')) {
+    options.args = options.args.filter(arg => arg !== '--no-sandbox');
+  }
+  return await originalLaunch.call(this, userDataDir, options);
+};
 
 export const launchStealthContext = async (browserDir, options = {}) => {
   const { headless, viewport, userAgent, locale, recordVideo, recordHar, handleSIGINT, args, ...rest } = options;
