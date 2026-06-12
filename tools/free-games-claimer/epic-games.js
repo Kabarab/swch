@@ -93,23 +93,42 @@ try {
       page.waitForSelector('p:has-text("Incorrect response.")').then(async () => {
         console.error('Incorrect response for captcha!');
       }).catch(_ => { });
-      await page.locator('input[type="email"]:visible, #email:visible').first().fill(email);
+      const emailInput = page.locator('input[type="email"]:visible, #email:visible').first();
+      await emailInput.focus();
+      await emailInput.clear();
+      await emailInput.pressSequentially(email, { delay: 50 });
       
-      const passwordInput = page.locator('input[type="password"]:visible, #password:visible').first();
-      // If the login is split into two steps, we need to click submit to show the password field
-      if (!await passwordInput.isVisible()) {
-        console.log('Password field not visible, clicking continue/submit...');
+      // Check if password field is actually visible (not hidden by CSS opacity or transitions)
+      const isPasswordVisible = await page.evaluate(() => {
+        const el = document.querySelector('input[type="password"], #password');
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && rect.width > 0 && rect.height > 0;
+      });
+
+      if (!isPasswordVisible) {
+        console.log('Password field not visible (split login flow), clicking continue...');
         await page.locator('button[type="submit"]:visible').first().click();
-        // Wait for password field to appear
-        await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(e => {
-          console.log('Password field did not appear after clicking submit:', e.message);
+        // Wait for password field to become visible
+        await page.waitForFunction(() => {
+          const el = document.querySelector('input[type="password"], #password');
+          if (!el) return false;
+          const style = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && rect.width > 0 && rect.height > 0;
+        }, { timeout: 10000 }).catch(e => {
+          console.log('Password field did not appear:', e.message);
         });
       }
 
       const password = email && (cfg.eg_password || await prompt({ type: 'password', message: 'Enter password' }));
       if (!password) await notifyBrowserLogin();
       else {
-        await passwordInput.fill(password);
+        const passwordInput = page.locator('input[type="password"]:visible, #password:visible').first();
+        await passwordInput.focus();
+        await passwordInput.clear();
+        await passwordInput.pressSequentially(password, { delay: 50 });
         await page.locator('button[type="submit"]:visible').first().click();
       }
       const error = page.locator('#form-error-message');
