@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"context"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -32,6 +33,7 @@ type App struct {
 	claimerCmd       *exec.Cmd
 	claimerMu        sync.Mutex
 	claimerIsRunning bool
+	claimerFS        embed.FS
 }
 
 const epicLoginURL = "https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode"
@@ -61,7 +63,7 @@ func makeKey(platform, username string) string {
 	return platform + ":" + username
 }
 
-func NewApp() *App {
+func NewApp(claimerFS embed.FS) *App {
 	epicClient := epic.NewEpicClient()
 	steamScanner := scanner.NewSteamScanner()
 	riotProvider := scanner.NewRiotProvider()
@@ -76,8 +78,9 @@ func NewApp() *App {
 	settingsMgr := settings.NewManager()
 
 	return &App{
-		epic:     epicClient,
-		settings: settingsMgr,
+		epic:      epicClient,
+		settings:  settingsMgr,
+		claimerFS: claimerFS,
 		providers: map[string]interfaces.PlatformProvider{
 			"Steam":           steamScanner,
 			"Epic":            epicClient,
@@ -761,6 +764,47 @@ func (a *App) InstallAllEpicGames() string {
 
 // --- FREE GAMES CLAIMER INTEGRATION ---
 
+func (a *App) extractEmbeddedClaimer(targetDir string) error {
+	err := os.MkdirAll(targetDir, 0755)
+	if err != nil {
+		return err
+	}
+	return a.copyEmbeddedDir("tools/free-games-claimer", targetDir)
+}
+
+func (a *App) copyEmbeddedDir(srcDir, destDir string) error {
+	entries, err := a.claimerFS.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := srcDir + "/" + entry.Name()
+		destPath := filepath.Join(destDir, entry.Name())
+
+		if entry.IsDir() {
+			err = os.MkdirAll(destPath, 0755)
+			if err != nil {
+				return err
+			}
+			err = a.copyEmbeddedDir(srcPath, destPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			data, err := a.claimerFS.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			err = os.WriteFile(destPath, data, 0644)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (a *App) getClaimerPath() string {
 	// 1. Check if custom path is configured in any profile
 	for _, p := range a.settings.Profiles {
@@ -775,6 +819,7 @@ func (a *App) getClaimerPath() string {
 	home, homeErr := os.UserHomeDir()
 	cwd, cwdErr := os.Getwd()
 	execPath, execErr := os.Executable()
+	configDir, configErr := os.UserConfigDir()
 
 	var candidates []string
 
@@ -795,6 +840,11 @@ func (a *App) getClaimerPath() string {
 			filepath.Join(execDir, "..", "free-games-claimer"),
 			filepath.Join(execDir, "..", "..", "free-games-claimer"),
 		)
+	}
+
+	// Check user config directory (where we extract it)
+	if configErr == nil {
+		candidates = append(candidates, filepath.Join(configDir, "swch", "free-games-claimer"))
 	}
 
 	// Check common home subdirectories
@@ -819,7 +869,18 @@ func (a *App) getClaimerPath() string {
 		}
 	}
 
-	// Fallback to default dynamic path if not found
+	// 4. If not found anywhere, extract embedded claimer to UserConfigDir/swch/free-games-claimer
+	if configErr == nil {
+		targetDir := filepath.Clean(filepath.Join(configDir, "swch", "free-games-claimer"))
+		wruntime.EventsEmit(a.ctx, "claimer-log", "Free Games Claimer not found. Extracting bundled version to: "+targetDir)
+		err := a.extractEmbeddedClaimer(targetDir)
+		if err == nil {
+			return targetDir
+		}
+		wruntime.EventsEmit(a.ctx, "claimer-log", "Error extracting embedded claimer: "+err.Error())
+	}
+
+	// Fallback to default dynamic path if not found and extraction failed
 	if homeErr == nil {
 		return filepath.Join(home, "vtvin", "free-games-claimer")
 	}

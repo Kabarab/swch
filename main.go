@@ -13,9 +13,12 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed all:tools/free-games-claimer
+var claimerAssets embed.FS
+
 func main() {
 	// Create an instance of the app structure
-	application := app.NewApp()
+	application := app.NewApp(claimerAssets)
 
 	// Create application with options
 	err := wails.Run(&options.App{
