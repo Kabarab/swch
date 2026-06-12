@@ -762,18 +762,68 @@ func (a *App) InstallAllEpicGames() string {
 // --- FREE GAMES CLAIMER INTEGRATION ---
 
 func (a *App) getClaimerPath() string {
-	// First check if any profile has CLAIMER_PATH set
+	// 1. Check if custom path is configured in any profile
 	for _, p := range a.settings.Profiles {
 		if path, ok := p.Config["CLAIMER_PATH"]; ok && path != "" {
-			return path
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
 		}
 	}
-	// Fallback to default dynamic path
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "/Users/nazarzukov/vtvin/free-games-claimer"
+
+	// 2. Build list of candidate paths
+	home, homeErr := os.UserHomeDir()
+	cwd, cwdErr := os.Getwd()
+	execPath, execErr := os.Executable()
+
+	var candidates []string
+
+	// Check sibling in CWD
+	if cwdErr == nil {
+		candidates = append(candidates,
+			filepath.Join(cwd, "free-games-claimer"),
+			filepath.Join(cwd, "..", "free-games-claimer"),
+			filepath.Join(cwd, "..", "..", "free-games-claimer"),
+		)
 	}
-	return filepath.Join(home, "vtvin", "free-games-claimer")
+
+	// Check sibling in Executable dir
+	if execErr == nil {
+		execDir := filepath.Dir(execPath)
+		candidates = append(candidates,
+			filepath.Join(execDir, "free-games-claimer"),
+			filepath.Join(execDir, "..", "free-games-claimer"),
+			filepath.Join(execDir, "..", "..", "free-games-claimer"),
+		)
+	}
+
+	// Check common home subdirectories
+	if homeErr == nil {
+		candidates = append(candidates,
+			filepath.Join(home, "vtvin", "free-games-claimer"),
+			filepath.Join(home, "free-games-claimer"),
+			filepath.Join(home, "Documents", "free-games-claimer"),
+			filepath.Join(home, "Documents", "GitHub", "free-games-claimer"),
+			filepath.Join(home, "Downloads", "free-games-claimer"),
+			filepath.Join(home, "Desktop", "free-games-claimer"),
+		)
+	}
+
+	// 3. Check which candidate directory exists and contains epic-games.js
+	for _, path := range candidates {
+		cleanPath := filepath.Clean(path)
+		if info, err := os.Stat(cleanPath); err == nil && info.IsDir() {
+			if _, err := os.Stat(filepath.Join(cleanPath, "epic-games.js")); err == nil {
+				return cleanPath
+			}
+		}
+	}
+
+	// Fallback to default dynamic path if not found
+	if homeErr == nil {
+		return filepath.Join(home, "vtvin", "free-games-claimer")
+	}
+	return "/Users/nazarzukov/vtvin/free-games-claimer"
 }
 
 func parseEnvFile(filePath string) (map[string]string, error) {
