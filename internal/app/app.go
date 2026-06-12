@@ -2,10 +2,13 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1087,6 +1090,83 @@ func (a *App) ToggleClaimerProfileSelected(name string) string {
 	return "Error: Profile not found"
 }
 
+func sendTelegramMessage(token, chatID, text string) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+	payload := map[string]string{
+		"chat_id": chatID,
+		"text":    text,
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func pollTelegramReply(token, chatID string) (string, error) {
+	lastUpdateID := 0
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?limit=1", token)
+	resp, err := http.Get(url)
+	if err == nil {
+		var result struct {
+			Ok     bool `json:"ok"`
+			Result []struct {
+				UpdateID int `json:"update_id"`
+			} `json:"result"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&result) == nil && len(result.Result) > 0 {
+			lastUpdateID = result.Result[0].UpdateID
+		}
+		resp.Body.Close()
+	}
+
+	for i := 0; i < 12; i++ { // wait up to 6 minutes total (12 * 30 seconds)
+		pollURL := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=25", token, lastUpdateID+1)
+		pollResp, err := http.Get(pollURL)
+		if err != nil {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		
+		var result struct {
+			Ok     bool `json:"ok"`
+			Result []struct {
+				UpdateID int `json:"update_id"`
+				Message  *struct {
+					Chat struct {
+						ID int64 `json:"id"`
+					} `json:"chat"`
+					Text string `json:"text"`
+				} `json:"message"`
+			} `json:"result"`
+		}
+		
+		decodeErr := json.NewDecoder(pollResp.Body).Decode(&result)
+		pollResp.Body.Close()
+		
+		if decodeErr != nil {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		
+		for _, upd := range result.Result {
+			lastUpdateID = upd.UpdateID
+			if upd.Message != nil && upd.Message.Text != "" {
+				msgChatID := fmt.Sprintf("%d", upd.Message.Chat.ID)
+				if msgChatID == chatID {
+					return strings.TrimSpace(upd.Message.Text), nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("timeout waiting for 2FA code via Telegram")
+}
+
 func (a *App) RunClaimerScript(scriptName string) string {
 	a.claimerMu.Lock()
 	if a.claimerIsRunning {
@@ -1170,9 +1250,16 @@ func (a *App) RunClaimerScript(scriptName string) string {
 			browserDir := filepath.Join(cPath, "data", "browser_"+safeName)
 			cmd.Env = append(cmd.Env, "BROWSER_DIR="+browserDir)
 
+			stdinPipe, err := cmd.StdinPipe()
+			if err != nil {
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Error creating stdin pipe: %v", profile.Name, err))
+				continue
+			}
+
 			stdoutPipe, err := cmd.StdoutPipe()
 			if err != nil {
 				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Error creating stdout pipe: %v", profile.Name, err))
+				stdinPipe.Close()
 				continue
 			}
 			cmd.Stderr = cmd.Stdout
@@ -1183,6 +1270,7 @@ func (a *App) RunClaimerScript(scriptName string) string {
 
 			if err := cmd.Start(); err != nil {
 				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Error starting process: %v", profile.Name, err))
+				stdinPipe.Close()
 				continue
 			}
 
@@ -1192,8 +1280,40 @@ func (a *App) RunClaimerScript(scriptName string) string {
 				if err != nil {
 					break
 				}
-				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] %s", profile.Name, strings.TrimRight(line, "\r\n")))
+				logLine := strings.TrimRight(line, "\r\n")
+				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] %s", profile.Name, logLine))
+
+				// Detect 2FA/sign-in code request
+				lowerLine := strings.ToLower(logLine)
+				if strings.Contains(lowerLine, "two-factor sign in code") || strings.Contains(lowerLine, "verification code") || strings.Contains(lowerLine, "enter value") || (strings.Contains(lowerLine, "code") && strings.Contains(lowerLine, "digits")) {
+					tgToken := profile.Config["TG_BOT_TOKEN"]
+					tgChat := profile.Config["TG_CHAT_ID"]
+
+					if tgToken != "" && tgChat != "" {
+						wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Prompt detected. Sending request to Telegram bot...", profile.Name))
+						err := sendTelegramMessage(tgToken, tgChat, fmt.Sprintf("🔑 [swch] Account '%s' requires 2FA code.\nPlease reply with the code.", profile.Name))
+						if err != nil {
+							wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Failed to send Telegram: %v", profile.Name, err))
+						} else {
+							wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Waiting for reply from Telegram chat %s...", profile.Name, tgChat))
+							code, err := pollTelegramReply(tgToken, tgChat)
+							if err != nil {
+								wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Telegram polling error: %v", profile.Name, err))
+							} else {
+								wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Received 2FA code '%s' from Telegram. Submitting...", profile.Name, code))
+								_, err = stdinPipe.Write([]byte(code + "\n"))
+								if err != nil {
+									wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Failed to write code to stdin: %v", profile.Name, err))
+								}
+							}
+						}
+					} else {
+						wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Prompt detected, but Telegram bot details not configured in settings.", profile.Name))
+					}
+				}
 			}
+
+			stdinPipe.Close()
 
 			if err := cmd.Wait(); err != nil {
 				wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("[%s] Process finished with status: %v", profile.Name, err))

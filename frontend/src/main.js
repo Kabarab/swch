@@ -1091,7 +1091,7 @@ const configKeys = [
     "EG_EMAIL", "EG_PASSWORD", "EG_OTPKEY", "EG_PARENTALPIN",
     "GOG_EMAIL", "GOG_PASSWORD",
     "PG_EMAIL", "PG_PASSWORD", "PG_OTPKEY", "PG_REDEEM", "PG_CLAIMDLC",
-    "NOTIFY", "CLAIMER_PATH", "PROFILE_NAME"
+    "NOTIFY", "CLAIMER_PATH", "PROFILE_NAME", "TG_BOT_TOKEN", "TG_CHAT_ID"
 ];
 
 window.loadClaimerProfiles = async function () {
