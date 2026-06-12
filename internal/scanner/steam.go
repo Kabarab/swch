@@ -31,6 +31,8 @@ const cacheFileName = "steam_cache.json"
 
 type SteamScanner struct {
 	Path string
+	// StorageOverride подменяет каталог хранения снапшотов сессий (для тестов).
+	StorageOverride string
 }
 
 func NewSteamScanner() *SteamScanner {
@@ -764,7 +766,10 @@ func (s *SteamScanner) GetAccountsProvider() ([]models.Account, error) {
 	return s.GetAccounts(), nil
 }
 
-// SwitchAccount implements PlatformProvider
+// SwitchAccount implements PlatformProvider.
+// Legacy-путь "все в одном": kill -> activate -> start. Гранулярные шаги
+// (KillLauncher/ActivateAccount/StartLauncher) живут в steam_session.go,
+// их по отдельности оркеструет switcher.Service.
 func (s *SteamScanner) SwitchAccount(accountName string) error {
 	if accountName == "UNKNOWN" {
 		return fmt.Errorf("login not found")
@@ -773,24 +778,19 @@ func (s *SteamScanner) SwitchAccount(accountName string) error {
 	fmt.Printf("[Steam] Switching account (%s)...\n", runtime.GOOS)
 
 	// 1. Kill Steam
-	sys.KillSteam()
+	if err := s.KillLauncher(); err != nil {
+		return fmt.Errorf("failed to kill steam: %w", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
-	// 2. Registry VDF (AutoLoginUser)
-	if err := sys.SetSteamUser(accountName); err != nil {
-		fmt.Println("[Steam] Error setting registry user:", err)
+	// 2. Registry (AutoLoginUser) + LoginUsers VDF (MostRecent)
+	if err := s.ActivateAccount(accountName); err != nil {
 		return err
 	}
 
-	// 3. LoginUsers VDF (MostRecent)
-	if err := s.SetUserActive(accountName); err != nil {
-		return fmt.Errorf("error updating VDF: %w", err)
-	}
-
 	fmt.Println("[Steam] Configs updated. Launching Steam...")
-	sys.StartGame("steam://open/main")
-	return nil
+	return s.StartLauncher()
 }
 
 // LaunchGame implements PlatformProvider

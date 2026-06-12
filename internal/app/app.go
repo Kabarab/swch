@@ -14,10 +14,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"swch/internal/bus"
 	"swch/internal/epic"
 	"swch/internal/interfaces"
 	"swch/internal/models"
 	"swch/internal/scanner"
+	"swch/internal/services/switcher"
 	"sync"
 
 	"swch/internal/sys"
@@ -30,7 +32,9 @@ import (
 
 type App struct {
 	ctx              context.Context
+	bus              *bus.WailsEmitter
 	providers        map[string]interfaces.PlatformProvider
+	switcher         *switcher.Service
 	epic             *epic.EpicClient
 	settings         *settings.Manager
 	claimerCmd       *exec.Cmd
@@ -81,25 +85,32 @@ func NewApp(claimerFS embed.FS) *App {
 
 	settingsMgr := settings.NewManager()
 
+	providers := map[string]interfaces.PlatformProvider{
+		"Steam":           steamScanner,
+		"Epic":            epicClient,
+		"Riot":            riotProvider,
+		"Battle.net":      bnetProvider,
+		"Ubisoft Connect": ubiProvider,
+		"EA App":          eaProvider,
+		"GOG Galaxy":      gogProvider,
+		"Wargaming.net":   wgProvider,
+	}
+
+	emitter := bus.NewWailsEmitter()
+
 	return &App{
+		bus:       emitter,
 		epic:      epicClient,
 		settings:  settingsMgr,
 		claimerFS: claimerFS,
-		providers: map[string]interfaces.PlatformProvider{
-			"Steam":           steamScanner,
-			"Epic":            epicClient,
-			"Riot":            riotProvider,
-			"Battle.net":      bnetProvider,
-			"Ubisoft Connect": ubiProvider,
-			"EA App":          eaProvider,
-			"GOG Galaxy":      gogProvider,
-			"Wargaming.net":   wgProvider,
-		},
+		providers: providers,
+		switcher:  switcher.NewService(providers, emitter),
 	}
 }
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.bus.SetContext(ctx)
 }
 
 func runCSharpSwitcher(username string, gameID string) string {
@@ -366,10 +377,11 @@ func (a *App) SwitchEpicAccountWithDeviceAuth(name string) string {
 }
 
 func (a *App) SwitchToAccount(accountName string, platform string) string {
-	// General Provider Switch logic
-	if provider, ok := a.providers[platform]; ok {
-		err := provider.SwitchAccount(accountName)
-		if err != nil {
+	// Полный цикл переключения (kill -> activate -> start) оркеструет
+	// switcher.Service; для провайдеров без гранулярных способностей он сам
+	// откатывается на их legacy SwitchAccount.
+	if _, ok := a.providers[platform]; ok {
+		if err := a.switcher.Switch(platform, accountName); err != nil {
 			return "Error: " + err.Error()
 		}
 		return "Switched to " + accountName
@@ -384,6 +396,48 @@ func (a *App) SwitchToAccount(accountName string, platform string) string {
 	}
 
 	return "Platform not supported"
+}
+
+// --- ACCOUNT SESSION SNAPSHOTS (TcNo-style) ---
+
+// SaveAccountSession сохраняет файлы текущей сессии лаунчера как снапшот
+// аккаунта (для Steam: loginusers.vdf, config.vdf, ssfn*, registry.vdf).
+func (a *App) SaveAccountSession(platform string, accountName string) string {
+	if err := a.switcher.SaveCurrentSession(platform, accountName); err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
+}
+
+// RestoreAccountSession выполняет полный цикл с подменой файлов:
+// kill лаунчера -> восстановление файлов сессии из снапшота -> активация
+// аккаунта в конфигах -> запуск лаунчера.
+func (a *App) RestoreAccountSession(platform string, accountName string) string {
+	if err := a.switcher.RestoreSession(platform, accountName); err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Restored session for " + accountName
+}
+
+// ListAccountSessions возвращает имена сохраненных снапшотов сессий платформы.
+func (a *App) ListAccountSessions(platform string) []string {
+	names, err := a.switcher.ListSessions(platform)
+	if err != nil {
+		fmt.Printf("[App] ListAccountSessions error: %v\n", err)
+		return []string{}
+	}
+	if names == nil {
+		return []string{}
+	}
+	return names
+}
+
+// DeleteAccountSession удаляет сохраненный снапшот сессии.
+func (a *App) DeleteAccountSession(platform string, accountName string) string {
+	if err := a.switcher.DeleteSession(platform, accountName); err != nil {
+		return "Error: " + err.Error()
+	}
+	return "Success"
 }
 
 func (a *App) LaunchGame(accountName string, gameID string, platform string, exePath string) string {

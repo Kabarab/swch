@@ -11,6 +11,8 @@ export function AuthorizeEpicWithCode(arg1:string,arg2:string):Promise<string>;
 
 export function DeleteAccount(arg1:string,arg2:string):Promise<string>;
 
+export function DeleteAccountSession(arg1:string,arg2:string):Promise<string>;
+
 export function DeleteAllEpicAccounts():Promise<string>;
 
 export function DeleteClaimerProfile(arg1:string):Promise<string>;
@@ -41,13 +43,19 @@ export function IsClaimerRunning():Promise<boolean>;
 
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
+export function ListAccountSessions(arg1:string):Promise<Array<string>>;
+
 export function LogoutEpic():Promise<string>;
 
 export function OpenEpicAuthPage():Promise<void>;
 
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
 
+export function RestoreAccountSession(arg1:string,arg2:string):Promise<string>;
+
 export function RunClaimerScript(arg1:string):Promise<string>;
+
+export function SaveAccountSession(arg1:string,arg2:string):Promise<string>;
 
 export function SaveClaimerConfig(arg1:Record<string, string>):Promise<string>;
 
