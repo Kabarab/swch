@@ -27,26 +27,23 @@ export const handleSIGINT = (context = null) => process.on('SIGINT', async () =>
   if (context) await context.close(); // in order to save recordings also on SIGINT, we need to disable Playwright's handleSIGINT and close the context ourselves
 });
 
-export const launchChromium = async options => {
-  const { chromium } = await import('playwright-chromium'); // stealth plugin needs no outdated playwright-extra
+import { launchPersistentContext } from 'cloakbrowser';
 
-  // https://www.nopecha.com extension source from https://github.com/NopeCHA/NopeCHA/releases/tag/0.1.16
-  // const ext = path.resolve('nopecha'); // used in Chromium, currently not needed in Firefox
-
-  const context = chromium.launchPersistentContext(cfg.dir.browser, {
-    // chrome will not work in linux arm64, only chromium
-    // channel: 'chrome', // https://playwright.dev/docs/browsers#google-chrome--microsoft-edge
-    args: [ // https://peter.sh/experiments/chromium-command-line-switches
-      // don't want to see bubble 'Restore pages? Chrome didn't shut down correctly.'
-      // '--restore-last-session', // does not apply for crash/killed
-      '--hide-crash-restore-bubble',
-      // `--disable-extensions-except=${ext}`,
-      // `--load-extension=${ext}`,
-    ],
-    // ignoreDefaultArgs: ['--enable-automation'], // remove default arg that shows the info bar with 'Chrome is being controlled by automated test software.'. Since Chromeium 106 this leads to show another info bar with 'You are using an unsupported command-line flag: --no-sandbox. Stability and security will suffer.'.
-    ...options,
+export const launchStealthContext = async (browserDir, options = {}) => {
+  const { headless, viewport, userAgent, locale, recordVideo, recordHar, handleSIGINT, args, ...rest } = options;
+  return await launchPersistentContext({
+    userDataDir: browserDir,
+    headless,
+    viewport,
+    userAgent: userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+    locale: locale || 'en-US',
+    recordVideo,
+    recordHar,
+    handleSIGINT: handleSIGINT ?? false,
+    humanize: true,
+    args: args || [],
+    ...rest,
   });
-  return context;
 };
 
 export const stealth = async context => {

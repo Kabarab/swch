@@ -1,5 +1,4 @@
-import { firefox } from 'playwright-firefox'; // stealth plugin needs no outdated playwright-extra
-import { jsonDb, prompt } from './src/util.js';
+import { jsonDb, prompt, launchStealthContext } from './src/util.js';
 import { cfg } from './src/config.js';
 
 const db = await jsonDb('steam-games.json', {});
@@ -16,7 +15,7 @@ const { fingerprint, headers } = new FingerprintGenerator().getFingerprint({
     operatingSystems: ["windows"],
 });
 
-const context = await firefox.launchPersistentContext(cfg.dir.browser, {
+const context = await launchStealthContext(cfg.dir.browser, {
   headless: cfg.headless,
   // viewport: { width: cfg.width, height: cfg.height },
   locale: 'en-US', // ignore OS locale to be sure to have english text for locators -> done via /en in URL

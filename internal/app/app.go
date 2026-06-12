@@ -37,6 +37,7 @@ type App struct {
 	claimerMu        sync.Mutex
 	claimerIsRunning bool
 	claimerFS        embed.FS
+	claimerExtracted bool
 }
 
 const epicLoginURL = "https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode"
@@ -867,6 +868,19 @@ func (a *App) getClaimerPath() string {
 		cleanPath := filepath.Clean(path)
 		if info, err := os.Stat(cleanPath); err == nil && info.IsDir() {
 			if _, err := os.Stat(filepath.Join(cleanPath, "epic-games.js")); err == nil {
+				// If we chose targetDir (embedded config candidate), make sure it is updated once per session
+				if configErr == nil {
+					targetDir := filepath.Clean(filepath.Join(configDir, "swch", "free-games-claimer"))
+					if cleanPath == targetDir && !a.claimerExtracted {
+						a.claimerMu.Lock()
+						if !a.claimerExtracted {
+							wruntime.EventsEmit(a.ctx, "claimer-log", "Updating embedded claimer scripts in: "+targetDir)
+							_ = a.extractEmbeddedClaimer(targetDir)
+							a.claimerExtracted = true
+						}
+						a.claimerMu.Unlock()
+					}
+				}
 				return cleanPath
 			}
 		}
@@ -878,6 +892,9 @@ func (a *App) getClaimerPath() string {
 		wruntime.EventsEmit(a.ctx, "claimer-log", "Free Games Claimer not found. Extracting bundled version to: "+targetDir)
 		err := a.extractEmbeddedClaimer(targetDir)
 		if err == nil {
+			a.claimerMu.Lock()
+			a.claimerExtracted = true
+			a.claimerMu.Unlock()
 			return targetDir
 		}
 		wruntime.EventsEmit(a.ctx, "claimer-log", "Error extracting embedded claimer: "+err.Error())
@@ -967,11 +984,20 @@ func findNodePath() (string, error) {
 func (a *App) ensureDependencies(nodePath string) error {
 	cPath := a.getClaimerPath()
 	nodeModulesPath := filepath.Join(cPath, "node_modules")
-	if _, err := os.Stat(nodeModulesPath); err == nil {
+	cloakbrowserPath := filepath.Join(nodeModulesPath, "cloakbrowser")
+
+	_, errModules := os.Stat(nodeModulesPath)
+	_, errCloak := os.Stat(cloakbrowserPath)
+
+	if errModules == nil && errCloak == nil {
 		return nil
 	}
 
-	wruntime.EventsEmit(a.ctx, "claimer-log", "node_modules not found. Running npm install...")
+	if errCloak != nil && errModules == nil {
+		wruntime.EventsEmit(a.ctx, "claimer-log", "CloakBrowser dependency is missing. Running npm install...")
+	} else {
+		wruntime.EventsEmit(a.ctx, "claimer-log", "node_modules not found. Running npm install...")
+	}
 
 	npmPath, err := exec.LookPath("npm")
 	if err != nil {
@@ -991,7 +1017,7 @@ func (a *App) ensureDependencies(nodePath string) error {
 		return fmt.Errorf("npm not found. Please run 'npm install' in free-games-claimer directory manually")
 	}
 
-	cmd := exec.Command(npmPath, "install")
+	cmd := exec.Command(npmPath, "install", "--legacy-peer-deps")
 	cmd.Dir = cPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
