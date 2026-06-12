@@ -250,3 +250,35 @@ func waitForExit(processName string) {
 		time.Sleep(500 * time.Millisecond)
 	}
 }
+
+func IsProcessRunning(nameOrPath string) bool {
+	if nameOrPath == "" {
+		return false
+	}
+	if !strings.Contains(nameOrPath, "\\") && !strings.Contains(nameOrPath, "/") {
+		cmd := exec.Command("tasklist", "/NH", "/FI", fmt.Sprintf("IMAGENAME eq %s", nameOrPath))
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		output, err := cmd.Output()
+		return err == nil && strings.Contains(string(output), nameOrPath)
+	}
+
+	// Use powershell to query process paths
+	cmdStr := fmt.Sprintf("Get-Process | Where-Object { $_.Path -like '*%s*' }", strings.ReplaceAll(nameOrPath, "'", "''"))
+	cmd := exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", cmdStr)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	err := cmd.Run()
+	return err == nil
+}
+
+func GetActiveSteamUser() string {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Valve\Steam`, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	val, _, err := k.GetStringValue("AutoLoginUser")
+	if err != nil {
+		return ""
+	}
+	return val
+}

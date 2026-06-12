@@ -198,3 +198,34 @@ func StartGameWithArgs(exePath string, args ...string) error {
 	cmdArgs = append(cmdArgs, args...)
 	return exec.Command("open", cmdArgs...).Start()
 }
+
+func IsProcessRunning(nameOrPath string) bool {
+	if nameOrPath == "" {
+		return false
+	}
+	cmd := exec.Command("pgrep", "-f", nameOrPath)
+	err := cmd.Run()
+	return err == nil
+}
+
+func GetActiveSteamUser() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	regPath := filepath.Join(home, "Library", "Application Support", "Steam", "registry.vdf")
+	if _, err := os.Stat(regPath); os.IsNotExist(err) {
+		regPath = filepath.Join(home, "Library", "Application Support", "Steam", "config", "registry.vdf")
+	}
+	contentBytes, err := os.ReadFile(regPath)
+	if err != nil {
+		return ""
+	}
+	content := string(contentBytes)
+	re := regexp.MustCompile(`(?i)"AutoLoginUser"\s+"([^"]*)"`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}

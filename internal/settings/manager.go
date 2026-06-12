@@ -12,6 +12,8 @@ type AccountSettings struct {
 	Hidden      bool              `json:"hidden"`
 	GameNotes   map[string]string `json:"gameNotes"`
 	HiddenGames map[string]bool   `json:"hiddenGames"`
+	Playtimes   map[string]int    `json:"playtimes"`
+	LastPlayeds map[string]int64  `json:"lastPlayeds"`
 }
 
 type GameSettings struct {

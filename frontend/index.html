@@ -23,6 +23,9 @@
                 <div class="nav-item" onclick="switchTab('accounts')">
                     <i class="fa-solid fa-users"></i> Accounts
                 </div>
+                <div class="nav-item" onclick="switchTab('claimer')">
+                    <i class="fa-solid fa-gift"></i> Free Games
+                </div>
             </div>
 
             <div class="nav-spacer"></div>
@@ -50,7 +53,7 @@
                             class="input-field search-input" oninput="applyFilters()">
                     </div>
 
-                    <div class="filter-group">
+                    <div class="filter-group" style="flex-wrap: wrap; gap: 8px;">
                         <button class="filter-tag active" onclick="toggleFilter(this, 'Steam')" data-type="platform">
                             <i class="fa-brands fa-steam"></i> Steam
                         </button>
@@ -59,6 +62,24 @@
                         </button>
                         <button class="filter-tag active" onclick="toggleFilter(this, 'Riot')" data-type="platform">
                             <i class="fa-solid fa-gamepad"></i> Riot
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Battle.net')" data-type="platform">
+                            <i class="fa-solid fa-circle-nodes"></i> Battle.net
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Ubisoft Connect')" data-type="platform">
+                            <i class="fa-solid fa-arrows-spin"></i> Ubisoft
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'EA App')" data-type="platform">
+                            <i class="fa-solid fa-play"></i> EA
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'GOG Galaxy')" data-type="platform">
+                            <i class="fa-solid fa-g"></i> GOG
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Wargaming.net')" data-type="platform">
+                            <i class="fa-solid fa-shield-halved"></i> Wargaming
+                        </button>
+                        <button class="filter-tag active" onclick="toggleFilter(this, 'Roblox')" data-type="platform">
+                            <i class="fa-solid fa-cube"></i> Roblox
                         </button>
                         <button class="filter-tag active" onclick="toggleFilter(this, 'Custom')" data-type="platform">
                             <i class="fa-solid fa-folder"></i> Custom
@@ -83,6 +104,59 @@
                     <div class="title">Accounts</div>
                 </div>
                 <div id="launchers-list"></div>
+            </div>
+
+            <div id="view-claimer" class="view-section" style="display: none;">
+                <div class="header">
+                    <div class="title">Free Games Claimer</div>
+                    <button class="btn-sidebar-action" onclick="openClaimerConfigModal()" style="margin: 0; padding: 10px 20px; font-size: 14px; border-radius: 8px;">
+                        <i class="fa-solid fa-cog"></i> Configure
+                    </button>
+                </div>
+
+                <div class="claimer-container">
+                    <div class="claimer-controls-panel">
+                        <h3>Available Scripts</h3>
+                        <div class="claimer-buttons-grid">
+                            <button class="claimer-btn btn-epic" onclick="runClaimer('epic-games')">
+                                <i class="fa-solid fa-bolt"></i> Epic Games Store
+                            </button>
+                            <button class="claimer-btn btn-gog" onclick="runClaimer('gog')">
+                                <i class="fa-solid fa-gamepad"></i> GOG.com
+                            </button>
+                            <button class="claimer-btn btn-prime" onclick="runClaimer('prime-gaming')">
+                                <i class="fa-solid fa-crown"></i> Prime Gaming
+                            </button>
+                            <button class="claimer-btn btn-unreal" onclick="runClaimer('unrealengine')">
+                                <i class="fa-solid fa-cubes"></i> Unreal Engine Assets
+                            </button>
+                            <button class="claimer-btn btn-steam" onclick="runClaimer('steam-games')">
+                                <i class="fa-brands fa-steam"></i> Steam Promo Games
+                            </button>
+                            <button class="claimer-btn btn-aliexpress" onclick="runClaimer('aliexpress')">
+                                <i class="fa-solid fa-shopping-cart"></i> AliExpress
+                            </button>
+                        </div>
+                        <div class="claimer-status-bar">
+                            <div class="claimer-status-info">
+                                <span>Status: <strong id="claimer-status-text">Idle</strong></span>
+                            </div>
+                            <button id="btn-stop-claimer" class="claimer-stop-btn" onclick="stopClaimer()" disabled>
+                                <i class="fa-solid fa-stop"></i> Stop Script
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="claimer-console-panel">
+                        <div class="console-header">
+                            <h3>Console Output</h3>
+                            <button class="console-clear-btn" onclick="clearConsole()">
+                                <i class="fa-solid fa-trash-can"></i> Clear Log
+                            </button>
+                        </div>
+                        <div id="claimer-console" class="claimer-console"></div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -297,6 +371,111 @@
             </div>
         </div>
     </div>
+
+    <div id="claimer-config-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px; width: 600px;">
+            <div class="modal-header">
+                <h3>Claimer Configuration</h3>
+                <span class="close" onclick="closeModal('claimer-config-modal')">&times;</span>
+            </div>
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <form id="claimer-config-form" onsubmit="saveClaimerSettings(event)">
+                    
+                    <h4 style="margin-top:0; border-bottom: 1px solid #333; padding-bottom: 5px; color:#fff;">General Settings</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Default Email:</label>
+                            <input type="text" id="cfg-EMAIL" class="input-field">
+                        </div>
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Default Password:</label>
+                            <input type="password" id="cfg-PASSWORD" class="input-field">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px; display:flex; align-items:center; gap:20px;">
+                        <label style="cursor:pointer; display:flex; align-items:center; color:#aaa; font-size:13px;">
+                            <input type="checkbox" id="cfg-SHOW" style="margin-right:8px;">
+                            Show Browser UI (SHOW=1)
+                        </label>
+                        <label style="cursor:pointer; display:flex; align-items:center; color:#aaa; font-size:13px;">
+                            <input type="checkbox" id="cfg-DRYRUN" style="margin-right:8px;">
+                            Dry Run (DRYRUN=1)
+                        </label>
+                    </div>
+
+                    <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-top:15px; color:#fff;">Epic Games</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Epic Email (optional):</label>
+                            <input type="text" id="cfg-EG_EMAIL" class="input-field">
+                        </div>
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Epic Password (optional):</label>
+                            <input type="password" id="cfg-EG_PASSWORD" class="input-field">
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Epic MFA OTP Key:</label>
+                            <input type="text" id="cfg-EG_OTPKEY" class="input-field" placeholder="Secret Key for 2FA">
+                        </div>
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Parental Control PIN:</label>
+                            <input type="text" id="cfg-EG_PARENTALPIN" class="input-field">
+                        </div>
+                    </div>
+
+                    <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-top:15px; color:#fff;">GOG.com</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">GOG Email (optional):</label>
+                            <input type="text" id="cfg-GOG_EMAIL" class="input-field">
+                        </div>
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">GOG Password (optional):</label>
+                            <input type="password" id="cfg-GOG_PASSWORD" class="input-field">
+                        </div>
+                    </div>
+
+                    <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-top:15px; color:#fff;">Prime Gaming</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Prime Email (optional):</label>
+                            <input type="text" id="cfg-PG_EMAIL" class="input-field">
+                        </div>
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Prime Password (optional):</label>
+                            <input type="password" id="cfg-PG_PASSWORD" class="input-field">
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px;">
+                        <div>
+                            <label style="color:#aaa; font-size:12px;">Prime MFA OTP Key:</label>
+                            <input type="text" id="cfg-PG_OTPKEY" class="input-field">
+                        </div>
+                        <div style="display:flex; flex-direction:column; justify-content:center; gap:5px;">
+                            <label style="cursor:pointer; display:flex; align-items:center; color:#aaa; font-size:12px;">
+                                <input type="checkbox" id="cfg-PG_REDEEM" style="margin-right:6px;"> Redeem keys externally
+                            </label>
+                            <label style="cursor:pointer; display:flex; align-items:center; color:#aaa; font-size:12px;">
+                                <input type="checkbox" id="cfg-PG_CLAIMDLC" style="margin-right:6px;"> Claim DLC/In-game content
+                            </label>
+                        </div>
+                    </div>
+
+                    <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-top:15px; color:#fff;">Notifications (Apprise)</h4>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color:#aaa; font-size:12px;">Apprise NOTIFY URL:</label>
+                        <input type="text" id="cfg-NOTIFY" class="input-field" placeholder="tgram://... or mailto://...">
+                    </div>
+
+                    <button type="submit" class="btn-main" style="margin-top:10px;">Save Configuration</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div id="context-menu" class="context-menu">
         <ul>
             <li id="ctx-change-icon" class="ctx-item">Изменить иконку</li>

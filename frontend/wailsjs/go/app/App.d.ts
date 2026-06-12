@@ -18,6 +18,8 @@ export function EpicLogin(arg1:string):Promise<string>;
 
 export function EpicLoginAuto():Promise<string>;
 
+export function GetClaimerConfig():Promise<Record<string, string>>;
+
 export function GetClipboardText():Promise<string>;
 
 export function GetEpicAuthURL():Promise<string>;
@@ -30,6 +32,8 @@ export function GetLibrary():Promise<Array<models.LibraryGame>>;
 
 export function InstallAllEpicGames():Promise<string>;
 
+export function IsClaimerRunning():Promise<boolean>;
+
 export function LaunchGame(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function LogoutEpic():Promise<string>;
@@ -37,6 +41,10 @@ export function LogoutEpic():Promise<string>;
 export function OpenEpicAuthPage():Promise<void>;
 
 export function RemoveGame(arg1:string,arg2:string):Promise<string>;
+
+export function RunClaimerScript(arg1:string):Promise<string>;
+
+export function SaveClaimerConfig(arg1:Record<string, string>):Promise<string>;
 
 export function SaveEpicAccount(arg1:string):Promise<string>;
 
@@ -51,6 +59,8 @@ export function SelectExe():Promise<string>;
 export function SelectImage():Promise<string>;
 
 export function SetGameImage(arg1:string,arg2:string):Promise<string>;
+
+export function StopClaimerScript():Promise<string>;
 
 export function SwitchEpicAccount(arg1:string):Promise<string>;
 

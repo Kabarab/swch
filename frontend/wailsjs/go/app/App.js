@@ -34,6 +34,10 @@ export function EpicLoginAuto() {
   return window['go']['app']['App']['EpicLoginAuto']();
 }
 
+export function GetClaimerConfig() {
+  return window['go']['app']['App']['GetClaimerConfig']();
+}
+
 export function GetClipboardText() {
   return window['go']['app']['App']['GetClipboardText']();
 }
@@ -58,6 +62,10 @@ export function InstallAllEpicGames() {
   return window['go']['app']['App']['InstallAllEpicGames']();
 }
 
+export function IsClaimerRunning() {
+  return window['go']['app']['App']['IsClaimerRunning']();
+}
+
 export function LaunchGame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['LaunchGame'](arg1, arg2, arg3, arg4);
 }
@@ -72,6 +80,14 @@ export function OpenEpicAuthPage() {
 
 export function RemoveGame(arg1, arg2) {
   return window['go']['app']['App']['RemoveGame'](arg1, arg2);
+}
+
+export function RunClaimerScript(arg1) {
+  return window['go']['app']['App']['RunClaimerScript'](arg1);
+}
+
+export function SaveClaimerConfig(arg1) {
+  return window['go']['app']['App']['SaveClaimerConfig'](arg1);
 }
 
 export function SaveEpicAccount(arg1) {
@@ -100,6 +116,10 @@ export function SelectImage() {
 
 export function SetGameImage(arg1, arg2) {
   return window['go']['app']['App']['SetGameImage'](arg1, arg2);
+}
+
+export function StopClaimerScript() {
+  return window['go']['app']['App']['StopClaimerScript']();
 }
 
 export function SwitchEpicAccount(arg1) {

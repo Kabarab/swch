@@ -24,7 +24,13 @@ import {
     AuthorizeEpicWithCode,
     OpenEpicAuthPage,
     SaveRobloxAccount,
-    InstallAllEpicGames
+    InstallAllEpicGames,
+    // CLAIMER
+    GetClaimerConfig,
+    SaveClaimerConfig,
+    RunClaimerScript,
+    StopClaimerScript,
+    IsClaimerRunning
 } from '../wailsjs/go/app/App';
 
 // --- Глобальные переменные ---
@@ -40,7 +46,7 @@ let selectedPlatform = null;
 
 // Состояние фильтров
 let filterState = {
-    platforms: ['Steam', 'Epic', 'Riot', 'Custom', 'Torrent'], // По умолчанию все включены
+    platforms: ['Steam', 'Epic', 'Riot', 'Battle.net', 'Ubisoft Connect', 'EA App', 'GOG Galaxy', 'Wargaming.net', 'Roblox', 'Custom', 'Torrent'],
     onlyInstalled: false,
     onlyMac: false,
     searchQuery: ''
@@ -190,6 +196,26 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    // Подписка на события Wails (Claimer и Playtime)
+    if (window.runtime && window.runtime.EventsOn) {
+        window.runtime.EventsOn("claimer-log", (line) => {
+            appendLog(line);
+        });
+        window.runtime.EventsOn("claimer-status", (status) => {
+            updateClaimerUI(status);
+        });
+        window.runtime.EventsOn("library-updated", () => {
+            console.log("[Wails Event] Library updated from backend, refreshing...");
+            loadLibrary();
+        });
+        window.runtime.EventsOn("game-started", (gameId) => {
+            console.log("[Wails Event] Game started:", gameId);
+        });
+        window.runtime.EventsOn("game-stopped", (gameId) => {
+            console.log("[Wails Event] Game stopped:", gameId);
+        });
+    }
 });
 
 // --- Функции навигации и интерфейса ---
@@ -199,7 +225,7 @@ window.toggleHiddenAccounts = function () {
     loadAccounts();
 }
 
-// Переключение вкладок (Библиотека / Аккаунты)
+// Переключение вкладок (Библиотека / Аккаунты / Клеймер)
 window.switchTab = function (tab) {
     document.querySelectorAll('.view-section').forEach(e => e.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
@@ -214,6 +240,10 @@ window.switchTab = function (tab) {
         document.getElementById('view-accounts').style.display = 'block';
         document.querySelector('.nav-item[onclick="switchTab(\'accounts\')"]').classList.add('active');
         loadAccounts();
+    } else if (tab === 'claimer') {
+        document.getElementById('view-claimer').style.display = 'block';
+        document.querySelector('.nav-item[onclick="switchTab(\'claimer\')"]').classList.add('active');
+        window.checkClaimerStatus();
     }
 }
 
@@ -317,7 +347,13 @@ function renderGrid(games) {
         // Цвет плашки платформы
         let platColor = '#0074e4';
         if (game.platform === 'Steam') platColor = '#1b2838';
-        if (game.platform === 'Epic') platColor = '#333';
+        else if (game.platform === 'Epic') platColor = '#333';
+        else if (game.platform === 'Battle.net') platColor = '#00aeff';
+        else if (game.platform === 'Ubisoft Connect') platColor = '#0070ff';
+        else if (game.platform === 'EA App') platColor = '#ff4747';
+        else if (game.platform === 'GOG Galaxy') platColor = '#5e2750';
+        else if (game.platform === 'Wargaming.net') platColor = '#d60000';
+        else if (game.platform === 'Roblox') platColor = '#000000';
 
         // Обработка картинки
         let img = 'https://via.placeholder.com/300x169?text=' + encodeURIComponent(game.name);
@@ -335,6 +371,26 @@ function renderGrid(games) {
         let macBadge = '';
         if (game.isMacSupported) macBadge = `<i class="fa-brands fa-apple" style="margin-right:5px;" title="macOS Supported"></i>`;
 
+        // Подсчет суммарного игрового времени по всем аккаунтам
+        let totalPlaytimeMin = 0;
+        if (game.availableOn) {
+            game.availableOn.forEach(acc => {
+                if (acc.playtimeMin) {
+                    totalPlaytimeMin += acc.playtimeMin;
+                }
+            });
+        }
+
+        let playtimeStr = '';
+        if (totalPlaytimeMin > 0) {
+            if (totalPlaytimeMin >= 60) {
+                const hours = (totalPlaytimeMin / 60).toFixed(1);
+                playtimeStr = `<span class="playtime-badge" style="font-size: 11px; color: #aaa; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 10px;"></i>${hours} hrs</span>`;
+            } else {
+                playtimeStr = `<span class="playtime-badge" style="font-size: 11px; color: #aaa; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 10px;"></i>${totalPlaytimeMin} m</span>`;
+            }
+        }
+
         card.innerHTML = `
             <div class="card-img-wrapper">
                 <img src="${img}" class="card-img" loading="lazy">
@@ -346,9 +402,9 @@ function renderGrid(games) {
             </div>
             <div class="card-info">
                 <div class="game-title" title="${game.name}">${game.name}</div>
-                <div class="account-count" style="display:flex; justify-content:space-between;">
+                <div class="account-count" style="display:flex; justify-content:space-between; align-items:center;">
                     <span>${game.availableOn ? game.availableOn.length : 0} accounts</span>
-                    ${game.isPinned ? '<i class="fa-solid fa-thumbtack" style="color:#FFD700; font-size:10px;"></i>' : ''}
+                    ${playtimeStr}
                 </div>
             </div>
         `;
@@ -426,6 +482,23 @@ function renderGameModalContent(gameId) {
             const hideClass = acc.isHidden ? "toggle-restore-btn" : "toggle-hidden-btn";
             const hideTitle = acc.isHidden ? "Restore account" : "Hide from this game";
 
+            let playtimeInfo = '';
+            if (acc.playtimeMin) {
+                if (acc.playtimeMin >= 60) {
+                    playtimeInfo = `${(acc.playtimeMin / 60).toFixed(1)} hrs`;
+                } else {
+                    playtimeInfo = `${acc.playtimeMin} mins`;
+                }
+            } else {
+                playtimeInfo = 'Never played';
+            }
+
+            let lastPlayedInfo = '';
+            if (acc.lastPlayed) {
+                const date = new Date(acc.lastPlayed * 1000);
+                lastPlayedInfo = ` | Last played: ${date.toLocaleDateString()}`;
+            }
+
             item.innerHTML = `
                 <div style="flex:1; cursor:pointer;" onclick="launch('${acc.username}', '${game.id}', '${game.platform}', '')">
                     <div class="acc-name" style="font-weight:bold; display:flex; align-items:center;">
@@ -433,7 +506,7 @@ function renderGameModalContent(gameId) {
                         ${acc.displayName}
                         ${noteHtml}
                     </div>
-                    <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username}</div>
+                    <div class="acc-meta" style="font-size:12px; color:#aaa;">Login: ${acc.username} | Playtime: ${playtimeInfo}${lastPlayedInfo}</div>
                 </div>
                 
                 <div class="edit-note-btn" onclick="openNoteSelector('${acc.username}', '${game.platform}', '${game.id}', '${acc.note || ''}')" title="Tag Account">
@@ -921,3 +994,146 @@ window.doSaveRoblox = async function () {
         console.error(e);
     }
 }
+
+// --- Claimer Logic ---
+
+window.runClaimer = async function (scriptName) {
+    window.clearConsole();
+    appendLog(`[SWCH] Starting script ${scriptName}...`);
+    try {
+        const res = await RunClaimerScript(scriptName);
+        if (res !== "Success") {
+            appendLog(`[ERROR] ${res}`, "error");
+        }
+    } catch (e) {
+        appendLog(`[EXCEPTION] ${e}`, "error");
+    }
+};
+
+window.stopClaimer = async function () {
+    appendLog("[SWCH] Sending stop signal...");
+    try {
+        const res = await StopClaimerScript();
+        if (res !== "Success") {
+            appendLog(`[ERROR] ${res}`, "error");
+        }
+    } catch (e) {
+        appendLog(`[EXCEPTION] ${e}`, "error");
+    }
+};
+
+window.clearConsole = function () {
+    const consoleDiv = document.getElementById('claimer-console');
+    if (consoleDiv) consoleDiv.innerHTML = '';
+};
+
+function appendLog(line, type = "") {
+    const consoleDiv = document.getElementById('claimer-console');
+    if (!consoleDiv) return;
+
+    const lineDiv = document.createElement('div');
+    lineDiv.className = 'log-line';
+    
+    let lowerLine = line.toLowerCase();
+    if (type === "error" || lowerLine.includes("error:") || lowerLine.includes("exception:") || lowerLine.includes("failed")) {
+        lineDiv.classList.add('log-error');
+    } else if (type === "warn" || lowerLine.includes("warning:") || lowerLine.includes("warn")) {
+        lineDiv.classList.add('log-warn');
+    } else if (type === "success" || lowerLine.includes("success") || lowerLine.includes("claimed successfully")) {
+        lineDiv.classList.add('log-success');
+    } else if (type === "info" || lowerLine.includes("info:") || lowerLine.includes("started checking")) {
+        lineDiv.classList.add('log-info');
+    }
+
+    lineDiv.innerText = line;
+    consoleDiv.appendChild(lineDiv);
+    consoleDiv.scrollTop = consoleDiv.scrollHeight;
+}
+
+window.checkClaimerStatus = async function () {
+    try {
+        const isRunning = await IsClaimerRunning();
+        updateClaimerUI(isRunning ? "running" : "finished");
+    } catch (e) {
+        console.error("Error checking claimer status:", e);
+    }
+};
+
+function updateClaimerUI(status) {
+    const statusText = document.getElementById('claimer-status-text');
+    const stopBtn = document.getElementById('btn-stop-claimer');
+    const runButtons = document.querySelectorAll('.claimer-btn');
+
+    if (status === "running") {
+        if (statusText) {
+            statusText.innerText = "Running...";
+            statusText.style.color = "#3498db";
+        }
+        if (stopBtn) stopBtn.disabled = false;
+        runButtons.forEach(btn => btn.disabled = true);
+    } else {
+        if (statusText) {
+            statusText.innerText = "Idle";
+            statusText.style.color = "#2ecc71";
+        }
+        if (stopBtn) stopBtn.disabled = true;
+        runButtons.forEach(btn => btn.disabled = false);
+    }
+}
+
+const configKeys = [
+    "EMAIL", "PASSWORD", "SHOW", "DRYRUN",
+    "EG_EMAIL", "EG_PASSWORD", "EG_OTPKEY", "EG_PARENTALPIN",
+    "GOG_EMAIL", "GOG_PASSWORD",
+    "PG_EMAIL", "PG_PASSWORD", "PG_OTPKEY", "PG_REDEEM", "PG_CLAIMDLC",
+    "NOTIFY"
+];
+
+window.openClaimerConfigModal = async function () {
+    try {
+        const config = await GetClaimerConfig();
+        
+        configKeys.forEach(key => {
+            const input = document.getElementById(`cfg-${key}`);
+            if (input) {
+                if (input.type === "checkbox") {
+                    input.checked = config[key] === "1";
+                } else {
+                    input.value = config[key] || "";
+                }
+            }
+        });
+
+        document.getElementById('claimer-config-modal').style.display = 'flex';
+    } catch (e) {
+        alert("Error loading claimer configuration: " + e);
+    }
+};
+
+window.saveClaimerSettings = async function (event) {
+    if (event) event.preventDefault();
+
+    const config = {};
+    configKeys.forEach(key => {
+        const input = document.getElementById(`cfg-${key}`);
+        if (input) {
+            if (input.type === "checkbox") {
+                config[key] = input.checked ? "1" : "0";
+            } else {
+                config[key] = input.value.trim();
+            }
+        }
+    });
+
+    try {
+        const res = await SaveClaimerConfig(config);
+        if (res === "Success") {
+            closeModal('claimer-config-modal');
+            alert("Configuration saved successfully!");
+        } else {
+            alert("Error saving configuration: " + res);
+        }
+    } catch (e) {
+        alert("Exception saving configuration: " + e);
+    }
+};

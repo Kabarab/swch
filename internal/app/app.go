@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -24,10 +25,13 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	providers map[string]interfaces.PlatformProvider
-	epic      *epic.EpicClient
-	settings  *settings.Manager
+	ctx              context.Context
+	providers        map[string]interfaces.PlatformProvider
+	epic             *epic.EpicClient
+	settings         *settings.Manager
+	claimerCmd       *exec.Cmd
+	claimerMu        sync.Mutex
+	claimerIsRunning bool
 }
 
 const epicLoginURL = "https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode"
@@ -181,6 +185,16 @@ func (a *App) GetLibrary() []models.LibraryGame {
 			if settings.HiddenGames != nil {
 				if hidden, found := settings.HiddenGames[game.ID]; found && hidden {
 					acc.IsHidden = true
+				}
+			}
+			if settings.Playtimes != nil {
+				if pt, found := settings.Playtimes[game.ID]; found {
+					acc.PlaytimeMin = pt
+				}
+			}
+			if settings.LastPlayeds != nil {
+				if lp, found := settings.LastPlayeds[game.ID]; found {
+					acc.LastPlayed = lp
 				}
 			}
 		}
@@ -372,6 +386,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 		if err != nil {
 			return "Error launching: " + err.Error()
 		}
+		go a.monitorGameSession(gameID, platform, accountName, exePath)
 		return "Launched on " + platform
 	}
 
@@ -381,6 +396,7 @@ func (a *App) LaunchGame(accountName string, gameID string, platform string, exe
 			if err != nil {
 				return "Error launch: " + err.Error()
 			}
+			go a.monitorGameSession(gameID, platform, accountName, exePath)
 			return "Launched Game"
 		}
 	}
@@ -741,4 +757,361 @@ func (a *App) InstallAllEpicGames() string {
 	}
 
 	return fmt.Sprintf("Готово. Установлено: %d, Ошибок: %d. Пожалуйста, перезапустите Epic Games Launcher.", successCount, failCount)
+}
+
+// --- FREE GAMES CLAIMER INTEGRATION ---
+
+const claimerPath = "/Users/nazarzukov/vtvin/free-games-claimer"
+
+func parseEnvFile(filePath string) (map[string]string, error) {
+	result := make(map[string]string)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return result, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			if strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"") {
+				val = val[1 : len(val)-1]
+			} else if strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
+				val = val[1 : len(val)-1]
+			}
+			result[key] = val
+		}
+	}
+	return result, scanner.Err()
+}
+
+func writeEnvFile(filePath string, config map[string]string) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for k, v := range config {
+		var err error
+		if strings.ContainsAny(v, " \t\n\r\"'#") {
+			_, err = writer.WriteString(fmt.Sprintf("%s=\"%s\"\n", k, strings.ReplaceAll(v, "\"", "\\\"")))
+		} else {
+			_, err = writer.WriteString(fmt.Sprintf("%s=%s\n", k, v))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return writer.Flush()
+}
+
+func findNodePath() (string, error) {
+	nodePath, err := exec.LookPath("node")
+	if err == nil {
+		return nodePath, nil
+	}
+	stdPaths := []string{
+		"/opt/homebrew/bin/node",
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+	}
+	for _, p := range stdPaths {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("node not found in PATH or standard paths")
+}
+
+func (a *App) ensureDependencies(nodePath string) error {
+	nodeModulesPath := filepath.Join(claimerPath, "node_modules")
+	if _, err := os.Stat(nodeModulesPath); err == nil {
+		return nil
+	}
+
+	wruntime.EventsEmit(a.ctx, "claimer-log", "node_modules not found. Running npm install...")
+
+	npmPath, err := exec.LookPath("npm")
+	if err != nil {
+		stdNpm := []string{
+			"/opt/homebrew/bin/npm",
+			"/usr/local/bin/npm",
+			"/usr/bin/npm",
+		}
+		for _, p := range stdNpm {
+			if _, err := os.Stat(p); err == nil {
+				npmPath = p
+				break
+			}
+		}
+	}
+	if npmPath == "" {
+		return fmt.Errorf("npm not found. Please run 'npm install' in free-games-claimer directory manually")
+	}
+
+	cmd := exec.Command(npmPath, "install")
+	cmd.Dir = claimerPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		wruntime.EventsEmit(a.ctx, "claimer-log", fmt.Sprintf("npm install failed: %s", string(output)))
+		return fmt.Errorf("failed to run npm install: %v", err)
+	}
+
+	wruntime.EventsEmit(a.ctx, "claimer-log", "npm install completed successfully!")
+	return nil
+}
+
+func (a *App) GetClaimerConfig() (map[string]string, error) {
+	envPath := filepath.Join(claimerPath, "data", "config.env")
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		return make(map[string]string), nil
+	}
+	return parseEnvFile(envPath)
+}
+
+func (a *App) SaveClaimerConfig(config map[string]string) string {
+	envPath := filepath.Join(claimerPath, "data", "config.env")
+	err := writeEnvFile(envPath, config)
+	if err != nil {
+		return "Error saving config: " + err.Error()
+	}
+	return "Success"
+}
+
+func (a *App) IsClaimerRunning() bool {
+	a.claimerMu.Lock()
+	defer a.claimerMu.Unlock()
+	return a.claimerIsRunning
+}
+
+func (a *App) RunClaimerScript(scriptName string) string {
+	a.claimerMu.Lock()
+	if a.claimerIsRunning {
+		a.claimerMu.Unlock()
+		return "A script is already running"
+	}
+	a.claimerIsRunning = true
+	a.claimerMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.claimerMu.Lock()
+			a.claimerIsRunning = false
+			a.claimerCmd = nil
+			a.claimerMu.Unlock()
+			wruntime.EventsEmit(a.ctx, "claimer-status", "finished")
+		}()
+
+		wruntime.EventsEmit(a.ctx, "claimer-status", "running")
+
+		nodePath, err := findNodePath()
+		if err != nil {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Error: "+err.Error())
+			return
+		}
+
+		err = a.ensureDependencies(nodePath)
+		if err != nil {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Error installing dependencies: "+err.Error())
+			return
+		}
+
+		scriptFile := scriptName + ".js"
+		scriptPath := filepath.Join(claimerPath, scriptFile)
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Error: script file "+scriptFile+" does not exist in claimer folder")
+			return
+		}
+
+		wruntime.EventsEmit(a.ctx, "claimer-log", "Starting claimer script: "+scriptName)
+
+		cmd := exec.Command(nodePath, scriptFile)
+		cmd.Dir = claimerPath
+		sys.ConfigureCommand(cmd)
+
+		stdoutPipe, err := cmd.StdoutPipe()
+		if err != nil {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Error creating stdout pipe: "+err.Error())
+			return
+		}
+		cmd.Stderr = cmd.Stdout
+
+		a.claimerMu.Lock()
+		a.claimerCmd = cmd
+		a.claimerMu.Unlock()
+
+		if err := cmd.Start(); err != nil {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Error starting process: "+err.Error())
+			return
+		}
+
+		reader := bufio.NewReader(stdoutPipe)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				break
+			}
+			wruntime.EventsEmit(a.ctx, "claimer-log", strings.TrimRight(line, "\r\n"))
+		}
+
+		if err := cmd.Wait(); err != nil {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Process finished with status: "+err.Error())
+		} else {
+			wruntime.EventsEmit(a.ctx, "claimer-log", "Process finished successfully.")
+		}
+	}()
+
+	return "Success"
+}
+
+func (a *App) StopClaimerScript() string {
+	a.claimerMu.Lock()
+	defer a.claimerMu.Unlock()
+
+	if a.claimerCmd == nil || a.claimerCmd.Process == nil {
+		return "No script is running"
+	}
+
+	wruntime.EventsEmit(a.ctx, "claimer-log", "Stopping claimer script gracefully (SIGINT)...")
+
+	err := a.claimerCmd.Process.Signal(os.Interrupt)
+	if err != nil {
+		wruntime.EventsEmit(a.ctx, "claimer-log", "Failed to send SIGINT. Killing process...")
+		a.claimerCmd.Process.Kill()
+	}
+
+	return "Success"
+}
+
+func (a *App) getCurrentActiveUser(platform string) string {
+	switch platform {
+	case "Steam":
+		user := sys.GetActiveSteamUser()
+		if user != "" {
+			return user
+		}
+		// Fallback: first scanned account
+		if provider, ok := a.providers["Steam"]; ok {
+			accounts, err := provider.GetAccountsProvider()
+			if err == nil && len(accounts) > 0 {
+				return accounts[0].Username
+			}
+		}
+	case "Epic":
+		if a.epic.Token != nil && a.epic.Token.DisplayName != "" {
+			return a.epic.Token.DisplayName
+		}
+		// Fallback
+		if provider, ok := a.providers["Epic"]; ok {
+			accounts, err := provider.GetAccountsProvider()
+			if err == nil && len(accounts) > 0 {
+				return accounts[0].Username
+			}
+		}
+	}
+	return "Current"
+}
+
+func (a *App) monitorGameSession(gameID, platform, username, exePath string) {
+	fmt.Printf("[Monitor] Starting session monitor for gameID: %s, platform: %s, user: %s, path: %s\n", gameID, platform, username, exePath)
+
+	searchPattern := exePath
+	if searchPattern == "" {
+		// Try to find in library
+		library := a.GetLibrary()
+		for _, g := range library {
+			if g.ID == gameID && g.ExePath != "" {
+				searchPattern = g.ExePath
+				break
+			}
+		}
+	}
+
+	if searchPattern == "" {
+		fmt.Printf("[Monitor] Warning: No execution path found for game %s, monitoring aborted\n", gameID)
+		return
+	}
+
+	// 1. Wait for process to start (up to 2 minutes)
+	var running bool
+	var checkInterval = 3 * time.Second
+	var startTimeout = 2 * time.Minute
+	var startTime = time.Now()
+
+	for time.Since(startTime) < startTimeout {
+		if sys.IsProcessRunning(searchPattern) {
+			running = true
+			break
+		}
+		time.Sleep(checkInterval)
+	}
+
+	if !running {
+		fmt.Printf("[Monitor] Timeout waiting for game process to start: %s\n", searchPattern)
+		return
+	}
+
+	fmt.Printf("[Monitor] Game process detected for: %s. Tracking playtime...\n", searchPattern)
+	wruntime.EventsEmit(a.ctx, "game-started", gameID)
+
+	// 2. Poll until process closes
+	sessionStart := time.Now()
+	for {
+		time.Sleep(5 * time.Second)
+		if !sys.IsProcessRunning(searchPattern) {
+			break
+		}
+	}
+
+	elapsed := time.Since(sessionStart)
+	minutesPlayed := int(elapsed.Minutes())
+	if minutesPlayed < 1 && elapsed.Seconds() > 10 {
+		// Round up to 1 min if played more than 10 seconds (helpful for quick manual tests)
+		minutesPlayed = 1
+	}
+
+	fmt.Printf("[Monitor] Game process exited. Session length: %v. Adding %d minutes.\n", elapsed, minutesPlayed)
+
+	if minutesPlayed > 0 {
+		targetUser := username
+		if targetUser == "" || targetUser == "Current" {
+			targetUser = a.getCurrentActiveUser(platform)
+		}
+
+		key := makeKey(platform, targetUser)
+		settings := a.settings.GetAccountSettings(key)
+
+		if settings.Playtimes == nil {
+			settings.Playtimes = make(map[string]int)
+		}
+		if settings.LastPlayeds == nil {
+			settings.LastPlayeds = make(map[string]int64)
+		}
+
+		settings.Playtimes[gameID] += minutesPlayed
+		settings.LastPlayeds[gameID] = time.Now().Unix()
+
+		a.settings.SetAccountSettings(key, settings)
+		a.settings.Save()
+
+		fmt.Printf("[Monitor] Playtime saved for %s: total %d mins\n", key, settings.Playtimes[gameID])
+	}
+
+	// Notify frontend about stopped game and update library
+	wruntime.EventsEmit(a.ctx, "game-stopped", gameID)
+	wruntime.EventsEmit(a.ctx, "library-updated")
 }
