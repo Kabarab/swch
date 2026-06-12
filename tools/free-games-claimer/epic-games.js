@@ -94,11 +94,22 @@ try {
         console.error('Incorrect response for captcha!');
       }).catch(_ => { });
       await page.fill('#email', email);
-      // await page.click('button[type="submit"]'); login was split in two steps for some time, now email and password are on the same form again
+      
+      const passwordInput = page.locator('#password, input[type="password"]').first();
+      // If the login is split into two steps, we need to click submit to show the password field
+      if (!await passwordInput.isVisible()) {
+        console.log('Password field not visible, clicking continue/submit...');
+        await page.click('button[type="submit"]');
+        // Wait for password field to appear
+        await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(e => {
+          console.log('Password field did not appear after clicking submit:', e.message);
+        });
+      }
+
       const password = email && (cfg.eg_password || await prompt({ type: 'password', message: 'Enter password' }));
       if (!password) await notifyBrowserLogin();
       else {
-        await page.fill('#password', password);
+        await passwordInput.fill(password);
         await page.click('button[type="submit"]');
       }
       const error = page.locator('#form-error-message');

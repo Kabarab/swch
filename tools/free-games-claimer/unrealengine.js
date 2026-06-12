@@ -60,8 +60,19 @@ try {
     if (email && password) {
       // await page.click('text=Sign in with Epic Games');
       await page.fill('#email', email);
-      await page.click('button[type="submit"]');
-      await page.fill('#password', password);
+      
+      const passwordInput = page.locator('#password, input[type="password"]').first();
+      // If the login is split into two steps, we need to click submit to show the password field
+      if (!await passwordInput.isVisible()) {
+        console.log('Password field not visible, clicking continue/submit...');
+        await page.click('button[type="submit"]');
+        // Wait for password field to appear
+        await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(e => {
+          console.log('Password field did not appear after clicking submit:', e.message);
+        });
+      }
+
+      await passwordInput.fill(password);
       await page.click('button[type="submit"]');
       page.waitForSelector('#h_captcha_challenge_login_prod iframe').then(() => {
         console.error('Got a captcha during login (likely due to too many attempts)! You may solve it in the browser, get a new IP or try again in a few hours.');
