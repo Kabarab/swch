@@ -567,15 +567,36 @@ impl UpdateManager {
                     let _ = copy_dir_all(&new_ui, &exe_dir.join("ui"));
                 }
 
+                // Update companion GUI launcher if present
+                let gui_name = if cfg!(windows) { "swch.exe" } else { "swch" };
+                let new_gui = extract_dir.join(gui_name);
+                let target_gui = exe_dir.join(gui_name);
+                if new_gui.exists() && target_gui.exists() && target_gui != current_exe {
+                    let _ = replace_executable(&target_gui, &new_gui);
+                }
+
                 #[cfg(windows)]
                 {
+                    let new_loader = extract_dir.join("WebView2Loader.dll");
+                    if new_loader.exists() {
+                        let _ = std::fs::copy(&new_loader, exe_dir.join("WebView2Loader.dll"));
+                    }
+                }
+
+                #[cfg(windows)]
+                {
+                    let relaunch_target = if exe_dir.join("swch.exe").exists() {
+                        exe_dir.join("swch.exe")
+                    } else {
+                        current_exe.clone()
+                    };
                     (
                         PathBuf::from("cmd"),
                         vec![
                             "/C".to_string(),
                             "start".to_string(),
                             "".to_string(),
-                            current_exe.to_string_lossy().to_string(),
+                            relaunch_target.to_string_lossy().to_string(),
                         ],
                     )
                 }

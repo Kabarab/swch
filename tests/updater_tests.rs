@@ -249,6 +249,31 @@ fn test_windows_asset_naming() {
 }
 
 #[test]
+fn test_windows_companion_gui_and_loader_presence() {
+    use swch::server::updater::find_binary_in_dir;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let package_dir = tmp.path().join("package");
+    std::fs::create_dir_all(&package_dir).unwrap();
+
+    let gui_path = package_dir.join(if cfg!(windows) { "swch.exe" } else { "swch.exe" });
+    let server_path = package_dir.join(if cfg!(windows) { "swch-server.exe" } else { "swch-server.exe" });
+    let loader_path = package_dir.join("WebView2Loader.dll");
+
+    std::fs::write(&gui_path, b"gui-dummy").unwrap();
+    std::fs::write(&server_path, b"server-dummy").unwrap();
+    std::fs::write(&loader_path, b"loader-dummy").unwrap();
+
+    // On windows or non-windows, finding binary with .exe extension works with find_binary_in_dir
+    let found_server = find_binary_in_dir(tmp.path(), if cfg!(windows) { "swch-server" } else { "swch-server.exe" });
+    assert!(found_server.is_some());
+
+    let found_gui = find_binary_in_dir(tmp.path(), if cfg!(windows) { "swch" } else { "swch.exe" });
+    assert!(found_gui.is_some());
+}
+
+#[test]
 fn test_copy_and_move_helpers() {
     use swch::server::updater::{copy_dir_all, move_or_copy_dir};
     use tempfile::tempdir;

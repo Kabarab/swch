@@ -70,15 +70,37 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Build Application (Rust Release)
+      - name: Set up MSVC Environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build Backend (Rust Release)
         run: cargo build --release
 
-      - name: Package Windows Executable
+      - name: Build Native Windows GUI Launcher
+        shell: pwsh
+        run: |
+          if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+            Write-Host "Compiling Windows GUI launcher using MSVC cl.exe..."
+            cl.exe /O2 /MT /EHsc /std:c++17 /Isrc src/windows_app.cpp /Fe:swch_gui.exe /link /SUBSYSTEM:WINDOWS winhttp.lib dwmapi.lib shlwapi.lib ole32.lib oleaut32.lib user32.lib gdi32.lib shell32.lib advapi32.lib
+          } elseif (Get-Command g++ -ErrorAction SilentlyContinue) {
+            Write-Host "Compiling Windows GUI launcher using g++..."
+            g++ -O2 -Isrc src/windows_app.cpp -o swch_gui.exe -mwindows -municode -lwinhttp -ldwmapi -lshlwapi -lole32 -loleaut32
+          } else {
+            throw "No suitable C++ compiler (cl.exe or g++) found for building Windows GUI launcher"
+          }
+
+      - name: Package Windows Application
         shell: pwsh
         run: |
           $binPath = if (Test-Path "target_build/release/swch.exe") { "target_build/release/swch.exe" } elseif (Test-Path "target/x86_64-pc-windows-msvc/release/swch.exe") { "target/x86_64-pc-windows-msvc/release/swch.exe" } else { "target/release/swch.exe" }
           New-Item -ItemType Directory -Force -Path "package"
-          Copy-Item $binPath -Destination "package/swch.exe"
+          Copy-Item "swch_gui.exe" -Destination "package/swch.exe"
+          Copy-Item $binPath -Destination "package/swch-server.exe"
+          if (Test-Path "src/webview2/WebView2Loader.dll") {
+            Copy-Item "src/webview2/WebView2Loader.dll" -Destination "package/WebView2Loader.dll"
+          }
           Copy-Item "index.html" -Destination "package/"
           Copy-Item -Recurse "ui" -Destination "package/"
           Compress-Archive -Path package/* -DestinationPath swch-windows-x86_64.zip
