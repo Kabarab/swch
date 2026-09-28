@@ -36,6 +36,8 @@ jobs:
           cp swch_gui swch.app/Contents/MacOS/swch
           if [ -f "target_build/release/swch" ]; then
             cp target_build/release/swch swch.app/Contents/MacOS/swch-server
+          elif [ -f "target/aarch64-apple-darwin/release/swch" ]; then
+            cp target/aarch64-apple-darwin/release/swch swch.app/Contents/MacOS/swch-server
           else
             cp target/release/swch swch.app/Contents/MacOS/swch-server
           fi
@@ -74,18 +76,21 @@ jobs:
       - name: Package Windows Executable
         shell: pwsh
         run: |
-          $binPath = if (Test-Path "target_build/release/swch.exe") { "target_build/release/swch.exe" } else { "target/release/swch.exe" }
+          $binPath = if (Test-Path "target_build/release/swch.exe") { "target_build/release/swch.exe" } elseif (Test-Path "target/x86_64-pc-windows-msvc/release/swch.exe") { "target/x86_64-pc-windows-msvc/release/swch.exe" } else { "target/release/swch.exe" }
           New-Item -ItemType Directory -Force -Path "package"
           Copy-Item $binPath -Destination "package/swch.exe"
           Copy-Item "index.html" -Destination "package/"
           Copy-Item -Recurse "ui" -Destination "package/"
           Compress-Archive -Path package/* -DestinationPath swch-windows-x86_64.zip
+          Copy-Item swch-windows-x86_64.zip swch-windows-amd64.zip
 
       - name: Upload Windows Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          files: swch-windows-x86_64.zip
+          files: |
+            swch-windows-x86_64.zip
+            swch-windows-amd64.zip
           draft: false
           prerelease: false
           generate_release_notes: true

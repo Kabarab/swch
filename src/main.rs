@@ -22,6 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting swch2 backend engine...");
 
+    // Clean up temporary update files from previous update runs
+    cleanup_update_artifacts();
+
     // Initialize SQLite database
     let db_path = Database::default_path()?;
     info!("Database target: {}", db_path.display());
@@ -116,5 +119,29 @@ async fn shutdown_signal() {
         _ = terminate => {
             info!("Received terminate signal (SIGTERM)");
         },
+    }
+}
+
+/// Automatically removes leftover update backups or replacement binaries from previous runs.
+fn cleanup_update_artifacts() {
+    if let Ok(exe) = std::env::current_exe() {
+        let old_exe = exe.with_extension("exe.old");
+        if old_exe.exists() {
+            let _ = std::fs::remove_file(old_exe);
+        }
+        let old_bin = exe.with_extension("old");
+        if old_bin.exists() {
+            let _ = std::fs::remove_file(old_bin);
+        }
+        let temp_bin = exe.with_extension("new_exe");
+        if temp_bin.exists() {
+            let _ = std::fs::remove_file(temp_bin);
+        }
+        if let Some(bundle) = swch::server::updater::find_enclosing_app_bundle(&exe) {
+            let old_bundle = bundle.with_extension("app.old");
+            if old_bundle.exists() {
+                let _ = std::fs::remove_dir_all(old_bundle);
+            }
+        }
     }
 }

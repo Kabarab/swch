@@ -130,6 +130,14 @@ pub fn find_best_asset<'a>(assets: &'a [ReleaseAsset], os: &str, arch: &str) -> 
             }) {
                 return Some(a);
             }
+            // Universal or x86_64 fallback (Apple Silicon can run x86_64 via Rosetta 2)
+            if let Some(a) = assets.iter().find(|a| {
+                let n = a.name.to_lowercase();
+                (n.contains("macos") || n.contains("darwin") || n.contains("mac"))
+                    && (n.contains("universal") || n.contains("x86_64") || n.contains("amd64") || n.contains("x64") || n.ends_with(".zip") || n.ends_with(".dmg"))
+            }) {
+                return Some(a);
+            }
         } else {
             if let Some(a) = assets.iter().find(|a| {
                 let n = a.name.to_lowercase();
@@ -138,26 +146,30 @@ pub fn find_best_asset<'a>(assets: &'a [ReleaseAsset], os: &str, arch: &str) -> 
             }) {
                 return Some(a);
             }
+            // Universal fallback for Intel (must NOT be arm64/aarch64)
+            if let Some(a) = assets.iter().find(|a| {
+                let n = a.name.to_lowercase();
+                (n.contains("macos") || n.contains("darwin") || n.contains("mac"))
+                    && n.contains("universal")
+                    && !n.contains("arm64")
+                    && !n.contains("aarch64")
+            }) {
+                return Some(a);
+            }
         }
-        // Universal fallback for macOS
-        if let Some(a) = assets.iter().find(|a| {
-            let n = a.name.to_lowercase();
-            (n.contains("macos") || n.contains("darwin") || n.contains("mac"))
-                && (n.contains("universal") || n.ends_with(".zip") || n.ends_with(".dmg"))
-        }) {
-            return Some(a);
-        }
+        return None;
     }
 
     // Windows
     if os_lower == "windows" {
         if let Some(a) = assets.iter().find(|a| {
             let n = a.name.to_lowercase();
-            (n.contains("windows") || n.contains("win64") || n.contains("win"))
+            (n.contains("windows") || n.contains("win64") || n.contains("win") || n.contains("amd64") || n.contains("x86_64"))
                 && (n.ends_with(".zip") || n.ends_with(".exe"))
         }) {
             return Some(a);
         }
+        return None;
     }
 
     // Linux
@@ -168,10 +180,10 @@ pub fn find_best_asset<'a>(assets: &'a [ReleaseAsset], os: &str, arch: &str) -> 
         }) {
             return Some(a);
         }
+        return None;
     }
 
-    // General fallback: any zip
-    assets.iter().find(|a| a.name.to_lowercase().ends_with(".zip"))
+    None
 }
 
 pub struct UpdateManager {
@@ -193,7 +205,7 @@ impl UpdateManager {
 
         let client = reqwest::Client::builder()
             .user_agent(format!("swch/{}", env!("CARGO_PKG_VERSION")))
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(300))
             .build()
             .unwrap_or_default();
 
@@ -408,7 +420,9 @@ impl UpdateManager {
         let extract_dir = temp_dir.join("extracted");
         std::fs::create_dir_all(&extract_dir).map_err(|e| format!("Не удалось создать папку распаковки: {}", e))?;
 
-        // Unpack archive using system unzip or tar
+        // Unpack archive using system unzip, tar, or powershell
+        let mut extracted_ok = false;
+
         let unzip_status = std::process::Command::new("unzip")
             .arg("-q")
             .arg("-o")
@@ -417,19 +431,43 @@ impl UpdateManager {
             .arg(&extract_dir)
             .status();
 
-        let extracted_ok = match unzip_status {
-            Ok(s) => s.success(),
-            Err(_) => {
-                // Fallback to tar
-                let tar_status = std::process::Command::new("tar")
-                    .arg("-xf")
-                    .arg(&archive_path)
-                    .arg("-C")
-                    .arg(&extract_dir)
-                    .status();
-                tar_status.map(|s| s.success()).unwrap_or(false)
+        if let Ok(s) = unzip_status {
+            if s.success() {
+                extracted_ok = true;
             }
-        };
+        }
+
+        if !extracted_ok {
+            let tar_status = std::process::Command::new("tar")
+                .arg("-xf")
+                .arg(&archive_path)
+                .arg("-C")
+                .arg(&extract_dir)
+                .status();
+            if let Ok(s) = tar_status {
+                if s.success() {
+                    extracted_ok = true;
+                }
+            }
+        }
+
+        #[cfg(windows)]
+        if !extracted_ok {
+            let ps_status = std::process::Command::new("powershell")
+                .arg("-NoProfile")
+                .arg("-Command")
+                .arg(format!(
+                    "Expand-Archive -Force -Path '{}' -DestinationPath '{}'",
+                    archive_path.display(),
+                    extract_dir.display()
+                ))
+                .status();
+            if let Ok(s) = ps_status {
+                if s.success() {
+                    extracted_ok = true;
+                }
+            }
+        }
 
         if !extracted_ok {
             return Err("Не удалось распаковать архив обновления".to_string());
@@ -466,14 +504,11 @@ impl UpdateManager {
                 std::fs::rename(&running_app, &backup_app)
                     .map_err(|e| format!("Не удалось переименовать текущее приложение: {}", e))?;
 
-                if let Err(e) = std::fs::rename(&extracted_app, &running_app) {
+                if let Err(e) = move_or_copy_dir(&extracted_app, &running_app) {
                     // Rollback
-                    let _ = std::fs::rename(&backup_app, &running_app);
+                    let _ = move_or_copy_dir(&backup_app, &running_app);
                     return Err(format!("Не удалось установить новое приложение: {}", e));
                 }
-
-                // Clean backup
-                let _ = std::fs::remove_dir_all(&backup_app);
 
                 // Ensure execution permissions on macOS binaries
                 let macos_dir = running_app.join("Contents/MacOS");
@@ -485,37 +520,75 @@ impl UpdateManager {
                         .status();
                 }
 
-                (PathBuf::from("/usr/bin/open"), vec!["-n".to_string(), running_app.to_string_lossy().to_string()])
-            }
-            _ => {
-                // Standalone binary update
-                let new_bin = find_binary_in_dir(&extract_dir, "swch")
-                    .ok_or_else(|| "Исполняемый файл swch не найден в распакованном архиве".to_string())?;
-
-                info!("Updating standalone binary: {} with {}", current_exe.display(), new_bin.display());
-
-                let temp_new_bin = current_exe.with_extension("new_exe");
-                std::fs::copy(&new_bin, &temp_new_bin)
-                    .map_err(|e| format!("Не удалось скопировать новый файл: {}", e))?;
-
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ = std::fs::set_permissions(&temp_new_bin, std::fs::Permissions::from_mode(0o755));
-                }
-
-                std::fs::rename(&temp_new_bin, &current_exe)
-                    .map_err(|e| format!("Не удалось заменить исполняемый файл: {}", e))?;
-
-                // Also update index.html and ui/ if present in package
-                let new_index = extract_dir.join("index.html");
-                if new_index.exists() {
-                    if let Some(exe_dir) = current_exe.parent() {
-                        let _ = std::fs::copy(&new_index, exe_dir.join("index.html"));
+                // Terminate any running GUI instances of swch associated with this bundle
+                // to prevent duplicate windows when the new version opens
+                let mut sys = sysinfo::System::new();
+                sys.refresh_processes();
+                let my_pid = std::process::id();
+                for (pid, proc) in sys.processes() {
+                    if pid.as_u32() != my_pid && proc.name().eq_ignore_ascii_case("swch") {
+                        if let Some(exe) = proc.exe() {
+                            if exe.starts_with(&running_app) || exe.to_string_lossy().contains("swch.app") {
+                                info!("Terminating existing GUI process {} before relaunch", pid);
+                                let _ = proc.kill_with(sysinfo::Signal::Term);
+                            }
+                        }
                     }
                 }
 
-                (current_exe.clone(), Vec::new())
+                (
+                    PathBuf::from("/bin/sh"),
+                    vec![
+                        "-c".to_string(),
+                        format!("sleep 1 && /usr/bin/open {:?}", running_app),
+                    ],
+                )
+            }
+            _ => {
+                // Standalone binary update
+                let current_stem = current_exe.file_stem().and_then(|s| s.to_str()).unwrap_or("swch");
+                let bin_target = if current_stem == "swch-server" { "swch-server" } else { "swch" };
+                let new_bin = find_binary_in_dir(&extract_dir, bin_target)
+                    .or_else(|| find_binary_in_dir(&extract_dir, "swch"))
+                    .ok_or_else(|| format!("Исполняемый файл {} не найден в распакованном архиве", bin_target))?;
+
+                info!("Updating standalone binary: {} with {}", current_exe.display(), new_bin.display());
+
+                replace_executable(&current_exe, &new_bin)?;
+
+                // Also update index.html and ui/ if present in package
+                let exe_dir = current_exe.parent().unwrap_or_else(|| Path::new("."));
+                let new_index = extract_dir.join("index.html");
+                if new_index.exists() {
+                    let _ = std::fs::copy(&new_index, exe_dir.join("index.html"));
+                }
+                let new_ui = extract_dir.join("ui");
+                if new_ui.is_dir() {
+                    let _ = copy_dir_all(&new_ui, &exe_dir.join("ui"));
+                }
+
+                #[cfg(windows)]
+                {
+                    (
+                        PathBuf::from("cmd"),
+                        vec![
+                            "/C".to_string(),
+                            "start".to_string(),
+                            "".to_string(),
+                            current_exe.to_string_lossy().to_string(),
+                        ],
+                    )
+                }
+                #[cfg(not(windows))]
+                {
+                    (
+                        PathBuf::from("/bin/sh"),
+                        vec![
+                            "-c".to_string(),
+                            format!("sleep 1 && {:?}", current_exe),
+                        ],
+                    )
+                }
             }
         };
 
@@ -604,6 +677,82 @@ fn is_path_readonly(path: &Path) -> bool {
             false
         }
         Err(_) => true,
+    }
+}
+
+pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn move_or_copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if std::fs::rename(src, dst).is_ok() {
+        return Ok(());
+    }
+    // Fallback: cross-device or permission failure with rename
+    #[cfg(unix)]
+    {
+        // On macOS / Unix, use cp -R to preserve bundle structure, symlinks, and permissions
+        let status = std::process::Command::new("cp")
+            .arg("-R")
+            .arg(src)
+            .arg(dst)
+            .status();
+        if let Ok(s) = status {
+            if s.success() {
+                let _ = std::fs::remove_dir_all(src);
+                return Ok(());
+            }
+        }
+    }
+    // Pure Rust recursive copy fallback
+    copy_dir_all(src, dst)?;
+    let _ = std::fs::remove_dir_all(src);
+    Ok(())
+}
+
+pub fn replace_executable(current_exe: &Path, new_bin: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let old_exe = current_exe.with_extension("exe.old");
+        if old_exe.exists() {
+            let _ = std::fs::remove_file(&old_exe);
+        }
+        std::fs::rename(current_exe, &old_exe)
+            .map_err(|e| format!("Не удалось переименовать текущий файл (Windows): {}", e))?;
+
+        if let Err(e) = std::fs::copy(new_bin, current_exe) {
+            let _ = std::fs::rename(&old_exe, current_exe);
+            return Err(format!("Не удалось скопировать новый файл: {}", e));
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let temp_new_bin = current_exe.with_extension("new_exe");
+        std::fs::copy(new_bin, &temp_new_bin)
+            .map_err(|e| format!("Не удалось скопировать новый файл: {}", e))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&temp_new_bin, std::fs::Permissions::from_mode(0o755));
+        }
+
+        std::fs::rename(&temp_new_bin, current_exe)
+            .map_err(|e| format!("Не удалось заменить исполняемый файл: {}", e))?;
+        Ok(())
     }
 }
 

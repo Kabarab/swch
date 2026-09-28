@@ -211,3 +211,79 @@ async fn test_update_check_endpoint() {
     assert!(json["target_platform"].is_string());
 }
 
+#[test]
+fn test_intel_mac_does_not_pick_arm64_asset() {
+    let arm_only_assets = vec![ReleaseAsset {
+        name: "swch-macos-arm64.zip".to_string(),
+        browser_download_url: "https://example.com/mac-arm.zip".to_string(),
+        size: 2000,
+    }];
+
+    // Intel Mac should NOT pick arm64 asset
+    let intel_match = find_best_asset(&arm_only_assets, "macos", "x86_64");
+    assert!(intel_match.is_none());
+
+    // Apple Silicon Mac SHOULD pick arm64 asset
+    let arm_match = find_best_asset(&arm_only_assets, "macos", "arm64");
+    assert!(arm_match.is_some());
+    assert_eq!(arm_match.unwrap().name, "swch-macos-arm64.zip");
+}
+
+#[test]
+fn test_windows_asset_naming() {
+    let win_assets = vec![
+        ReleaseAsset {
+            name: "swch-windows-amd64.zip".to_string(),
+            browser_download_url: "https://example.com/win-amd64.zip".to_string(),
+            size: 2000,
+        },
+        ReleaseAsset {
+            name: "swch-windows-x86_64.zip".to_string(),
+            browser_download_url: "https://example.com/win-x86_64.zip".to_string(),
+            size: 2000,
+        },
+    ];
+
+    let win_match = find_best_asset(&win_assets, "windows", "x86_64");
+    assert!(win_match.is_some());
+}
+
+#[test]
+fn test_copy_and_move_helpers() {
+    use swch::server::updater::{copy_dir_all, move_or_copy_dir};
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let src = tmp.path().join("src_dir");
+    let dst = tmp.path().join("dst_dir");
+    std::fs::create_dir_all(src.join("nested")).unwrap();
+    std::fs::write(src.join("nested/test.txt"), b"hello world").unwrap();
+
+    // Test copy_dir_all
+    copy_dir_all(&src, &dst).unwrap();
+    assert!(dst.join("nested/test.txt").exists());
+    assert_eq!(std::fs::read(dst.join("nested/test.txt")).unwrap(), b"hello world");
+
+    // Test move_or_copy_dir
+    let final_dst = tmp.path().join("final_dst");
+    move_or_copy_dir(&dst, &final_dst).unwrap();
+    assert!(final_dst.join("nested/test.txt").exists());
+    assert!(!dst.exists());
+}
+
+#[test]
+fn test_replace_executable_helper() {
+    use swch::server::updater::replace_executable;
+    use tempfile::tempdir;
+
+    let tmp = tempdir().unwrap();
+    let current_exe = tmp.path().join("test_bin");
+    let new_bin = tmp.path().join("new_bin");
+
+    std::fs::write(&current_exe, b"version 1").unwrap();
+    std::fs::write(&new_bin, b"version 2").unwrap();
+
+    replace_executable(&current_exe, &new_bin).unwrap();
+    assert_eq!(std::fs::read(&current_exe).unwrap(), b"version 2");
+}
+

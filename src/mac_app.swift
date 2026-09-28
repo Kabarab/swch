@@ -100,6 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func checkHealth(completion: @escaping (Bool) -> Void) {
         var req = URLRequest(url: healthURL)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 1.0
         let task = URLSession.shared.dataTask(with: req) { _, resp, err in
             if err == nil, let http = resp as? HTTPURLResponse, http.statusCode == 200 {
@@ -133,6 +134,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let proc = Process()
         proc.executableURL = serverExe
         proc.environment = ProcessInfo.processInfo.environment
+
+        let webDir = bundleURL.appendingPathComponent("Contents/Resources/web")
+        if FileManager.default.fileExists(atPath: webDir.path) {
+            proc.currentDirectoryURL = webDir
+        }
+
+        proc.terminationHandler = { p in
+            NSLog("swch: backend serverProcess terminated (status %d)", p.terminationStatus)
+            DispatchQueue.main.async {
+                // If backend process terminated, close the GUI shell so relaunch can take over without duplicates
+                NSApp.terminate(nil)
+            }
+        }
+
         do {
             try proc.run()
             self.serverProcess = proc
