@@ -743,3 +743,29 @@ fn test_sanitize_steam_url() {
         None
     );
 }
+
+#[tokio::test]
+async fn test_system_shutdown_endpoint() {
+    let db = Database::open_in_memory().unwrap();
+    let app = create_app(db);
+
+    let notify = swch::server::handlers::get_shutdown_notify();
+    let notified = notify.notified();
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/system/shutdown")
+                .method("POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    tokio::time::timeout(std::time::Duration::from_millis(500), notified)
+        .await
+        .expect("timed out waiting for shutdown notification");
+}
+

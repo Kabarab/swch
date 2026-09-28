@@ -112,12 +112,20 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
+    let api_notify = swch::server::handlers::get_shutdown_notify();
+    let api_shutdown = async move {
+        api_notify.notified().await;
+    };
+
     tokio::select! {
         _ = ctrl_c => {
             info!("Received shutdown signal (Ctrl+C)");
         },
         _ = terminate => {
             info!("Received terminate signal (SIGTERM)");
+        },
+        _ = api_shutdown => {
+            info!("Received graceful shutdown signal via /api/system/shutdown");
         },
     }
 }

@@ -190,6 +190,7 @@ pub fn create_app_with_state(state: AppState) -> Router {
     Router::new()
         // Core & System routes
         .route("/api/health", get(handlers::health))
+        .route("/api/system/shutdown", post(handlers::shutdown))
         .route("/api/modules", get(modules::list_modules))
         .route("/api/modules/scan", post(modules::scan_modules))
         .route("/api/modules/:id/install", post(modules::install_module))

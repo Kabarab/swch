@@ -102,6 +102,20 @@ pub async fn health(
     }
 }
 
+static SHUTDOWN_NOTIFY: std::sync::OnceLock<Arc<tokio::sync::Notify>> = std::sync::OnceLock::new();
+
+/// Returns a shared Notify instance for graceful server shutdown.
+pub fn get_shutdown_notify() -> Arc<tokio::sync::Notify> {
+    SHUTDOWN_NOTIFY.get_or_init(|| Arc::new(tokio::sync::Notify::new())).clone()
+}
+
+/// Handler for POST /api/system/shutdown
+pub async fn shutdown() -> &'static str {
+    tracing::info!("Received graceful shutdown request via /api/system/shutdown");
+    get_shutdown_notify().notify_waiters();
+    "shutdown initiated"
+}
+
 /// Handler for GET /api/games
 pub async fn get_games(
     State(db): State<Database>,
