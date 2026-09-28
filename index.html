@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ru" data-style="epic">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111214">
+  <title>SWCH — Твоя библиотека игр</title>
+  <style>
+    #file-open-message { display: none; }
+    html:not(.server-entry) body { margin: 0; background: #111214; color: #f2f2f4; font: 16px/1.5 system-ui, sans-serif; }
+    html:not(.server-entry) body > :not(#file-open-message) { display: none !important; }
+    html:not(.server-entry) #file-open-message { display: grid; min-height: 100vh; place-items: center; padding: 24px; box-sizing: border-box; }
+    html:not(.server-entry) #file-open-message > div { max-width: 520px; padding: 32px; border: 1px solid #36373d; border-radius: 18px; background: #1b1c20; }
+    html:not(.server-entry) #file-open-message h1 { margin: 0 0 12px; font-size: 26px; }
+    html:not(.server-entry) #file-open-message p { color: #adb0bb; }
+    html:not(.server-entry) #file-open-message a { display: inline-block; padding: 12px 18px; border-radius: 10px; background: #ff642d; color: #171717; font-weight: 700; text-decoration: none; }
+  </style>
+  <script>
+    if (location.protocol === 'file:') {
+      location.replace('http://127.0.0.1:4242/');
+    } else {
+      document.documentElement.classList.add('server-entry');
+    }
+  </script>
+  <link rel="stylesheet" href="/ui/launcher.css?v=game-stats-6">
+  <link rel="stylesheet" href="/ui/style.css">
+  <script type="module" src="/ui/launcher.js?v=steam-bans-7"></script>
+</head>
+<body>
+<div id="file-open-message">
+  <div>
+    <h1>Открой SWCH через приложение</h1>
+    <p>Для библиотеки нужен запущенный сервер SWCH. Если переход не сработал, запусти <strong>run_swch_desktop.command</strong> в папке проекта.</p>
+    <a href="http://127.0.0.1:4242/">Открыть SWCH</a>
+  </div>
+</div>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Главная навигация">
+    <a class="brand" href="/" aria-label="SWCH — библиотека"><span class="brand-symbol">s<span>↗</span></span> swch<span class="brand-dot">.</span></a>
+    <div class="workspace-label">ТВОЁ ИГРОВОЕ ПРОСТРАНСТВО</div>
+    <nav>
+      <button class="nav-item active" data-page="library" aria-label="Библиотека"><i data-icon="library"></i>Библиотека<span class="nav-count" id="library-count">0</span></button>
+      <button class="nav-item" data-page="favorites" aria-label="Избранное"><i data-icon="heart"></i>Избранное</button>
+      <button class="nav-item" data-page="inventory" aria-label="Инвентарь"><i data-icon="diamond"></i>Инвентарь</button>
+      <button class="nav-item" data-page="accounts" aria-label="Аккаунты"><i data-icon="users"></i>Аккаунты</button>
+    </nav>
+    <div class="sidebar-rule"></div><div class="section-label">ПЛАТФОРМЫ</div>
+    <button class="platform-item selected" data-platform="all"><span class="platform-mark">◈</span>Все платформы</button>
+    <button class="platform-item" data-platform="steam"><span class="platform-mark">S</span>Steam<span id="steam-count">0</span></button>
+    <button class="platform-item" data-platform="epic"><span class="platform-mark epic-mark">EPIC</span>Epic Games<span id="epic-count">0</span></button>
+    <button class="platform-item" data-platform="riot"><span class="platform-mark">R</span>Riot Games<span id="riot-count">0</span></button>
+    <button class="platform-item" data-platform="roblox"><span class="platform-mark roblox-mark">R</span>Roblox<span id="roblox-count">0</span></button>
+    <button class="platform-item" data-platform="minecraft"><span class="platform-mark minecraft-mark">MC</span>Minecraft<span id="minecraft-count">0</span></button>
+    <button class="connect-link" data-action="connect"><i data-icon="plus"></i>Подключить аккаунт</button>
+    <div class="sidebar-bottom">
+      <button class="nav-item" data-action="settings" aria-label="Настройки"><i data-icon="palette"></i>Настройки<span id="update-indicator-pill" class="update-pill" hidden>NEW</span></button>
+      <div class="profile"><span class="avatar">SW</span><div><strong>Моё пространство</strong><small id="connection-state">Подключение…</small></div><button class="icon-button mini-refresh" data-action="refresh" aria-label="Обновить библиотеку" title="Обновить"><i data-icon="refresh"></i></button><span class="status-dot"></span></div>
+    </div>
+  </aside>
+  <div class="main-shell">
+    <main>
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">PLAY YOUR WAY <span class="demo-label" id="demo-label" hidden>ДЕМО</span></div>
+          <h1 id="page-title">Твоя библиотека<span>.</span></h1>
+          <p id="page-subtitle">Разные платформы. Одна точка старта.</p>
+        </div>
+        <div class="page-heading-actions">
+          <button class="secondary" data-action="refresh" aria-label="Обновить библиотеку" title="Обновить"><i data-icon="refresh"></i></button>
+          <button class="secondary" data-action="settings"><i data-icon="palette"></i><span id="style-label">Настройки</span><i data-icon="chevron"></i></button>
+        </div>
+      </div>
+      <div id="notice" role="status" hidden></div>
+      <section id="library-view" aria-label="Библиотека игр">
+        <div class="library-toolbar">
+          <div class="filter-tabs"><button class="active" data-filter="all">Все игры <span id="all-count">0</span></button><button data-filter="installed">Установлены <span id="installed-count">0</span></button></div>
+          <div class="library-controls"><label class="search"><i data-icon="search"></i><input id="search-input" type="search" placeholder="Найти игру" aria-label="Найти игру"><kbd>/</kbd></label><select id="sort-select" aria-label="Сортировка игр"><option value="name">По названию</option><option value="recent">Недавно открытые</option><option value="hours">По времени в игре</option></select><div class="view-switch"><button class="active" data-layout="cards" aria-label="Карточки игр"><i data-icon="grid"></i></button><button data-layout="detail" aria-label="Список игр"><i data-icon="list"></i></button></div></div>
+        </div>
+        <div class="steam-filters" id="steam-filters"><label>Аккаунт Steam<select id="steam-account-filter"><option value="all">Все аккаунты</option></select></label><label>Доступ к игре<select id="steam-access-filter"><option value="all">Все игры</option><option value="owned">Свои игры</option><option value="family">Семейный доступ</option><option value="local">Локальная история</option><option value="history">Доступ не подтверждён</option></select></label><button class="secondary" data-action="steam-connect">Обновить Steam онлайн</button></div>
+        <div id="library-content"></div>
+      </section>
+      <section id="accounts-view" aria-label="Аккаунты" hidden></section>
+      <section id="inventory-view" aria-label="Инвентарь" hidden></section>
+    </main>
+    <footer class="statusbar"><span><i id="footer-dot" class="status-dot"></i><span id="footer-status">Подключаем библиотеку…</span></span><span>Все твои игры. Одно место. &nbsp; SWCH / 01</span></footer>
+  </div>
+</div>
+<dialog id="styles-dialog" class="settings-dialog" aria-labelledby="styles-title">
+  <div class="dialog-header">
+    <div>
+      <h2 id="styles-title">Настройки</h2>
+      <p class="muted">Режим отображения, цвет интерфейса и валюта</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <div class="settings-body">
+    <section class="settings-group">
+      <h4>Режим отображения</h4>
+      <div class="mode-options-grid">
+        <button type="button" class="mode-option-btn" data-layout-choice="cards" data-style-choice="epic">
+          <div class="mode-preview-box preview-cards">
+            <span></span><span></span><span></span>
+          </div>
+          <strong>Карточки</strong>
+          <small>Сетка крупных постеров игр</small>
+        </button>
+        <button type="button" class="mode-option-btn" data-layout-choice="detail" data-style-choice="steam">
+          <div class="mode-preview-box preview-detail">
+            <span class="preview-sidebar-line"></span><span class="preview-content-box"></span>
+          </div>
+          <strong>Список</strong>
+          <small>Список игр слева и панель информации</small>
+        </button>
+      </div>
+    </section>
+    <section class="settings-group">
+      <h4>Цвет интерфейса</h4>
+      <div id="color-options" class="color-options-grid"></div>
+    </section>
+    <section class="settings-group">
+      <h4>Валюта цен</h4>
+      <div class="settings-currency-row">
+        <label>Основная валюта
+          <select id="currency-select" aria-label="Валюта цен">
+            <option value="USD">USD — Доллар США</option>
+            <option value="RUB">RUB — Российский рубль</option>
+            <option value="EUR">EUR — Евро</option>
+            <option value="KZT">KZT — Тенге</option>
+            <option value="UAH">UAH — Гривна</option>
+            <option value="BRL">BRL — Бразильский реал</option>
+            <option value="PLN">PLN — Злотый</option>
+            <option value="GBP">GBP — Фунт стерлингов</option>
+            <option value="CNY">CNY — Юань</option>
+          </select>
+        </label>
+        <button type="button" class="secondary" data-action="currency-refresh">Обновить курс ↻</button>
+      </div>
+      <small id="currency-note" class="muted settings-currency-note">Оценки по ценам Steam и Epic Games в USD.</small>
+    </section>
+    <section class="settings-group">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h4 style="margin:0;">Модули платформ</h4>
+        <button type="button" class="secondary" id="btn-scan-modules" style="font-size:12px; padding:4px 8px;">Сканировать систему ↻</button>
+      </div>
+      <p class="muted small-text" style="margin-bottom:12px;">Модули подгружаются автоматически только для установленных на компьютере лаунчеров. Отсутствующие клиенты расходуют ровно 0 МБ ОЗУ.</p>
+      <div id="modules-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </section>
+    <section class="settings-group">
+      <h4>Roblox</h4>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="roblox-multi-instance-toggle" checked>
+        <span><strong>Multi-Roblox (Multi-Instance)</strong> — одновременный запуск нескольких окон с разных аккаунтов</span>
+      </label>
+      <small class="muted small-text" style="display:block; margin-top:4px;">Если отключено, перед запуском нового аккаунта предыдущие процессы Roblox будут закрываться.</small>
+    </section>
+    <section class="settings-group" id="settings-updates-group">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h4 style="margin:0;">Обновление SWCH</h4>
+        <span id="update-badge-version" class="badge" style="font-size:12px; padding:2px 8px; border-radius:6px; background:#2a2b30; color:#adb0bb;">v1.2.0</span>
+      </div>
+      <div id="update-status-card" class="update-card" style="padding:14px; border-radius:10px; background:#1b1c20; border:1px solid #36373d; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <div id="update-status-info">
+            <strong id="update-status-title" style="display:block; font-size:14px;">Проверка обновлений</strong>
+            <small id="update-status-desc" class="muted" style="font-size:12px;">Нажмите кнопку, чтобы проверить наличие обновлений на GitHub</small>
+          </div>
+          <button type="button" class="secondary" id="btn-check-update" style="font-size:13px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+            <i data-icon="refresh"></i><span>Проверить</span>
+          </button>
+        </div>
+
+        <!-- Update Available Panel -->
+        <div id="update-available-panel" style="display:none; flex-direction:column; gap:10px; border-top:1px solid #2a2b30; padding-top:12px; margin-top:2px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <span style="color:#22c55e; font-weight:700; font-size:13px;">★ Доступна новая версия: <span id="update-new-version">v1.2.0</span></span>
+              <small id="update-release-date" class="muted" style="display:block; font-size:11px;"></small>
+            </div>
+            <button type="button" class="primary" id="btn-apply-update" style="font-size:13px; padding:7px 16px; display:inline-flex; align-items:center; gap:6px; background:#22c55e; color:#111; font-weight:700; border-radius:8px;">
+              <i data-icon="download"></i><span>Обновить прямо сейчас</span>
+            </button>
+          </div>
+          <div id="update-changelog" style="background:#131417; padding:10px 12px; border-radius:6px; font-size:12px; max-height:120px; overflow-y:auto; color:#ccc; white-space:pre-wrap; border:1px solid #2a2b30;"></div>
+        </div>
+
+        <!-- Update Progress Panel -->
+        <div id="update-progress-panel" style="display:none; flex-direction:column; gap:6px; border-top:1px solid #2a2b30; padding-top:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:12px;">
+            <span id="update-progress-label">Загрузка обновления...</span>
+            <span id="update-progress-percent">0%</span>
+          </div>
+          <div style="background:#2a2b30; height:6px; border-radius:3px; overflow:hidden;">
+            <div id="update-progress-bar" style="background:#22c55e; width:0%; height:100%; transition:width 0.2s ease;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <p class="dialog-note"><i data-icon="check"></i>Все настройки сохраняются на этом устройстве.</p>
+</dialog>
+<dialog id="connect-dialog" aria-labelledby="connect-title">
+  <div class="dialog-header"><div><h2 id="connect-title">Подключить аккаунт</h2><p class="muted">Твои игры и профили в одном месте.</p></div><button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button></div>
+  <section class="steam-connect"><h3>Steam</h3><p class="muted">Профили из клиента Steam доступны автоматически. Обнови онлайн-данные для полной библиотеки и семейного доступа.</p>
+    <form id="steam-sync-form"><label>Аккаунт<select id="steam-sync-account" required></select></label><label>Steam Web API key<input id="steam-api-key" type="password" autocomplete="off" placeholder="Ключ для собственной библиотеки"></label><details><summary>Семейный доступ</summary><label>Токен веб-сессии Steam<input id="steam-access-token" type="password" autocomplete="off" placeholder="Токен для Steam Families"></label></details><p class="muted small-text">Ключ и токен не сохраняются. Закрытые данные могут быть недоступны.</p><p class="error-text" id="steam-sync-error" role="alert"></p><button class="primary" type="submit">Обновить игры и семейный доступ</button></form>
+  </section>
+  <section class="riot-connect"><h3>Riot Games</h3><p class="muted">Установленные игры определяются локально. Вход и смена аккаунта выполняются в Riot Client. TFT доступен через League of Legends.</p><button class="secondary" data-action="open-riot">Открыть Riot Client</button><div class="account-actions"><button class="secondary" data-action="sync-riot" data-app="league_of_legends">Обновить профиль LoL</button><button class="secondary" data-action="sync-riot" data-app="valorant">Обновить профиль VALORANT</button></div><p class="muted">Сохраняются скины, персонажи и время доступных матчей текущего аккаунта. Для другого профиля войди в него в клиенте и повтори обновление.</p></section>
+  <section class="epic-connect"><h3>Epic Games</h3><p class="muted"><a id="epic-auth-link" class="text-button" target="_blank" rel="noopener noreferrer">Войти в Epic Games ↗</a></p><form id="login-form"><label>Код авторизации<input id="oauth-code-input" autocomplete="off" required placeholder="Вставь код (authorizationCode) или весь JSON"></label><p id="login-error" class="error-text" role="alert"></p><button class="primary" type="submit">Подключить Epic Games</button></form></section>
+  <section class="roblox-connect">
+    <h3>Roblox</h3>
+    <p class="muted">Сессии не истекают и сохраняются локально. Профили из установленного клиента и браузеров (Chrome, Edge, Brave, Opera, Firefox) находятся автоматически.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="primary" type="button" data-action="scan-roblox"><i data-icon="refresh"></i>Авто-поиск аккаунтов Roblox</button>
+      <button class="secondary" type="button" data-action="open-roblox-place-dialog"><i data-icon="plus"></i>Добавить плейс по Place ID</button>
+    </div>
+    <p id="roblox-scan-status" class="small-text" style="margin-top:4px;"></p>
+    <details style="margin-top:12px;">
+      <summary style="cursor:pointer; color:var(--text-secondary, #a0a0a0); font-size:13px;">Добавить аккаунт вручную через .ROBLOSECURITY</summary>
+      <form id="roblox-manual-form" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+        <label>Cookie .ROBLOSECURITY
+          <input id="roblox-cookie-input" type="password" autocomplete="off" placeholder="_|WARNING:-DO-NOT-SHARE-THIS... или чистое значение куки" required>
+        </label>
+        <p class="muted small-text">Куки шифруются и хранятся исключительно в твоей локальной базе данных.</p>
+        <p class="error-text" id="roblox-manual-error" role="alert"></p>
+        <button class="secondary" type="submit">Добавить в SWCH</button>
+      </form>
+    </details>
+  </section>
+  <section class="minecraft-connect">
+    <h3>Minecraft</h3>
+    <p class="muted">Официальный лаунчер Minecraft (Java Edition). Профили, аккаунты Microsoft/Mojang и серверы находятся автоматически.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="primary" type="button" data-action="scan-minecraft"><i data-icon="refresh"></i>Авто-поиск аккаунтов Minecraft</button>
+      <button class="secondary" type="button" data-action="open-minecraft-server-dialog"><i data-icon="plus"></i>Добавить сервер</button>
+      <button class="secondary" type="button" data-action="import-minecraft-servers"><i data-icon="download"></i>Импорт из servers.dat</button>
+    </div>
+    <p id="minecraft-scan-status" class="small-text" style="margin-top:4px;"></p>
+  </section>
+</dialog>
+<dialog id="roblox-place-dialog" aria-labelledby="roblox-place-title">
+  <div class="dialog-header">
+    <div>
+      <h2 id="roblox-place-title">Добавить плейс Roblox</h2>
+      <p class="muted">Введи Place ID или ссылку на игру из roblox.com</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <form id="roblox-place-form">
+    <label>Place ID или ссылка на игру
+      <input id="roblox-place-input" type="text" placeholder="например, 9285238704 или https://www.roblox.com/games/..." required>
+    </label>
+    <p class="error-text" id="roblox-place-error" role="alert"></p>
+    <button class="primary" type="submit">Добавить в библиотеку</button>
+  </form>
+</dialog>
+<dialog id="roblox-inventory-dialog" aria-labelledby="roblox-inv-title" style="max-width: 650px; width: 100%;">
+  <div class="dialog-header">
+    <div>
+      <h2 id="roblox-inv-title">Инвентарь и скины Roblox</h2>
+      <p class="muted" id="roblox-inv-subtitle">Коллекционные предметы, надетый скин и оценка RAP</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <div id="roblox-inv-body" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+  </div>
+</dialog>
+<dialog id="metrics-dialog" aria-labelledby="metrics-title"><div class="dialog-header"><div><h2 id="metrics-title">Статистика аккаунта</h2><p class="muted" id="metrics-context"></p></div><button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button></div><form id="metrics-form"><label>Скины<input name="skins" type="number" min="0" step="1"></label><label>Стоимость инвентаря, $<input name="value" type="number" min="0" step="0.01"></label><label>Время в игре, ч<input name="hours" type="number" min="0" step="0.1"></label><p class="muted small-text">Неизвестные значения можно оставить пустыми.</p><button class="primary" type="submit">Сохранить статистику</button></form></dialog>
+<dialog id="restrictions-dialog" aria-labelledby="restrictions-title">
+  <div class="dialog-header">
+    <div>
+      <h2 id="restrictions-title">Ограничения аккаунта</h2>
+      <p class="muted" id="restrictions-account-name">Управление блокировками и банами</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <form id="restrictions-form">
+    <input type="hidden" id="restr-account-id" name="account_id">
+    <input type="hidden" id="restr-launcher" name="launcher" value="steam">
+    <div class="restrictions-group">
+      <h4>Общие ограничения</h4>
+      <label class="checkbox-label">
+        <input type="checkbox" id="restr-market" name="market_banned">
+        <span><strong>Запрет к ТП (Торговой площадке)</strong><small class="muted">Блокировка доступа к покупке и продаже на маркете</small></span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="restr-trade" name="trade_banned">
+        <span><strong>Запрет к обменам (Трейд-бан)</strong><small class="muted">Блокировка отправки и получения обменов предметами</small></span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="restr-vac" name="vac_banned">
+        <span><strong>VAC-бан / Блокировка античитом</strong><small class="muted">Отметка о наличии VAC-бана на аккаунте</small></span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="restr-community" name="community_banned">
+        <span><strong>Блокировка сообщества Steam</strong><small class="muted">Ограничение действий в сообществе Steam</small></span>
+      </label>
+    </div>
+    <div class="restrictions-group">
+      <div class="restrictions-group-header">
+        <h4>Баны в конкретных играх</h4>
+        <small class="muted">Подтверждённые Steam баны изменить нельзя. Добавленные вручную можно удалить.</small>
+      </div>
+      <div id="restr-game-bans-list" class="game-bans-list"></div>
+      <div class="add-game-ban-row">
+        <select id="restr-add-game-select">
+          <option value="">Выбери игру из библиотеки или списка...</option>
+        </select>
+        <button type="button" class="secondary" id="restr-add-game-btn">+ Добавить игру</button>
+      </div>
+      <div class="custom-game-ban-row">
+        <input type="text" id="restr-custom-name" placeholder="Или введи название вручную">
+        <input type="text" id="restr-custom-appid" placeholder="AppID (напр. 730)" style="max-width:130px">
+        <button type="button" class="secondary" id="restr-add-custom-btn">Добавить</button>
+      </div>
+    </div>
+    <div class="restrictions-group">
+      <h4>Валюта и регион Steam</h4>
+      <label>Валюта цен аккаунта
+        <select id="restr-currency" name="currency" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);margin-top:6px">
+          <option value="USD">USD — Доллар США</option>
+          <option value="RUB">RUB — Российский рубль</option>
+          <option value="KZT">KZT — Казахский тенге</option>
+          <option value="BRL">BRL — Бразильский реал</option>
+          <option value="EUR">EUR — Евро</option>
+          <option value="UAH">UAH — Украинская гривна</option>
+          <option value="PLN">PLN — Польский злотый</option>
+          <option value="GBP">GBP — Британский фунт</option>
+          <option value="CNY">CNY — Китайский юань</option>
+        </select>
+      </label>
+      <small class="muted" style="display:block;margin-top:4px">Оценка библиотеки этого аккаунта будет производиться в выбранной валюте.</small>
+    </div>
+    <p class="error-text" id="restrictions-error" role="alert"></p>
+    <div class="dialog-actions" style="display:flex;gap:12px;margin-top:16px">
+      <button class="primary" type="submit">Сохранить ограничения</button>
+      <button class="secondary" type="button" data-close>Отмена</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="quick-ban-dialog" aria-labelledby="quick-ban-title">
+  <div class="dialog-header">
+    <div>
+      <h2 id="quick-ban-title">Блокировка в игре</h2>
+      <p class="muted" id="quick-ban-subtitle">Назначь игру в бан для нужного аккаунта</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <div id="quick-ban-body" class="launch-account-options"></div>
+</dialog>
+<dialog id="launch-warning-dialog" aria-labelledby="launch-warning-title">
+  <div class="dialog-header">
+    <div>
+      <h2 id="launch-warning-title" style="color:#ff8373">⚠️ Внимание: бан в игре</h2>
+      <p class="muted" id="launch-warning-subtitle">Обнаружены ограничения на запуск</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <div class="launch-warning-body">
+    <p id="launch-warning-text" style="line-height:1.7;margin:16px 0 24px;font-size:12px;color:#d4d4db"></p>
+  </div>
+  <div class="dialog-actions" style="display:flex;gap:12px;justify-content:flex-end">
+    <button class="secondary" type="button" data-close>Отмена</button>
+    <button class="primary danger-btn" id="launch-warning-confirm" type="button">Всё равно запустить</button>
+  </div>
+</dialog>
+<dialog id="game-modal" class="game-modal" aria-labelledby="game-modal-title">
+  <div class="game-modal-header">
+    <button type="button" class="secondary back-btn" data-close aria-label="Назад к библиотеке">
+      <i data-icon="arrow"></i> Назад к библиотеке
+    </button>
+    <button type="button" class="icon-button modal-close-btn" data-close aria-label="Закрыть">
+      <i data-icon="close"></i>
+    </button>
+  </div>
+  <div id="game-modal-body" class="game-modal-body"></div>
+</dialog>
+<dialog id="fortnite-dialog" class="fortnite-modal" aria-labelledby="fortnite-dialog-title">
+  <div class="fortnite-modal-header">
+    <div class="fortnite-header-title-group">
+      <h2 id="fortnite-dialog-title">Шкафчик и профиль Fortnite</h2>
+      <p id="fortnite-dialog-subtitle" class="muted">Загрузка данных об аккаунте и скинах…</p>
+    </div>
+    <button type="button" class="icon-button modal-close-btn" data-close aria-label="Закрыть">
+      <i data-icon="close"></i>
+    </button>
+  </div>
+  <div id="fortnite-modal-body" class="fortnite-modal-body"></div>
+</dialog>
+<dialog id="minecraft-launch-dialog" aria-labelledby="minecraft-launch-title" style="max-width: 520px; width: 100%;">
+  <div class="dialog-header">
+    <div>
+      <h2 id="minecraft-launch-title">Запуск Minecraft: Java Edition</h2>
+      <p class="muted" id="minecraft-launch-subtitle">Выбор профиля, аккаунта и режима запуска</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <form id="minecraft-launch-form" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+    <input type="hidden" id="minecraft-launch-server-ip" name="quick_play_server">
+    <label>Аккаунт
+      <select id="minecraft-launch-account-select" name="account_id" required>
+        <option value="">Загрузка аккаунтов…</option>
+      </select>
+    </label>
+    <label>Версия / Сборка (Профиль)
+      <select id="minecraft-launch-profile-select" name="profile_id" required>
+        <option value="">Последняя версия (Latest Release)</option>
+      </select>
+    </label>
+    <label>Режим запуска
+      <select id="minecraft-launch-mode-select" name="mode">
+        <option value="official">Официальный лаунчер (с активированным профилем)</option>
+        <option value="direct">Прямой запуск (Direct)</option>
+      </select>
+    </label>
+    <div id="minecraft-launch-quickplay-banner" class="small-text muted" style="display:none; background:rgba(46,125,50,0.15); padding:8px 12px; border-radius:6px; border:1px solid rgba(46,125,50,0.3);">
+      ⚡ Быстрый вход на сервер: <strong id="minecraft-launch-quickplay-dest"></strong>
+    </div>
+    <p class="error-text" id="minecraft-launch-error" role="alert"></p>
+    <div class="dialog-actions" style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+      <button class="secondary" type="button" data-close>Отмена</button>
+      <button class="primary" type="submit"><i data-icon="play"></i> Запустить</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="minecraft-server-dialog" aria-labelledby="minecraft-server-title" style="max-width: 480px; width: 100%;">
+  <div class="dialog-header">
+    <div>
+      <h2 id="minecraft-server-title">Сервер Minecraft</h2>
+      <p class="muted">Добавление или редактирование сервера для быстрого запуска</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <form id="minecraft-server-form" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+    <input type="hidden" id="minecraft-server-id" name="id">
+    <label>Название сервера
+      <input id="minecraft-server-name-input" type="text" placeholder="например, Hypixel Network" required>
+    </label>
+    <label>Адрес (IP / Домен)
+      <input id="minecraft-server-ip-input" type="text" placeholder="например, mc.hypixel.net" required>
+    </label>
+    <label class="checkbox-label" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="minecraft-server-fav-input">
+      <span>В избранное</span>
+    </label>
+    <p class="error-text" id="minecraft-server-error" role="alert"></p>
+    <div class="dialog-actions" style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+      <button class="secondary" type="button" data-close>Отмена</button>
+      <button class="primary" type="submit">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast" role="status" hidden></div>
+</body>
+</html>

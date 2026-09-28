@@ -1,0 +1,18 @@
+{
+  "FormatVersion": 0,
+  "AppName": "Sugar",
+  "CatalogItemId": "4b6c317ad5654dafa94fbf2a11b64e10",
+  "CatalogNamespace": "0a2d5924765643a39e05465c04da7d50",
+  "DisplayName": "Cyberpunk 2077",
+  "InstallationGuid": "{A1B2C3D4-E5F6-7890-ABCD-EF0123456789}",
+  "InstallLocation": "C:\\Games\\Cyberpunk 2077",
+  "InstallSize": 75161927680,
+  "LaunchExecutable": "bin\\x64\\Cyberpunk2077.exe",
+  "LaunchCommand": "",
+  "MainGameAppName": "",
+  "MandatoryAppFolderName": "Cyberpunk2077",
+  "AppVersionString": "2.12",
+  "bIsIncompleteInstall": false,
+  "bCanRunOffline": true,
+  "bRequiresAuth": true
+}

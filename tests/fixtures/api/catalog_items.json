@@ -1,0 +1,133 @@
+{
+  "4b6c317ad5654dafa94fbf2a11b64e10": {
+    "id": "4b6c317ad5654dafa94fbf2a11b64e10",
+    "title": "Fall Guys",
+    "description": "Fall Guys is a free, cross-platform party royale game.",
+    "keyImages": [
+      {
+        "type": "DieselGameBox",
+        "url": "https://cdn1.epicgames.com/offer/fallguys/EGS_FallGuys_DieselGameBox_2560x1440.jpg",
+        "md5": "a1b2c3d4e5f6",
+        "width": 2560,
+        "height": 1440
+      },
+      {
+        "type": "DieselGameBoxTall",
+        "url": "https://cdn1.epicgames.com/offer/fallguys/EGS_FallGuys_DieselGameBoxTall_1200x1600.jpg",
+        "md5": "d4e5f6a1b2c3",
+        "width": 1200,
+        "height": 1600
+      }
+    ],
+    "categories": [
+      { "path": "games" },
+      { "path": "applications" }
+    ],
+    "namespace": "0a2d5924765643a39e05465c04da7d50",
+    "status": "ACTIVE",
+    "creationDate": "2022-05-16T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {
+      "CanRunOffline": { "type": "STRING", "value": "false" },
+      "CloudSaveFolder": { "type": "STRING", "value": "{AppData}/FallGuys" },
+      "FolderName": { "type": "STRING", "value": "FallGuys" }
+    },
+    "mainGameItem": null
+  },
+  "42ac1ee840304cb1807172a9b47dc8e3": {
+    "id": "42ac1ee840304cb1807172a9b47dc8e3",
+    "title": "Sid Meier's Civilization VI",
+    "description": "Civilization VI is a turn-based strategy game.",
+    "keyImages": [
+      {
+        "type": "DieselGameBoxTall",
+        "url": "https://cdn1.epicgames.com/offer/civ6/EGS_Civ6_DieselGameBoxTall_1200x1600.jpg",
+        "md5": "112233445566",
+        "width": 1200,
+        "height": 1600
+      }
+    ],
+    "categories": [
+      { "path": "games" }
+    ],
+    "namespace": "cd14dcaa4f3443f19f7169a980559c62",
+    "status": "ACTIVE",
+    "creationDate": "2020-05-15T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {
+      "CanRunOffline": { "type": "STRING", "value": "true" }
+    },
+    "mainGameItem": null
+  },
+  "dlc_civ6_gathering_storm_id": {
+    "id": "dlc_civ6_gathering_storm_id",
+    "title": "Civilization VI: Gathering Storm",
+    "description": "Expansion pack for Civilization VI introducing climate and geology.",
+    "keyImages": [],
+    "categories": [
+      { "path": "addons" }
+    ],
+    "namespace": "cd14dcaa4f3443f19f7169a980559c62",
+    "status": "ACTIVE",
+    "creationDate": "2021-01-01T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {},
+    "mainGameItem": {
+      "id": "42ac1ee840304cb1807172a9b47dc8e3"
+    }
+  },
+  "celeste_epic_catalog_id": {
+    "id": "celeste_epic_catalog_id",
+    "title": "Celeste",
+    "description": "Help Madeline survive her inner demons on her journey to the top of Celeste Mountain.",
+    "keyImages": [
+      {
+        "type": "DieselGameBoxTall",
+        "url": "https://cdn1.epicgames.com/offer/celeste/celeste_tall.jpg",
+        "width": 1200,
+        "height": 1600
+      }
+    ],
+    "categories": [
+      { "path": "games" }
+    ],
+    "namespace": "celeste_namespace",
+    "status": "ACTIVE",
+    "creationDate": "2019-12-20T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {
+      "CanRunOffline": { "type": "STRING", "value": "true" }
+    },
+    "mainGameItem": null
+  },
+  "unreal_engine_asset_pack": {
+    "id": "unreal_engine_asset_pack",
+    "title": "Sci-Fi Environments Modular Kit",
+    "description": "Modular 3D environment meshes for Unreal Engine developers.",
+    "keyImages": [],
+    "categories": [
+      { "path": "assets" }
+    ],
+    "namespace": "ue",
+    "status": "ACTIVE",
+    "creationDate": "2023-01-01T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {},
+    "mainGameItem": null
+  },
+  "mod_community_map": {
+    "id": "mod_community_map",
+    "title": "Community Map Pack 2024",
+    "description": "Custom maps created by the community.",
+    "keyImages": [],
+    "categories": [
+      { "path": "mods" }
+    ],
+    "namespace": "cd14dcaa4f3443f19f7169a980559c62",
+    "status": "ACTIVE",
+    "creationDate": "2024-01-01T12:00:00.000Z",
+    "lastModifiedDate": "2024-01-01T12:00:00.000Z",
+    "customAttributes": {},
+    "mainGameItem": null
+  }
+}

@@ -10,50 +10,82 @@ permissions:
   contents: write
 
 jobs:
+  build-macos:
+    name: Build macOS Application
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Build Backend (Rust Release)
+        run: cargo build --release
+
+      - name: Build Native GUI Launcher (Swift)
+        run: swiftc -O src/mac_app.swift -o swch_gui
+
+      - name: Assemble swch.app Bundle
+        run: |
+          mkdir -p swch.app/Contents/MacOS
+          mkdir -p swch.app/Contents/Resources/web
+          cp swch_gui swch.app/Contents/MacOS/swch
+          if [ -f "target_build/release/swch" ]; then
+            cp target_build/release/swch swch.app/Contents/MacOS/swch-server
+          else
+            cp target/release/swch swch.app/Contents/MacOS/swch-server
+          fi
+          chmod +x swch.app/Contents/MacOS/*
+          cp index.html swch.app/Contents/Resources/web/
+          cp -r ui swch.app/Contents/Resources/web/
+          zip -r -q swch-macos-arm64.zip swch.app
+
+      - name: Upload macOS Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          files: swch-macos-arm64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-windows:
-    name: Build Windows App
+    name: Build Windows Application
     runs-on: windows-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          go-version: '1.21'
-          cache: true
+          targets: x86_64-pc-windows-msvc
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+      - name: Build Application (Rust Release)
+        run: cargo build --release
 
-      - name: Install Wails CLI
-        run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-          echo "C:\Users\runneradmin\go\bin" >> $GITHUB_PATH
-
-      - name: Install Frontend Dependencies
-        working-directory: frontend
-        run: npm install
-
-      - name: Build Application
-        run: wails build -platform windows/amd64
-
-      - name: Package Executable
+      - name: Package Windows Executable
         shell: pwsh
         run: |
-          Compress-Archive -Path build/bin/swch.exe -DestinationPath swch-windows-amd64.zip
+          $binPath = if (Test-Path "target_build/release/swch.exe") { "target_build/release/swch.exe" } else { "target/release/swch.exe" }
+          New-Item -ItemType Directory -Force -Path "package"
+          Copy-Item $binPath -Destination "package/swch.exe"
+          Copy-Item "index.html" -Destination "package/"
+          Copy-Item -Recurse "ui" -Destination "package/"
+          Compress-Archive -Path package/* -DestinationPath swch-windows-x86_64.zip
 
-      - name: Create Release & Upload Asset
+      - name: Upload Windows Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          files: swch-windows-amd64.zip
+          files: swch-windows-x86_64.zip
           draft: false
           prerelease: false
           generate_release_notes: true

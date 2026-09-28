@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ent_acc1_fallguys",
+    "entitlementName": "FallGuysGame",
+    "namespace": "0a2d5924765643a39e05465c04da7d50",
+    "catalogItemId": "4b6c317ad5654dafa94fbf2a11b64e10",
+    "accountId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "identityId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "entitlementType": "EXECUTABLE",
+    "grantDate": "2022-06-21T13:00:00.000Z",
+    "consumable": false,
+    "status": "ACTIVE",
+    "active": true,
+    "useCount": 0,
+    "created": "2022-06-21T13:00:00.000Z",
+    "updated": "2022-06-21T13:00:00.000Z"
+  },
+  {
+    "id": "ent_acc1_civ6",
+    "entitlementName": "CivilizationVIGame",
+    "namespace": "cd14dcaa4f3443f19f7169a980559c62",
+    "catalogItemId": "42ac1ee840304cb1807172a9b47dc8e3",
+    "accountId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "identityId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "entitlementType": "EXECUTABLE",
+    "grantDate": "2020-05-21T15:00:00.000Z",
+    "consumable": false,
+    "status": "ACTIVE",
+    "active": true,
+    "useCount": 0,
+    "created": "2020-05-21T15:00:00.000Z",
+    "updated": "2020-05-21T15:00:00.000Z"
+  },
+  {
+    "id": "ent_acc1_civ6_dlc",
+    "entitlementName": "Civ6GatheringStormDLC",
+    "namespace": "cd14dcaa4f3443f19f7169a980559c62",
+    "catalogItemId": "dlc_civ6_gathering_storm_id",
+    "accountId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "identityId": "4a6313cbbe7d432b8132b5ee67ad53fa",
+    "entitlementType": "ENTITLEMENT",
+    "grantDate": "2021-01-10T12:00:00.000Z",
+    "consumable": false,
+    "status": "ACTIVE",
+    "active": true,
+    "useCount": 0,
+    "created": "2021-01-10T12:00:00.000Z",
+    "updated": "2021-01-10T12:00:00.000Z"
+  }
+]

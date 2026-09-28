@@ -1,0 +1,356 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+:root{--bg:#111214;--panel:#191a1e;--panel-hover:#222429;--line:#2a2b30;--text:#f4f4f6;--muted:#96979f;--accent:#ff784f;--accent-rgb:255,120,79;--radius:12px;font-family:Manrope,Arial,sans-serif;color:var(--text);background:var(--bg);font-synthesis:none;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}button{cursor:pointer;color:inherit}button{border:0;background:none}a{color:inherit;text-decoration:none}button:disabled{opacity:.45;cursor:wait}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:4px}button, a{transition:background .16s,color .16s,border-color .16s,transform .16s}button:hover{color:white}svg{width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}i{display:inline-flex;font-style:normal;flex-shrink:0}h1,h2,h3,p{margin:0}h2{font-size:25px;letter-spacing:-.8px}h3{font-size:17px}small{display:block} [hidden]{display:none!important}.app-shell{display:flex;min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:224px;background:#17181b;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:31px 18px 0;z-index:3}.brand{display:flex;align-items:center;gap:10px;font-size:34px;font-weight:800;letter-spacing:-2px;padding:0 10px 32px}.brand-symbol{font-size:23px;display:flex;align-items:center;justify-content:center;background:var(--accent);color:#131416;width:33px;height:33px;border-radius:10px;letter-spacing:-4px;transform:rotate(-6deg)}.brand-symbol span{font-size:24px}.brand-dot{color:var(--accent);margin-left:-10px}.workspace-label{font-size:8px;letter-spacing:1.2px;color:#85868e;margin:2px 10px 17px}.nav-item,.platform-item{display:flex;align-items:center;width:100%;gap:12px;padding:12px 13px;border-radius:8px;font-size:12px;font-weight:600;color:#a2a3ab;text-align:left;margin:3px 0}.nav-item:hover,.platform-item:hover{background:#232429}.nav-item.active{color:var(--accent);background:rgba(var(--accent-rgb),.1)}.nav-count{margin-left:auto;padding:2px 6px;background:rgba(var(--accent-rgb),.14);border-radius:4px;font-size:10px}.sidebar-rule{height:1px;background:var(--line);margin:24px 10px}.section-label{font-size:9px;letter-spacing:1.7px;color:#737580;margin:0 13px 14px}.platform-mark{width:20px;height:20px;background:#35373e;border-radius:50%;display:grid;place-items:center;color:#e2e3e8;font-size:12px;font-weight:800}.epic-mark{font-size:7px;border-radius:4px}.platform-item>span:last-child:not(.platform-mark){margin-left:auto;font-size:10px;color:#81838e}.platform-item.selected{color:white}.platform-item.selected .platform-mark{color:var(--accent)}.connect-link{display:flex;gap:10px;align-items:center;font-size:11px;color:#9698a2;padding:16px 12px}.sidebar-bottom{margin-top:auto;padding-top:25px}.style-teaser{margin:0 8px 22px;padding:16px 13px;border:1px solid #343032;border-radius:10px;background:linear-gradient(130deg,rgba(var(--accent-rgb),.06),transparent)}.tiny-label{font-size:7px;letter-spacing:.8px;color:var(--accent)}.style-teaser p{font-size:12px;line-height:1.9;margin:9px 0 12px;color:#c8c8ce}.style-teaser button{display:flex;justify-content:space-between;width:100%;font-size:10px;font-weight:700;color:var(--accent);padding:0}.profile{border-top:1px solid var(--line);margin-top:16px;padding:22px 3px;display:flex;gap:10px;align-items:center}.avatar{background:#393039;color:#e9c6bc;display:grid;place-items:center;width:36px;height:36px;border-radius:11px;font-size:11px;font-weight:800;flex-shrink:0}.avatar.small{width:29px;height:29px;border-radius:50%;font-size:9px}.profile strong{font-size:10px}.profile small{font-size:9px;color:var(--muted);margin-top:4px}.status-dot{width:5px;height:5px;background:#8cba9c;display:inline-block;border-radius:50%;flex-shrink:0}.profile>.status-dot{margin-left:auto}.main-shell{margin-left:224px;min-width:0;flex:1;display:flex;flex-direction:column}.topbar{height:76px;display:flex;align-items:center;justify-content:space-between;padding:0 38px;border-bottom:1px solid var(--line)}.breadcrumbs{font-size:10px;color:#85868f;display:flex;gap:15px}.breadcrumbs strong{font-weight:500;color:#d4d4db}.breadcrumbs span{color:#4d4e58}.topbar-actions{display:flex;gap:19px;align-items:center}.icon-button{display:grid;place-items:center;width:33px;height:33px;border-radius:7px;color:var(--muted)}.icon-button:hover{background:var(--panel-hover)}.top-divider{height:20px;width:1px;background:var(--line)}.demo-label{font-size:8px;letter-spacing:1.2px;color:#d9ad6a}main{padding:34px 38px 40px;flex:1;min-width:0}.page-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:31px}.eyebrow{font-size:8px;font-weight:800;letter-spacing:2px;color:var(--accent);margin-bottom:11px}h1{font-size:34px;letter-spacing:-1.4px;line-height:1.35;font-weight:800}h1 span{color:var(--accent)}.page-heading p{margin-top:9px;font-size:11px;color:var(--muted)}.secondary,.primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-size:11px;font-weight:700;padding:12px 16px;border-radius:8px;min-height:39px}.secondary{background:#202126;border:1px solid #33343b}.secondary:hover{background:#2b2c32;border-color:#474951}.secondary svg{width:15px;height:15px}.primary{background:var(--accent);color:#151517}.primary:hover{filter:brightness(1.1);color:#151517}.library-toolbar{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:1px solid var(--line);margin-bottom:25px}.filter-tabs{display:flex;gap:24px;align-self:stretch}.filter-tabs button{font-size:11px;color:var(--muted);border-bottom:2px solid transparent;padding:14px 0 18px;white-space:nowrap}.filter-tabs button.active{color:white;border-color:var(--accent)}.filter-tabs span{color:#82848f;font-size:9px;margin-left:5px}.library-controls{display:flex;gap:15px;align-items:center;padding-bottom:9px}.search{display:flex;align-items:center;gap:8px;background:#1a1b1f;border:1px solid var(--line);border-radius:7px;height:34px;padding:0 10px;color:#7b7d87}.search svg{width:14px;height:14px}.search input{width:130px;border:0;background:none;color:white;font-size:10px;outline:none}.search:focus-within{border-color:var(--accent)}kbd{font-family:inherit;font-size:10px;border:1px solid #393a42;padding:1px 5px;border-radius:3px}select{border:0;color:#a9aab3;background:#191a1e;font-size:10px;padding:7px;border-radius:5px;max-width:154px}.view-switch{display:flex;border:1px solid var(--line);padding:3px;border-radius:6px}.view-switch button{padding:5px;color:#737580;border-radius:3px}.view-switch button.active{background:#34353d;color:#f5f5f7}.view-switch svg{width:14px;height:14px}.hero{min-height:270px;position:relative;border-radius:13px;overflow:hidden;background:#29262a;margin-bottom:31px;display:flex;align-items:center}.hero-art{position:absolute;inset:0;background-position:center 36%;background-size:cover;opacity:.72}.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#17191ef5 0%,#17191ebb 37%,#17191e18 76%),linear-gradient(0deg,#14151aa8,transparent 65%)}.hero-copy{position:relative;z-index:1;padding:30px;width:65%}.hero-kicker{font-size:8px;letter-spacing:1.6px;color:#d7d2cd;display:flex;align-items:center;gap:7px;margin-bottom:17px}.hero h2{font-size:38px;line-height:1.14;letter-spacing:-1.5px;max-width:470px;font-weight:800}.hero p{font-size:10px;color:#b9b7bc;line-height:1.8;max-width:350px;margin:14px 0 21px}.hero-actions{display:flex;align-items:center;gap:15px}.hero-actions small{color:#aeb0b9;font-size:9px}.hero-count{position:absolute;bottom:20px;right:22px;z-index:1;font-size:9px;color:#aeb0b8;letter-spacing:3px}.collection-heading{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 18px}.collection-heading h3{font-size:13px}.collection-heading span{font-size:9px;color:var(--muted)}.games-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:23px 18px}.game-card{min-width:0}.poster-button{display:block;position:relative;width:100%;height:215px;overflow:hidden;padding:0;border:1px solid #33353b;border-radius:10px;text-align:left;background:#22252d}.poster-art{width:100%;height:100%;object-fit:cover;transition:transform .35s}.poster-button:hover .poster-art{transform:scale(1.05)}.poster-button:hover{border-color:var(--accent);transform:translateY(-3px)}.poster-overlay{position:absolute;inset:0;background:linear-gradient(0deg,#090b13dd,transparent 70%)}.poster-name{position:absolute;left:18px;right:18px;bottom:24px;font-size:22px;font-weight:800;line-height:1.1;text-transform:uppercase;letter-spacing:-.8px;text-shadow:0 2px 14px #000}.poster-platform{position:absolute;top:12px;left:12px;background:#14151dc7;border:1px solid #ffffff20;padding:4px 6px;border-radius:4px;font-size:7px;font-weight:800;letter-spacing:.4px}.poster-open{position:absolute;bottom:10px;right:12px;color:#ffffffaa;font-size:14px}.card-caption{display:flex;align-items:flex-start;justify-content:space-between;padding-top:12px;gap:8px}.card-caption h3{font-size:11px;letter-spacing:0;line-height:1.5}.card-caption small{font-size:9px;color:#8e919b;margin-top:5px;display:flex;gap:6px;align-items:center}.favorite{color:#737581;font-size:17px;padding:0 2px}.favorite.saved{color:var(--accent)}.favorite svg{width:16px;height:16px}.favorite.saved svg{fill:var(--accent);stroke:var(--accent)}.detail-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:24px}.game-list{border-right:1px solid var(--line);padding-right:16px;max-height:700px;overflow:auto}.game-list button{display:flex;align-items:center;gap:12px;width:100%;padding:10px 9px;border:1px solid transparent;border-radius:8px;margin-bottom:6px;text-align:left}.game-list button.selected{background:rgba(var(--accent-rgb),.09);border-color:rgba(var(--accent-rgb),.28)}.game-list button:hover{background:var(--panel-hover)}.game-list img{width:40px;height:47px;border-radius:5px;object-fit:cover}.game-list strong{font-size:10px;line-height:1.5;display:block}.game-list small{font-size:8px;color:var(--muted);margin-top:5px}.detail-panel{min-width:0}.detail-panel .hero{min-height:230px;margin-bottom:20px}.detail-panel .hero-copy{width:85%;padding:25px}.detail-panel .hero h2{font-size:29px}.detail-panel .hero p{margin:10px 0 15px}.account-section{border:1px solid var(--line);background:#17181c;border-radius:10px;padding:20px}.account-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:17px}.account-heading h3{font-size:13px}.account-heading small{font-size:9px;color:var(--muted);margin-top:6px}.text-button{font-size:10px;color:var(--accent);padding:5px 0}.account-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.account-chip{display:flex;gap:8px;align-items:center;padding:9px 11px;border:1px solid #33343d;border-radius:7px;font-size:10px;background:#202127}.account-chip.selected{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}.account-chip .avatar{width:24px;height:24px;border-radius:6px;font-size:8px}.account-chip small{color:#83b494;font-size:8px;margin-top:2px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.metric{padding:17px 13px;background:#202126;border:1px solid #2c2d35;border-radius:8px}.metric-label{display:flex;gap:7px;align-items:center;font-size:9px;color:#a0a1ac}.metric-label svg{width:13px;height:13px}.metric strong{display:block;font-size:23px;letter-spacing:-.7px;margin:12px 0 4px;font-weight:700}.metric small{color:#81838e;font-size:8px}.account-actions{display:flex;gap:14px;align-items:center;margin-top:17px}.account-actions p{font-size:9px;color:var(--muted);line-height:1.7}.game-info{display:flex;gap:25px;font-size:10px;color:var(--muted);padding:20px 0}.game-info strong{display:block;color:#d4d5db;font-size:11px;margin-top:6px;font-weight:500}.statusbar{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);height:38px;padding:0 38px;font-size:8px;color:#777985;gap:16px}.statusbar>span:first-child{display:flex;align-items:center;gap:7px}.version{margin-left:20px;color:#575966;font-size:7px;letter-spacing:1px}.empty-state{padding:65px 30px;text-align:center;border:1px dashed #373942;border-radius:12px}.empty-state>i{color:var(--accent);margin-bottom:20px}.empty-state>i svg{width:36px;height:36px}.empty-state h2{font-size:24px}.empty-state p{font-size:12px;line-height:1.8;color:var(--muted);max-width:460px;margin:15px auto 24px}.empty-actions{display:flex;justify-content:center;gap:12px}.account-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.account-tile{padding:23px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.account-tile h3{margin:14px 0 7px}.account-tile p{font-size:11px;color:var(--muted);margin-bottom:16px}.account-tile .primary{margin-top:20px}.account-tile small{font-size:10px;color:#a0b6a5}dialog{color:var(--text);background:#191a1f;border:1px solid #383a43;border-radius:17px;width:min(760px,calc(100% - 32px));padding:30px;box-shadow:0 30px 100px #0008;max-height:90vh;overflow:auto}dialog::backdrop{background:#06070bc9;backdrop-filter:blur(8px)}.dialog-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;gap:16px}.muted{font-size:12px;line-height:1.8;color:var(--muted)}.style-options{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:25px 0}.style-option{border:1px solid #363842;border-radius:10px;padding:10px;text-align:left;position:relative;background:#202127}.style-option:hover{border-color:#858795}.style-option.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.style-option strong{display:block;font-size:12px;margin-top:12px}.style-option small{font-size:9px;line-height:1.7;color:var(--muted);margin:4px 0}.style-preview{height:94px;border-radius:5px;display:flex;gap:5px;padding:10px;background:#101116}.mini-sidebar{width:18px;background:#262833;border-radius:2px}.mini-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;flex:1;align-items:center}.mini-cards span{height:53px;border-radius:3px;background:linear-gradient(145deg,var(--preview),#222636)}.mini-detail{flex:1;display:flex;flex-direction:column;gap:7px}.mini-detail span{flex:1;background:linear-gradient(125deg,var(--preview),#252737);border-radius:3px}.mini-detail span:last-child{flex:.4;background:#33353e}.dialog-note{display:flex;align-items:center;gap:9px;font-size:10px;color:#a3a5af;border-top:1px solid var(--line);padding-top:20px}.dialog-note svg{width:15px;color:var(--accent)}form{display:flex;flex-direction:column;gap:15px;margin-top:24px}form label{display:flex;flex-direction:column;gap:8px;font-size:11px;color:#b7b8c1}input,textarea{padding:12px;border:1px solid #393b46;border-radius:7px;background:#121318;color:white;min-width:0}textarea{resize:vertical}#connect-dialog,#metrics-dialog{max-width:510px}.small-text{font-size:10px}.error-text{font-size:11px;color:#ff9389;line-height:1.7}#toast{position:fixed;bottom:55px;left:50%;transform:translateX(-50%);z-index:20;background:#2a2c34;border:1px solid #4a4c58;border-radius:10px;padding:15px 23px;font-size:12px;box-shadow:0 12px 30px #0005;max-width:calc(100% - 40px)}#notice{padding:12px 16px;background:#33291d;color:#e1bd87;border:1px solid #5b4630;border-radius:8px;font-size:11px;line-height:1.8;margin-bottom:20px}
+html[data-style=xbox]{--accent:#9ada70;--accent-rgb:154,218,112}html[data-style=playstation]{--accent:#74acff;--accent-rgb:116,172,255}html[data-style=steam]{--accent:#85c8e9;--accent-rgb:133,200,233}html[data-style=riot]{--accent:#ff6878;--accent-rgb:255,104,120}html[data-style=xbox] .poster-button{height:185px;border-radius:4px}html[data-style=playstation] .poster-button{height:230px;border-radius:17px}html[data-style=riot] .hero,html[data-style=riot] .primary{border-radius:3px}html[data-style=steam] .hero{border-radius:6px}
+@media(min-width:1600px){main{padding:40px 50px}.poster-button{height:285px}.hero{min-height:330px}.hero h2{font-size:48px}.games-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(max-width:1180px){.sidebar{width:194px;padding-left:12px;padding-right:12px}.main-shell{margin-left:194px}main{padding:28px 25px}.topbar,.statusbar{padding-left:25px;padding-right:25px}.library-toolbar{align-items:flex-start;flex-wrap:wrap;gap:0}.library-controls{margin-left:auto}.filter-tabs{gap:15px}.games-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-layout{grid-template-columns:185px minmax(0,1fr);gap:18px}.metric{padding:13px 9px}.metric-label{font-size:8px}.account-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.sidebar{width:74px;padding:24px 9px 0}.brand{font-size:0;padding:0 8px 30px;gap:0}.brand-dot,.workspace-label,.section-label,.platform-item,.connect-link,.sidebar-rule,.style-teaser,.profile,.nav-count{display:none}.nav-item{font-size:0;gap:0;justify-content:center;padding:15px}.sidebar-bottom{margin-top:auto;padding-bottom:20px}.main-shell{margin-left:74px}.detail-layout{grid-template-columns:155px minmax(0,1fr)}.game-list{padding-right:8px}.game-list button{gap:7px;padding:7px 5px}.game-list img{width:30px;height:40px}.game-list strong{font-size:9px}.hero-copy{width:85%}.page-heading .secondary{font-size:9px;padding:9px}.metrics{gap:5px}.metric strong{font-size:20px}.account-section{padding:14px}}
+@media(max-width:650px){main{padding:24px 17px}.topbar{height:60px;padding:0 17px}.breadcrumbs{font-size:9px;gap:8px}.topbar-actions{gap:7px}.top-divider,.topbar .avatar{display:none}.page-heading{align-items:flex-start;flex-direction:column;gap:17px}h1{font-size:29px}.library-controls{width:100%;gap:8px;justify-content:space-between}.search{flex:1;min-width:80px}.search input{width:100%}.search kbd{display:none}select{max-width:100px;font-size:9px}.games-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 11px}.poster-button{height:180px}.poster-name{font-size:17px;left:12px;right:12px}.hero-copy{width:100%;padding:23px}.hero h2{font-size:30px}.hero p{max-width:260px}.hero{min-height:250px}.hero-count{display:none}.detail-layout{display:flex;flex-direction:column}.game-list{display:flex;max-height:none;border:0;gap:7px;padding:0;overflow:auto}.game-list button{min-width:150px;max-width:170px}.metrics{grid-template-columns:1fr}.metric{display:flex;align-items:center;justify-content:space-between;gap:8px}.metric strong{margin:0}.metric small{display:none}.account-actions{flex-wrap:wrap}.statusbar>span:last-child{display:none}.statusbar{padding:0 17px}.style-options{grid-template-columns:repeat(2,1fr)}dialog{padding:23px}.account-grid{grid-template-columns:1fr}.empty-state{padding:35px 15px}.empty-actions{flex-direction:column}.hero-actions{gap:9px}.hero-actions small{font-size:8px}.game-info{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+.hero h2,.account-tile h3{overflow-wrap:anywhere}.account-chip{max-width:100%;min-width:0}.account-chip>span:last-child{overflow-wrap:anywhere;min-width:0}.game-list strong{overflow-wrap:anywhere}.card-caption>div{min-width:0}.card-caption h3{overflow-wrap:anywhere}
+
+/* Steam library and account-isolated Community inventory. */
+.steam-filters,.inventory-toolbar{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin:0 0 24px}.steam-filters label,.inventory-toolbar label,.inventory-custom label{display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--muted);flex:1;min-width:150px}.steam-filters select,.inventory-toolbar select,.inventory-toolbar input,.steam-connect select,.inventory-custom input{width:100%;min-width:0;max-width:100%;padding:12px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px}.steam-connect{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:24px}.steam-connect>p{margin:12px 0}.steam-connect details{margin-top:14px}.steam-connect details p{margin:12px 0}.steam-connect small a{color:var(--accent)}.access-value{font-size:16px!important;line-height:1.5;overflow-wrap:anywhere}.account-section>.muted{margin-top:16px}.inventory-summary{display:flex;flex-direction:column;gap:12px;margin:24px 0}.inventory-summary .text-button{align-self:flex-start}.inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:24px}.inventory-item{padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);min-width:0}.inventory-item img,.inventory-placeholder{display:block;width:100%;height:160px;object-fit:contain;background:radial-gradient(ellipse,#ffffff09,transparent);margin-bottom:16px}.inventory-placeholder{display:grid;place-items:center;color:var(--muted)}.inventory-placeholder svg{width:54px;height:54px}.inventory-item small,.inventory-item p{color:var(--muted);font-size:11px;line-height:1.6;overflow-wrap:anywhere}.inventory-item h3{font-size:14px;line-height:1.6;margin:8px 0;overflow-wrap:anywhere}.item-flags{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0;font-size:9px;color:var(--muted)}.item-flags span{padding:5px 7px;border:1px solid var(--line);border-radius:5px}.inventory-warning{padding:16px;background:#d9ad6a15;border:1px solid #d9ad6a55;border-radius:8px;margin:18px 0;font-size:12px;line-height:1.7}.inventory-custom{font-size:12px;color:var(--muted);margin:18px 0}.inventory-custom form{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:18px 0}.inventory-note{margin-top:28px;max-width:780px;line-height:1.9}.inventory-empty{padding:40px 15px;text-align:center;border:1px dashed var(--line);border-radius:12px;margin:20px 0}.inventory-empty p{margin-top:12px}
+@media(max-width:600px){.steam-filters,.inventory-toolbar{align-items:stretch;gap:12px}.steam-filters label,.inventory-toolbar label{flex-basis:100%}.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.inventory-item{padding:10px}.inventory-item img,.inventory-placeholder{height:110px}.inventory-item h3{font-size:12px}.inventory-item .text-button{font-size:10px}.inventory-toolbar>.secondary{width:100%}.account-actions{flex-wrap:wrap}.steam-connect input{min-width:0}}
+
+.avatar{position:relative;overflow:hidden}.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.aggregate-metrics{display:flex;align-items:center;gap:30px;padding:22px;margin:18px 0 30px;background:rgba(var(--accent-rgb),.06);border:1px solid rgba(var(--accent-rgb),.18);border-radius:12px}.aggregate-metrics strong{display:block;font-size:27px;margin-top:6px;white-space:nowrap}.aggregate-metrics small,.aggregate-metrics p{font-size:11px;color:var(--muted);line-height:1.8}.aggregate-metrics p{margin-left:auto;max-width:240px}.inventory-account-status{display:flex;gap:12px;flex-wrap:wrap}.inventory-account-status>div{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px;max-width:350px}.inventory-account-status strong{font-size:12px}.inventory-account-status small{font-size:10px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere}.inventory-actions{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}.valuation-card{display:flex;flex-wrap:wrap;gap:35px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:20px 0 25px}.valuation-card strong{display:block;font-size:28px;margin:8px 0}.valuation-card small,.valuation-card p{font-size:11px;line-height:1.8;color:var(--muted)}.item-owner{display:flex;align-items:center;gap:7px;margin-top:12px;font-size:10px;color:var(--muted)}.item-owner .avatar{width:22px;height:22px;font-size:8px;border-radius:6px}.inventory-item .item-owner img{height:100%;margin:0}.item-price{display:block;font-size:15px;margin:12px 0}.inventory-item>.text-button{display:inline-block;margin-top:8px}
+@media(max-width:700px){.aggregate-metrics{flex-wrap:wrap;gap:20px}.aggregate-metrics p{max-width:none;margin-left:0}.valuation-card{gap:18px}.valuation-card strong{font-size:23px}.inventory-actions>*{flex:1}.inventory-account-status>div{max-width:100%;width:100%}}
+.card-play{width:100%;justify-content:center;margin-top:12px}.game-card{padding-bottom:10px}.download-status{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:20px;margin:16px 0;border:1px solid rgba(var(--accent-rgb),.35);border-radius:12px;background:rgba(var(--accent-rgb),.07)}.download-status strong,.download-status small{flex-basis:100%}.download-status small{color:var(--muted);font-size:11px;line-height:1.7}.download-status progress{accent-color:var(--accent);flex:1;min-width:120px}.download-status span{font-size:12px}.launch-account-options{display:grid;gap:12px;margin-top:22px}.launch-account-options .account-chip{width:100%;text-align:left}.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}#launch-account-dialog{width:min(540px,calc(100vw - 32px));padding:26px}#launch-account-dialog p{margin-top:15px;line-height:1.7}.aggregate-metrics{flex-wrap:wrap}.aggregate-metrics strong{white-space:normal;overflow-wrap:anywhere}.inventory-facets{border:1px solid var(--line);padding:18px;border-radius:12px;margin:20px 0}.inventory-facets summary{cursor:pointer;font-size:13px}.facet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;margin:20px 0}.facet-grid fieldset{border:1px solid var(--line);border-radius:8px;min-width:0;max-height:280px;overflow:auto;padding:12px}.facet-grid legend{font-size:12px;color:var(--accent);padding:0 6px}.facet-grid label{display:flex;gap:8px;align-items:center;font-size:12px;margin:10px 0}.facet-grid input{width:auto;accent-color:var(--accent)}.inventory-facets p{font-size:11px;line-height:1.8}.global-valuation{background:rgba(var(--accent-rgb),.07)}.detail-panel{min-width:0}.game-list{max-height:calc(100vh - 220px);overflow-y:auto;position:sticky;top:20px;align-self:start}.inventory-toolbar input{min-width:0;max-width:100%}@media(max-width:700px){.game-list{position:static;max-height:240px}.card-play{font-size:11px;padding:11px 6px}.facet-grid{grid-template-columns:1fr}}
+.game-list{width:100%;max-width:100%;min-width:0}
+.currency-bar{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin:-8px 0 25px}.currency-bar label{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}.currency-bar select{max-width:240px;padding:9px;border:1px solid var(--line);border-radius:7px}.currency-bar small{flex:1;min-width:180px;font-size:10px;color:var(--muted);line-height:1.7}.currency-bar .text-button{font-size:10px}.library-value-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:15px 0 25px}.library-value-toolbar>p{flex-basis:100%}.account-library-value{text-align:left;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin:18px 0;width:100%}.account-library-value h4{font-size:13px;margin:0 0 14px}.library-value-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:11px;margin:14px 0 5px}.library-value-row strong{font-size:17px;white-space:nowrap}.library-value-row.total{padding-top:12px;border-top:1px solid var(--line)}.account-library-value>small{color:var(--muted);font-size:10px;line-height:1.7}.account-library-value>.secondary{margin-top:15px;width:100%}.library-price-details{margin-top:16px}.library-price-details summary{font-size:11px;cursor:pointer;color:var(--accent)}.library-price-details h5{margin:20px 0 10px}.library-price-item{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px 10px;font-size:11px;border-top:1px solid var(--line);padding:10px 0}.library-price-item>span{flex:1;min-width:100px;overflow-wrap:anywhere}.library-price-item>small{flex-basis:100%;color:var(--muted);font-size:9px;line-height:1.6}@media(max-width:650px){.currency-bar{gap:12px}.currency-bar small{flex-basis:100%}.library-value-row{flex-wrap:wrap}}
+
+/* Account Restrictions Styles */
+.account-restrictions-box{margin:14px 0;padding:12px;background:#191b20;border:1px solid var(--line);border-radius:8px;text-align:left}
+.restrictions-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.restrictions-header small{font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--muted);text-transform:uppercase}
+.status-indicator-danger{font-size:9px;color:#ff6b6b;font-weight:600}
+.status-indicator-clean{font-size:9px;color:#8cba9c;font-weight:600}
+.restrictions-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.restriction-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;line-height:1.4}
+.badge-danger{background:rgba(235,87,87,.15);color:#ff7878;border:1px solid rgba(235,87,87,.35)}
+.badge-warning{background:rgba(217,173,106,.15);color:#d9ad6a;border:1px solid rgba(217,173,106,.35)}
+.badge-success{background:rgba(140,186,156,.12);color:#8cba9c;border:1px solid rgba(140,186,156,.3)}
+.restrictions-actions{display:flex;flex-direction:column;gap:4px}
+.mini-btn{padding:6px 10px!important;font-size:10px!important;min-height:28px!important}
+.account-chip.is-banned{border-color:#ff5252!important;background:rgba(255,82,82,.08)!important}
+.chip-ban-badge{color:#ff6b6b!important;font-weight:700!important;font-size:8px!important;margin-top:2px}
+.game-ban-alert{padding:14px 18px;background:rgba(235,87,87,.12);border:1px solid rgba(235,87,87,.4);border-radius:9px;margin:16px 0;color:#ff9389}
+.game-ban-alert strong{display:block;font-size:12px;color:#ff6b6b;margin-bottom:4px}
+.game-ban-alert p{font-size:11px;line-height:1.6;margin:0;color:#d8d8de}
+.restrictions-group{border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;background:#14151a}
+.restrictions-group h4{font-size:12px;margin:0 0 12px;color:var(--accent)}
+.restrictions-group-header{margin-bottom:12px}
+.restrictions-group-header h4{margin-bottom:4px}
+.checkbox-label{display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:10px!important;padding:8px 0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)}
+.checkbox-label:last-child{border-bottom:none}
+.checkbox-label input[type="checkbox"]{margin-top:3px;accent-color:var(--accent);width:16px;height:16px}
+.checkbox-label span{display:flex;flex-direction:column;gap:2px}
+.game-bans-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;max-height:180px;overflow-y:auto}
+.game-ban-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#1b1d24;border:1px solid var(--line);border-radius:6px;font-size:11px}
+.game-ban-item span{display:flex;align-items:baseline;gap:8px}
+.add-game-ban-row,.custom-game-ban-row{display:flex;gap:8px;margin-top:8px;align-items:center}
+.add-game-ban-row select,.custom-game-ban-row input{flex:1;min-width:0}
+.danger-btn{background:#eb5757!important;color:white!important}
+.danger-btn:hover{background:#ff6b6b!important}
+.inventory-setting-box{padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:16px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.inventory-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:12px;color:var(--text);margin:0}
+.inventory-toggle-label input[type="checkbox"]{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.inventory-item.is-banned-item{border-color:rgba(235,87,87,.45);background:linear-gradient(180deg,rgba(235,87,87,.08) 0%,var(--panel) 100%);position:relative}
+.item-ban-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;margin:6px 0 8px;background:rgba(235,87,87,.18);color:#ff7878;border:1px solid rgba(235,87,87,.4)}
+.price-excluded-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(235,87,87,.18);color:#ff7878;border:1px solid rgba(235,87,87,.35);margin-left:6px;vertical-align:middle}
+.item-ban-subtext{display:block;font-size:10px;color:#ff7878;margin-top:4px;font-weight:500}
+.item-flags .flag-banned{background:rgba(235,87,87,.18);color:#ff7878;border-color:rgba(235,87,87,.4);font-weight:600}
+.item-card-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.item-card-actions-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.item-card-actions-row .text-button{font-size:10px;padding:3px 0}
+.btn-sell-item{width:100%;min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;transition:transform .12s,background .15s,filter .15s}
+.btn-sell-item svg{width:14px;height:14px}
+.btn-sell-item:hover:not(:disabled){transform:translateY(-1px)}
+.btn-sell-item:disabled{opacity:.55;cursor:not-allowed}
+.card-ban-btn{color:#737581;padding:0 2px;transition:color .16s,transform .16s;display:grid;place-items:center}.card-ban-btn:hover{color:#ff8373;transform:scale(1.15)}.card-ban-btn.banned{color:#ff5252}.card-ban-btn svg{width:15px;height:15px}
+.account-ban-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:#2b1c1c;color:#ff8373;border:1px solid #5a2626;cursor:pointer;margin-left:auto;transition:background .16s}.account-ban-btn:hover{background:#3d2222;color:#ffa094}
+.account-ban-btn.is-banned{background:#1e2621;color:#8cba9c;border-color:#2a4d33}
+.account-ban-btn.is-banned:hover{background:#25382b;color:#a5d6b4}
+.banned-accounts-toggle{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+.banned-accounts-toggle summary{font-size:10px;color:var(--muted);cursor:pointer;user-select:none}
+.banned-accounts-toggle summary:hover{color:var(--text)}
+.btn-ban-action{display:inline-flex;align-items:center;gap:6px;color:#ff8373!important;border-color:#5a2626!important;background:#2b1c1c!important}
+.btn-ban-action:hover{background:#3d2222!important;border-color:#7a3535!important;color:#ffa094!important}
+.quick-ban-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg-card)}
+.quick-ban-row .account-info{display:flex;align-items:center;gap:10px}
+
+/* Unified Settings Dialog */
+.settings-dialog{width:min(680px,calc(100vw - 32px));padding:28px}
+.settings-body{display:flex;flex-direction:column;gap:24px;margin:20px 0}
+.settings-group h4{font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--accent);margin:0 0 12px;text-transform:uppercase}
+.mode-options-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.mode-option-btn{padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);text-align:left;cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s}
+.mode-option-btn:hover{border-color:var(--muted);background:var(--panel-hover)}
+.mode-option-btn.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:rgba(var(--accent-rgb),.08)}
+.mode-preview-box{height:65px;border-radius:6px;background:#101115;display:flex;padding:8px;gap:6px;margin-bottom:12px;align-items:center}
+.preview-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex:1}
+.preview-cards span{height:48px;border-radius:4px;background:linear-gradient(135deg,rgba(var(--accent-rgb),.35),#232635)}
+.preview-detail{display:flex;gap:6px;flex:1}
+.preview-sidebar-line{width:22px;height:48px;background:#262835;border-radius:4px}
+.preview-content-box{flex:1;height:48px;background:linear-gradient(135deg,rgba(var(--accent-rgb),.25),#232635);border-radius:4px}
+.mode-option-btn strong{display:block;font-size:13px;color:var(--text);margin-bottom:4px}
+.mode-option-btn small{font-size:10px;color:var(--muted);line-height:1.5}
+.color-options-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.color-swatch-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;transition:border-color .16s,background .16s}
+.color-swatch-btn:hover{border-color:var(--muted);background:var(--panel-hover)}
+.color-swatch-btn.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:rgba(var(--accent-rgb),.08)}
+.color-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px rgba(0,0,0,.4)}
+.color-name{font-size:11px;font-weight:600;color:var(--text);flex:1;text-align:left}
+.color-check{color:var(--accent);font-weight:800;font-size:12px}
+.settings-currency-row{display:flex;align-items:flex-end;gap:12px}
+.settings-currency-row label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted);flex:1}
+.settings-currency-row select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.settings-currency-note{display:block;margin-top:8px;font-size:10px;color:var(--muted);line-height:1.6}
+.mini-refresh{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--muted);margin-left:auto}
+.mini-refresh:hover{background:var(--panel-hover);color:white}
+.page-heading-actions{display:flex;gap:10px;align-items:center}
+
+/* Fullscreen Game Card Modal */
+dialog:not([open]){display:none!important}
+dialog.game-modal:not([open]){display:none!important}
+dialog.game-modal[open]{width:min(1080px,calc(100vw - 32px));max-height:92vh;padding:0;border-radius:18px;background:#141519;border:1px solid #363845;box-shadow:0 35px 90px #000c;overflow:hidden;display:flex;flex-direction:column}
+.game-modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--line);background:#18191f;position:sticky;top:0;z-index:10}
+.game-modal-header .back-btn{display:inline-flex;align-items:center;gap:8px;font-size:11px;padding:8px 14px;min-height:34px}
+.game-modal-body{overflow-y:auto;flex:1;min-height:0}
+.game-modal-hero{position:relative;background-size:cover;background-position:center;padding:36px 36px 30px;min-height:260px;display:flex;flex-direction:column;justify-content:flex-end}
+.game-modal-badges{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.platform-badge{font-size:8px;font-weight:800;letter-spacing:1px;padding:4px 8px;border-radius:4px;background:#2b2d38;color:#d8dae2;border:1px solid #404352}
+.platform-badge.epic-badge{background:#2a1f1b;color:#ff9e7f;border-color:#5c3328}
+.status-badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px}
+.status-badge.installed{background:rgba(140,186,156,.18);color:#8cba9c;border:1px solid rgba(140,186,156,.35)}
+.status-badge.not-installed{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--line)}
+.game-modal-hero h1{font-size:36px;letter-spacing:-1.2px;line-height:1.2;font-weight:800;color:white;text-shadow:0 3px 18px #000;margin-bottom:10px}
+.game-modal-desc{font-size:12px;color:#c0c2cc;line-height:1.7;max-width:680px;margin-bottom:20px;text-shadow:0 1px 6px #0008}
+.game-modal-price-strip{display:flex;gap:20px;align-items:center;flex-wrap:wrap;background:rgba(18,19,24,.85);border:1px solid #363842;border-radius:10px;padding:14px 20px;margin-bottom:22px;backdrop-filter:blur(10px)}
+.game-modal-price-box{display:flex;align-items:baseline;gap:10px}
+.game-modal-price-label{font-size:11px;font-weight:600;color:var(--muted)}
+.game-modal-price-val{font-size:22px;font-weight:800;color:var(--accent)}
+.game-modal-price-val.is-free{color:#8cba9c}
+.game-modal-size-box{display:flex;gap:8px;font-size:11px;align-items:baseline;border-left:1px solid var(--line);padding-left:18px}
+.game-modal-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.game-modal-launch-btn{padding:12px 24px;font-size:13px}
+.game-modal-details-scroll{padding:24px 36px 36px}
+.game-modal-details-scroll .account-section{margin-top:0}
+@media(max-width:768px){
+  dialog.game-modal[open]{width:100vw;height:100vh;max-height:100vh;border-radius:0;border:none}
+  .game-modal-hero{padding:24px 20px 20px}
+  .game-modal-hero h1{font-size:26px}
+  .game-modal-details-scroll{padding:18px 20px 24px}
+  .game-modal-price-strip{flex-direction:column;align-items:flex-start;gap:8px}
+  .game-modal-size-box{border-left:none;padding-left:0}
+}
+
+/* Inventory Tag / Quality Chips and Bottom Info */
+.inventory-tag-filter-box{padding:14px 18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:0 0 20px}
+.inventory-tag-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;display:block;letter-spacing:.5px;text-transform:uppercase}
+.inventory-tag-chips{display:flex;flex-wrap:wrap;gap:8px}
+.tag-chip{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;background:#21232b;color:#c0c2cc;border:1px solid #333644;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .16s}
+.tag-chip:hover{background:#2a2d38;border-color:var(--accent);color:white}
+.tag-chip.active{background:rgba(var(--accent-rgb),.18);border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tag-chip-count{font-size:9px;opacity:.75;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,.08)}
+.inventory-tag-hint{padding:12px 16px;background:rgba(255,255,255,.02);border:1px dashed var(--line);border-radius:8px;margin:0 0 20px}
+.inventory-bottom-info{border-top:1px solid var(--line);margin-top:36px;padding-top:20px}
+.detail-price-box{display:inline-flex;align-items:baseline;gap:6px;padding:4px 8px;background:rgba(var(--accent-rgb),.1);border:1px solid rgba(var(--accent-rgb),.25);border-radius:6px;color:var(--accent);font-weight:700}
+.fortnite-modal{max-width:1040px;width:94vw;max-height:90vh;background:var(--bg);border-radius:16px;border:1px solid var(--line);color:var(--text);overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.7);padding:0}
+.fortnite-modal::backdrop{background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
+.fortnite-modal-header{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10}
+.fortnite-header-title-group h2{margin:0;font-size:18px;font-weight:700}
+.fortnite-header-title-group p{margin:4px 0 0;font-size:12px}
+.fortnite-modal-body{padding:20px 24px}
+.fortnite-hero-banner{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.fortnite-hero-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.fortnite-hero-card small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.fortnite-hero-card strong{font-size:18px;font-weight:800;color:var(--text)}
+.fortnite-vbucks-value{font-size:22px!important;font-weight:800;color:#38bdf8!important;display:flex;align-items:center;gap:6px}
+.fortnite-stw-founder{color:#f59e0b!important}
+.fortnite-auth-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fortnite-auth-chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid var(--line);color:#e2e8f0}
+.fortnite-counts-bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:20px;font-size:12px;color:var(--muted)}
+.fortnite-counts-bar strong{color:var(--text);margin-left:2px}
+.fortnite-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px}
+.fortnite-tab-btn{padding:7px 14px;border-radius:20px;background:#21232b;border:1px solid #333644;color:#c0c2cc;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+.fortnite-tab-btn:hover{background:#2a2d38;border-color:var(--accent);color:white}
+.fortnite-tab-btn.active{background:rgba(var(--accent-rgb),.18);border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.fortnite-tab-count{font-size:10px;opacity:.8;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,.1)}
+.fortnite-toolbar{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;align-items:center}
+.fortnite-search-input{flex:1;min-width:200px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px}
+.fortnite-filter-select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px}
+.fortnite-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.fortnite-card{position:relative;background:#181a20;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;border:2px solid #2d313d;transition:transform .15s,box-shadow .15s}
+.fortnite-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.fortnite-card.rarity-legendary{border-color:#f59e0b;background:linear-gradient(180deg,rgba(245,158,11,.15) 0%,#181a20 60%)}
+.fortnite-card.rarity-epic{border-color:#a855f7;background:linear-gradient(180deg,rgba(168,85,247,.15) 0%,#181a20 60%)}
+.fortnite-card.rarity-rare{border-color:#3b82f6;background:linear-gradient(180deg,rgba(59,130,246,.15) 0%,#181a20 60%)}
+.fortnite-card.rarity-uncommon{border-color:#22c55e;background:linear-gradient(180deg,rgba(34,197,94,.15) 0%,#181a20 60%)}
+.fortnite-card.rarity-marvel{border-color:#ef4444;background:linear-gradient(180deg,rgba(239,68,68,.2) 0%,#181a20 60%)}
+.fortnite-card.rarity-dc{border-color:#2563eb;background:linear-gradient(180deg,rgba(37,99,235,.2) 0%,#181a20 60%)}
+.fortnite-card.rarity-icon{border-color:#06b6d4;background:linear-gradient(180deg,rgba(6,182,212,.2) 0%,#181a20 60%)}
+.fortnite-card.rarity-gaminglegends{border-color:#6366f1;background:linear-gradient(180deg,rgba(99,102,241,.2) 0%,#181a20 60%)}
+.fortnite-card.rarity-starwars{border-color:#eab308;background:linear-gradient(180deg,rgba(234,179,8,.2) 0%,#181a20 60%)}
+.fortnite-card-img{width:100%;aspect-ratio:1;object-fit:cover;background:rgba(0,0,0,.25);display:block}
+.fortnite-card-info{padding:10px;display:flex;flex-direction:column;gap:3px;flex:1}
+.fortnite-card-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);margin:0}
+.fortnite-card-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);text-transform:capitalize}
+.fortnite-card-badges{position:absolute;top:6px;left:6px;right:6px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+.exclusive-badge{background:#f59e0b;color:#000;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
+.variant-badge{background:rgba(0,0,0,.75);color:#fff;font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;border:1px solid rgba(255,255,255,.2);margin-left:auto}
+.fav-badge{color:#f59e0b;font-size:12px}
+.fortnite-loading{text-align:center;padding:40px 20px;color:var(--muted)}
+.btn-fortnite-locker{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.fortnite-seasons-banner{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:16px}
+.fortnite-seasons-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.fortnite-seasons-list{display:flex;flex-wrap:wrap;gap:8px}
+.fortnite-season-item{background:#181a20;border:1px solid var(--line);border-radius:6px;padding:4px 10px;display:flex;align-items:center;gap:8px;font-size:11px}
+.fortnite-season-item strong{color:var(--accent)}
+.fortnite-season-item span{color:var(--muted)}
+
+/* Fortnite Category Sections (по отдельности, не в перемешку) */
+.fortnite-categories-container{display:flex;flex-direction:column;gap:22px}
+.fortnite-category-section{background:rgba(255,255,255,.018);border:1px solid var(--line);border-radius:12px;padding:16px 18px 20px}
+.fortnite-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.fortnite-section-title{display:flex;align-items:center;gap:10px}
+.fortnite-section-icon{font-size:18px;line-height:1}
+.fortnite-section-title h3{margin:0;font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.2px}
+.fortnite-section-count{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(var(--accent-rgb),.15);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.3)}
+.fortnite-cache-notice{margin-bottom:16px;font-size:11px;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;display:inline-flex;align-items:center;gap:8px}
+.fortnite-formula-note{display:block;font-size:10px;color:var(--accent);margin-top:3px}
+
+/* Inventory Launcher bar & Steam game selector */
+.inventory-launcher-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;padding:14px 18px;background:linear-gradient(180deg,#181a21 0%,#13151a 100%);border:1px solid #282a33;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.25);flex-wrap:wrap}
+.inventory-launcher-tabs{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.launcher-tab-btn{display:inline-flex;align-items:center;gap:13px;padding:10px 18px;background:#1a1c24;border:1px solid #2d303c;border-radius:12px;color:#9da0ae;cursor:pointer;transition:all .2s cubic-bezier(0.16,1,0.3,1);user-select:none;position:relative;overflow:hidden;font-family:inherit;text-align:left}
+.launcher-tab-btn:hover{background:#232632;border-color:#404554;color:#fff;transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.launcher-tab-btn.active{background:linear-gradient(135deg,rgba(var(--accent-rgb),.16) 0%,rgba(var(--accent-rgb),.05) 100%);border-color:var(--accent);color:#fff;box-shadow:0 0 0 1px var(--accent),0 6px 20px rgba(var(--accent-rgb),.22);transform:translateY(-1px)}
+.launcher-tab-btn .platform-mark,.launcher-tab-btn .launcher-tab-icon{width:34px;height:34px;border-radius:9px;background:#222530;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid rgba(255,255,255,.08);color:#c4c7d5;transition:all .2s ease;overflow:hidden}
+.launcher-tab-btn:hover .platform-mark,.launcher-tab-btn:hover .launcher-tab-icon{background:#2a2e3c;border-color:rgba(255,255,255,.18);color:#fff;transform:scale(1.05)}
+.launcher-tab-btn.active .platform-mark,.launcher-tab-btn.active .launcher-tab-icon{background:rgba(var(--accent-rgb),.22);border-color:var(--accent);color:#fff;box-shadow:0 0 12px rgba(var(--accent-rgb),.4)}
+.launcher-tab-btn .launcher-tab-icon svg,.launcher-tab-btn .platform-mark svg{width:20px;height:20px;display:block}
+.launcher-tab-info{display:flex;flex-direction:column;text-align:left;gap:2px}
+.launcher-tab-info strong{font-size:13.5px;font-weight:700;color:#f4f4f6;letter-spacing:-.2px;line-height:1.3}
+.launcher-tab-info small{font-size:11px;color:#8f929e;font-weight:500;line-height:1.3}
+.launcher-tab-btn.active .launcher-tab-info strong{color:#fff}
+.launcher-tab-btn.active .launcher-tab-info small{color:rgba(255,255,255,.8)}
+
+.steam-game-logos-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 2px 10px;margin-bottom:20px}
+.steam-game-logos-bar::-webkit-scrollbar{display:none}
+.steam-game-logo-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;background:#191b22;border:1px solid #2a2d36;border-radius:8px;font-size:12px;font-weight:600;color:#b2b5c2;cursor:pointer;white-space:nowrap;transition:all .2s cubic-bezier(0.16,1,0.3,1);user-select:none;font-family:inherit;flex-shrink:0}
+.steam-game-logo-btn:hover{background:#222530;border-color:#3e4252;color:#fff;transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.steam-game-logo-btn.active{background:linear-gradient(135deg,rgba(var(--accent-rgb),.18) 0%,rgba(var(--accent-rgb),.06) 100%);border-color:var(--accent);color:#fff;font-weight:700;box-shadow:0 0 0 1px var(--accent),0 4px 14px rgba(var(--accent-rgb),.25);transform:translateY(-1px)}
+.steam-game-logo-btn .platform-mark,.steam-game-logo-btn .game-logo-icon{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;background:none;box-shadow:0 2px 5px rgba(0,0,0,.3);transition:transform .2s ease}
+.steam-game-logo-btn:hover .platform-mark,.steam-game-logo-btn:hover .game-logo-icon{transform:scale(1.08)}
+.steam-game-logo-btn.active .platform-mark,.steam-game-logo-btn.active .game-logo-icon{box-shadow:0 0 10px rgba(var(--accent-rgb),.4)}
+.steam-game-logo-btn svg{width:100%;height:100%;display:block}
+.steam-game-logo-btn .game-name{line-height:1.2}
+.dota2-badge{background:#181920!important;border:1px solid rgba(226,59,36,.4)!important;box-shadow:0 2px 8px rgba(226,59,36,.25)!important}
+.dota2-badge .dota2-icon-svg{width:18px;height:18px;display:block}
+
+/* Hero Filter Styles */
+.hero-filter-box{background:var(--panel,#1a1b20);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0 20px;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.hero-filter-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.hero-filter-title{display:flex;align-items:center;gap:10px}
+.hero-mark{width:24px;height:24px;background:rgba(var(--accent-rgb),.15);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.3);border-radius:6px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.hero-filter-title strong{font-size:13.5px;font-weight:700;color:#fff;display:block}
+.hero-filter-title small{font-size:11px;color:var(--muted);display:block}
+.hero-filter-actions{display:flex;align-items:center;gap:10px}
+.hero-search-input{background:#121318;border:1px solid var(--line);border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;outline:none;width:180px;transition:border-color .15s}
+.hero-search-input:focus{border-color:var(--accent)}
+.hero-reset-btn{font-size:11px;color:var(--accent);cursor:pointer}
+.hero-chips-container{display:flex;flex-wrap:wrap;gap:8px;max-height:260px;overflow-y:auto;padding:2px;scrollbar-width:thin;scrollbar-color:#2b2d36 transparent}
+.hero-chips-container::-webkit-scrollbar{width:6px}
+.hero-chips-container::-webkit-scrollbar-thumb{background:#2b2d36;border-radius:3px}
+.hero-chip{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 6px;background:#1e2027;border:1px solid #2d303b;border-radius:8px;color:#b2b5c2;font-size:11.5px;font-weight:500;cursor:pointer;white-space:nowrap;user-select:none;transition:all .15s ease}
+.hero-chip:hover{background:#282b36;border-color:#3e4252;color:#fff;transform:translateY(-1px)}
+.hero-chip.active{background:linear-gradient(135deg,rgba(var(--accent-rgb),.2) 0%,rgba(var(--accent-rgb),.08) 100%);border-color:var(--accent);color:#fff;font-weight:700;box-shadow:0 0 0 1px var(--accent),0 2px 10px rgba(var(--accent-rgb),.25)}
+.hero-chip-icon{width:28px;height:28px;border-radius:5px;object-fit:contain;image-rendering:pixelated;image-rendering:-moz-crisp-edges;image-rendering:crisp-edges;background:#15161b;flex-shrink:0}
+.hero-chip-avatar{width:28px;height:28px;border-radius:5px;background:#2a2d38;color:#d0d2dc;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.hero-chip-avatar.all-avatar{background:rgba(var(--accent-rgb),.15);color:var(--accent)}
+.hero-chip-name{line-height:1.2}
+.hero-chip-badge{background:rgba(255,255,255,.08);color:var(--muted);font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600}
+.hero-chip.active .hero-chip-badge{background:rgba(var(--accent-rgb),.3);color:#fff}
+
+
+
+
+
+
+/* Riot collections remain readable on narrow desktop windows. */
+.riot-account section,.riot-profile { margin:16px 0; padding:14px; border:1px solid var(--line); border-radius:12px; text-align:left; }
+.riot-account .metrics,.riot-profile .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:12px; }
+.riot-account .account-actions { flex-wrap:wrap; }
+.played-games { text-align:left; margin:12px 0; }
+#riot-collection-dialog { width:min(920px,calc(100vw - 32px)); max-height:85vh; overflow:auto; }
+.riot-items { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; margin:14px 0 24px; }
+.riot-items article { display:flex; flex-direction:column; gap:10px; border:1px solid var(--line); border-radius:10px; padding:12px; overflow-wrap:anywhere; }
+.riot-items img { width:100%; height:100px; object-fit:contain; }
+
+/* Selected-account competitive statistics, shared by detail view and game dialog. */
+.game-stat-panel{margin:22px 0;padding:22px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.game-stat-panel .account-heading{margin:0 0 16px;gap:12px}
+.game-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
+.game-stat-grid .metric{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:10px;min-width:0;padding:16px}
+.game-stat-grid .metric strong{font-size:24px;overflow-wrap:normal;word-break:normal}
+.game-stat-notes{color:var(--muted);font-size:12px;line-height:1.6;margin-top:14px}
+.game-stat-notes p{margin:6px 0}
+.game-stats-key{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-top:14px}
+.game-stats-key label{display:grid;gap:8px;flex:1;min-width:160px;font-size:12px}
+.game-stats-key input{width:100%;min-width:0;box-sizing:border-box}
+.game-stats-api-link{display:inline-block;margin-top:10px;font-size:12px;color:var(--accent)}
+@media(max-width:600px){.game-stat-panel{padding:14px}.game-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.game-stat-panel .account-heading{align-items:flex-start;flex-wrap:wrap}.game-stat-grid .metric{padding:12px}.game-stat-grid .metric strong{font-size:20px}}
+
+/* Roblox styling */
+.platform-mark.roblox-mark { background: linear-gradient(135deg, #e2231a, #990000); color: #fff; font-weight: 800; border-radius: 6px; }
+.roblox-account { border-color: rgba(226, 35, 26, 0.25); }
+.roblox-account:hover { border-color: rgba(226, 35, 26, 0.6); }
+.roblox-robux-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(76, 217, 100, 0.12); color: #4cd964; border: 1px solid rgba(76, 217, 100, 0.3); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
+.roblox-premium-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 166, 35, 0.15); color: #f5a623; border: 1px solid rgba(245, 166, 35, 0.4); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+.roblox-rap-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(0, 162, 255, 0.12); color: #00a2ff; border: 1px solid rgba(0, 162, 255, 0.3); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
+.roblox-active-tag { color: #4cd964; font-weight: 600; display: block; margin: 4px 0; }
+.roblox-inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.roblox-item-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg-card, rgba(255,255,255,0.02)); }
+.roblox-item-card img { width: 80px; height: 80px; object-fit: contain; }
+.roblox-item-name { font-size: 12px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.roblox-item-rap { font-size: 11px; color: #00a2ff; font-weight: 700; }
+
+/* Minecraft styling */
+.platform-mark.minecraft-mark { background: linear-gradient(135deg, #2e7d32, #1b5e20); color: #fff; font-weight: 800; border-radius: 6px; }
+.minecraft-account { border-color: rgba(46, 125, 50, 0.25); }
+.minecraft-account:hover { border-color: rgba(46, 125, 50, 0.6); }
+.minecraft-account-head { width: 44px; height: 44px; border-radius: 6px; image-rendering: pixelated; object-fit: cover; }
+.minecraft-account-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(46, 125, 50, 0.12); color: #4caf50; border: 1px solid rgba(46, 125, 50, 0.3); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+.minecraft-server-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(33, 150, 243, 0.12); color: #2196f3; border: 1px solid rgba(33, 150, 243, 0.3); border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+
+/* Update notifications and panels */
+.update-pill {
+  display: inline-block;
+  background: #22c55e;
+  color: #111;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse-update 2s infinite;
+}
+
+@keyframes pulse-update {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.update-card {
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.update-card.has-update {
+  border-color: rgba(34, 197, 94, 0.4) !important;
+  background: rgba(34, 197, 94, 0.05) !important;
+}
+
+

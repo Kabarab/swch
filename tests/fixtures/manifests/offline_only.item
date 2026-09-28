@@ -1,0 +1,18 @@
+{
+  "FormatVersion": 0,
+  "AppName": "Celeste",
+  "CatalogItemId": "celeste_epic_catalog_id",
+  "CatalogNamespace": "celeste_namespace",
+  "DisplayName": "Celeste",
+  "InstallationGuid": "{CELESTE-1234-5678-9ABC-DEF012345678}",
+  "InstallLocation": "C:\\Games\\Celeste",
+  "InstallSize": 1200000000,
+  "LaunchExecutable": "Celeste.exe",
+  "LaunchCommand": "",
+  "MainGameAppName": "",
+  "MandatoryAppFolderName": "Celeste",
+  "AppVersionString": "1.4.0.0",
+  "bIsIncompleteInstall": false,
+  "bCanRunOffline": true,
+  "bRequiresAuth": false
+}

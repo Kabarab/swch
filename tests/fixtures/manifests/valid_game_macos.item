@@ -1,0 +1,18 @@
+{
+  "FormatVersion": 0,
+  "AppName": "Kinglet",
+  "CatalogItemId": "42ac1ee840304cb1807172a9b47dc8e3",
+  "CatalogNamespace": "cd14dcaa4f3443f19f7169a980559c62",
+  "DisplayName": "Sid Meier's Civilization VI",
+  "InstallationGuid": "42AC1EE840304CB1807172A9B47DC8E3",
+  "InstallLocation": "/Users/Shared/Epic Games/CivilizationVI",
+  "InstallSize": 18239019200,
+  "LaunchExecutable": "Civ6.app",
+  "LaunchCommand": "",
+  "MainGameAppName": "",
+  "MandatoryAppFolderName": "CivilizationVI",
+  "AppVersionString": "1.0.12.951533",
+  "bIsIncompleteInstall": false,
+  "bCanRunOffline": true,
+  "bRequiresAuth": true
+}

@@ -1,0 +1,18 @@
+{
+  "FormatVersion": 0,
+  "AppName": "NoExecutableGame",
+  "CatalogItemId": "no_exe_catalog_id",
+  "CatalogNamespace": "no_exe_namespace",
+  "DisplayName": "Game Without Executable",
+  "InstallationGuid": "{NOEXE-1234-5678-9ABC-DEF012345678}",
+  "InstallLocation": "C:\\Games\\NoExecutable",
+  "InstallSize": 1000000,
+  "LaunchExecutable": "",
+  "LaunchCommand": "",
+  "MainGameAppName": "",
+  "MandatoryAppFolderName": "NoExecutable",
+  "AppVersionString": "1.0",
+  "bIsIncompleteInstall": false,
+  "bCanRunOffline": true,
+  "bRequiresAuth": true
+}

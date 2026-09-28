@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>swch — Мультилаунчер & Менеджер Аккаунтов</title>
+    <style>
+        :root {
+            --bg-base: #0b0f17;
+            --bg-surface: #141b26;
+            --bg-card: #1c2636;
+            --bg-card-hover: #233146;
+            --border: #2a3a52;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent-green: #10b981;
+            --accent-green-bg: rgba(16, 185, 129, 0.15);
+            --accent-orange: #f59e0b;
+            --accent-pink: #ec4899;
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header */
+        header {
+            background: rgba(20, 27, 38, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: #fff;
+            font-weight: 900;
+            font-size: 18px;
+            letter-spacing: 1px;
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .logo-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .logo-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            background: var(--bg-base);
+            padding: 4px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .action-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--primary);
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            border: none;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .action-btn.primary:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            padding: 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .section-header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .search-bar {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 10px 18px;
+            color: var(--text-main);
+            font-size: 14px;
+            width: 320px;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .search-bar:focus {
+            border-color: var(--primary);
+        }
+
+        /* Grid Views */
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 24px;
+        }
+
+        .game-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .game-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.6);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .game-banner {
+            height: 140px;
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .game-platform-tag {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .game-body {
+            padding: 16px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .game-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .game-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .play-btn {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .play-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        /* Accounts View */
+        .launcher-group {
+            margin-bottom: 36px;
+        }
+
+        .launcher-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #cbd5e1;
+        }
+
+        .accounts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 18px;
+        }
+
+        .account-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: all 0.2s;
+        }
+
+        .account-card.active {
+            border-color: var(--accent-green);
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-surface) 100%);
+        }
+
+        .account-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .account-name {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .account-user {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.active {
+            background: var(--accent-green-bg);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+
+        .status-badge.standby {
+            background: rgba(148, 163, 184, 0.1);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .switch-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .switch-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .switch-btn.current {
+            background: transparent;
+            border: 1px dashed var(--accent-green);
+            color: var(--accent-green);
+            cursor: default;
+        }
+
+        /* Freebies View */
+        .freebies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 24px;
+        }
+
+        .freebie-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .freebie-banner {
+            height: 180px;
+            background: #1e293b;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .freebie-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #ef4444;
+            color: #fff;
+            font-weight: 900;
+            font-size: 12px;
+            padding: 5px 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.5);
+        }
+
+        .freebie-body {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .freebie-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .freebie-price {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .old-price {
+            text-decoration: line-through;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .new-price {
+            color: var(--accent-green);
+            font-weight: 800;
+            font-size: 18px;
+        }
+
+        .freebie-date {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 520px;
+            padding: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 22px;
+            cursor: pointer;
+        }
+
+        .account-select-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .account-select-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .account-select-item:hover {
+            border-color: var(--primary);
+            background: var(--bg-card-hover);
+        }
+
+        .account-select-item.selected {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 2000;
+        }
+
+        .toast {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            padding: 14px 20px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success { border-color: var(--accent-green); }
+        .toast.error { border-color: #ef4444; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo-area">
+            <div class="logo-badge">SWCH</div>
+            <div>
+                <div class="logo-title">swch Multi-Launcher</div>
+                <div class="logo-sub">Высокоскоростное ядро Rust Edition</div>
+            </div>
+        </div>
+
+        <nav class="nav-tabs">
+            <button class="tab-btn active" onclick="switchTab('library')">🎮 Библиотека Игр</button>
+            <button class="tab-btn" onclick="switchTab('accounts')">👥 Аккаунты</button>
+            <button class="tab-btn" onclick="switchTab('freebies')">🎁 Раздачи 100%</button>
+        </nav>
+
+        <div class="header-actions">
+            <button class="action-btn" onclick="triggerScan()">🔄 Сканировать</button>
+            <button class="action-btn primary" onclick="triggerAutoClaim()">⚡ Забрать все раздачи</button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main>
+        <!-- Tab 1: Library -->
+        <section id="tab-library">
+            <div class="section-header">
+                <h2 class="section-title">🎮 Установленные игры <span id="games-count" style="color:var(--text-muted); font-size:16px;">(0)</span></h2>
+                <input type="text" class="search-bar" id="game-search" placeholder="Поиск игры по названию..." oninput="filterGames()">
+            </div>
+            <div class="games-grid" id="games-grid">
+                <!-- Games rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- Tab 2: Accounts -->
+        <section id="tab-accounts" style="display: none;">
+            <div class="section-header">
+                <h2 class="section-title">👥 Менеджер Аккаунтов</h2>
+                <div style="font-size:13px; color:var(--text-muted);">
+                    Бесшовный Hot-Swap сессий без паролей и 2FA
+                </div>
+            </div>
+            <div id="accounts-container">
+                <!-- Accounts rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- Tab 3: Freebies -->
+        <section id="tab-freebies" style="display: none;">
+            <div class="section-header">
+                <h2 class="section-title">🎁 Активные раздачи со 100% скидкой</h2>
+                <button class="action-btn primary" onclick="triggerAutoClaim()">⚡ Забрать для всех моих аккаунтов</button>
+            </div>
+            <div class="freebies-grid" id="freebies-grid">
+                <!-- Freebies rendered dynamically -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for Account Selection on Game Launch -->
+    <div class="modal-overlay" id="launch-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-game-title">Запуск игры</div>
+                <button class="modal-close" onclick="closeLaunchModal()">&times;</button>
+            </div>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+                Выберите, с какого аккаунта запустить игру. swch автоматически выполнит Hot-Swap сессии, если выбран другой аккаунт.
+            </p>
+            <div class="account-select-list" id="modal-account-list">
+                <!-- List of accounts -->
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="action-btn" onclick="closeLaunchModal()">Отмена</button>
+                <button class="action-btn primary" id="modal-launch-btn" onclick="executeLaunch()">🚀 Запустить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Alerts -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let allGames = [];
+        let allAccounts = {};
+        let allFreebies = [];
+        let selectedGameForLaunch = null;
+        let selectedAccountIdForLaunch = null;
+
+        // Navigation
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+
+            document.getElementById(`tab-${tabName}`).style.display = 'block';
+            event.target.classList.add('active');
+
+            if (tabName === 'library') loadGames();
+            if (tabName === 'accounts') loadAccounts();
+            if (tabName === 'freebies') loadFreebies();
+        }
+
+        // Toast notifications
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `${type === 'success' ? '✅' : '❌'} ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // Fetch & render Games
+        async function loadGames() {
+            try {
+                const res = await fetch('/api/games');
+                allGames = await res.json();
+                renderGames(allGames);
+            } catch (err) {
+                console.error("Failed loading games:", err);
+            }
+        }
+
+        function renderGames(games) {
+            const grid = document.getElementById('games-grid');
+            document.getElementById('games-count').innerText = `(${games.len || games.length})`;
+
+            if (!games || games.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted);">
+                        <h3>Игры пока не просканированы</h3>
+                        <p style="margin-top:8px;">Нажмите кнопку «🔄 Сканировать» вверху, чтобы мгновенно обнаружить установленные игры.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = games.map(g => `
+                <div class="game-card">
+                    <div class="game-banner" style="background-image: url('${g.banner_url || ''}')">
+                        <span class="game-platform-tag">${g.launcher}</span>
+                    </div>
+                    <div class="game-body">
+                        <div>
+                            <div class="game-title">${g.name}</div>
+                            <div class="game-meta">
+                                <span>ID: ${g.app_id}</span>
+                                <span>${(g.size_bytes / (1024*1024*1024)).toFixed(1)} GB</span>
+                            </div>
+                        </div>
+                        <button class="play-btn" onclick="openLaunchModal('${g.id}')">
+                            ▶ Играть
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterGames() {
+            const query = document.getElementById('game-search').value.toLowerCase();
+            const filtered = allGames.filter(g => g.name.toLowerCase().includes(query) || g.launcher.toLowerCase().includes(query));
+            renderGames(filtered);
+        }
+
+        // Fetch & render Accounts
+        async function loadAccounts() {
+            try {
+                const res = await fetch('/api/accounts');
+                allAccounts = await res.json();
+                renderAccounts(allAccounts);
+            } catch (err) {
+                console.error("Failed loading accounts:", err);
+            }
+        }
+
+        function renderAccounts(accMap) {
+            const container = document.getElementById('accounts-container');
+            const launchers = Object.keys(accMap);
+
+            if (launchers.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+                        <h3>Аккаунты не обнаружены</h3>
+                        <p style="margin-top:8px;">Войдите в Steam или Epic Games, чтобы аккаунты автоматически появились здесь.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = launchers.map(launcher => {
+                const accs = accMap[launcher];
+                return `
+                    <div class="launcher-group">
+                        <div class="launcher-header">
+                            <span>📦 ${launcher}</span>
+                            <span style="font-size:12px; background:var(--bg-card); padding:3px 8px; border-radius:10px;">${accs.length} аккаунт(ов)</span>
+                        </div>
+                        <div class="accounts-grid">
+                            ${accs.map(a => `
+                                <div class="account-card ${a.is_active ? 'active' : ''}">
+                                    <div class="account-top">
+                                        <div>
+                                            <div class="account-name">${a.display_name}</div>
+                                            <div class="account-user">Логин: ${a.username}</div>
+                                            <div class="account-user">ID: ${a.id}</div>
+                                        </div>
+                                        <span class="status-badge ${a.is_active ? 'active' : 'standby'}">
+                                            ${a.is_active ? '🟢 АКТИВЕН' : '⚪ РЕЗЕРВ'}
+                                        </span>
+                                    </div>
+                                    <button class="switch-btn ${a.is_active ? 'current' : ''}" 
+                                        onclick="${a.is_active ? '' : `switchAccount('${launcher}', '${a.id}')`}">
+                                        ${a.is_active ? '✔ Текущая сессия' : '⚡ Переключиться на этот аккаунт'}
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Account Switch Action
+        async function switchAccount(launcher, accountId) {
+            try {
+                showToast(`Переключаем ${launcher} на ${accountId}...`);
+                const res = await fetch('/api/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ launcher, account_id: accountId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Успешно переключено на ${accountId}!`, 'success');
+                    loadAccounts();
+                } else {
+                    showToast(data.error || 'Ошибка переключения', 'error');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // Fetch & render Freebies
+        async function loadFreebies() {
+            try {
+                const res = await fetch('/api/freebies');
+                allFreebies = await res.json();
+                renderFreebies(allFreebies);
+            } catch (err) {
+                console.error("Failed loading freebies:", err);
+            }
+        }
+
+        function renderFreebies(freebies) {
+            const grid = document.getElementById('freebies-grid');
+            if (!freebies || freebies.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted);">
+                        <h3>Прямо сейчас нет активных 100% раздач</h3>
+                        <p style="margin-top:8px;">Мы автоматически проверяем Epic Games Store, Steam и GOG каждые несколько часов.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = freebies.map(f => `
+                <div class="freebie-card">
+                    <div class="freebie-banner" style="background-image: url('${f.image_url || ''}')">
+                        <span class="freebie-badge">-100% БЕСПЛАТНО</span>
+                    </div>
+                    <div class="freebie-body">
+                        <div>
+                            <span style="font-size:11px; font-weight:700; color:var(--primary); text-transform:uppercase;">${f.launcher}</span>
+                            <div class="freebie-title">${f.title}</div>
+                            <div class="freebie-price">
+                                <span class="old-price">${f.original_price || '$19.99'}</span>
+                                <span class="new-price">БЕСПЛАТНО</span>
+                            </div>
+                            <div class="freebie-date">
+                                ⏳ Раздача доступна до: ${f.end_date ? new Date(f.end_date).toLocaleString() : 'скоро'}
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <a href="${f.store_url}" target="_blank" class="action-btn" style="flex:1; text-decoration:none; justify-content:center;">
+                                🌐 В магазин
+                            </a>
+                            <button class="action-btn primary" style="flex:1; justify-content:center;" onclick="triggerAutoClaim()">
+                                ⚡ Забрать
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Modal for Launch with Account
+        function openLaunchModal(gameId) {
+            const game = allGames.find(g => g.id === gameId);
+            if (!game) return;
+
+            selectedGameForLaunch = game;
+            document.getElementById('modal-game-title').innerText = `Запуск ${game.name}`;
+
+            const launcherAccs = allAccounts[game.launcher] || [];
+            const listEl = document.getElementById('modal-account-list');
+
+            if (launcherAccs.length === 0) {
+                listEl.innerHTML = `
+                    <div class="account-select-item selected">
+                        <div>
+                            <div style="font-weight:700;">Стандартный запуск (${game.launcher})</div>
+                            <div style="font-size:12px; color:var(--text-muted);">Будет использован текущий вошедший аккаунт</div>
+                        </div>
+                        <span>▶</span>
+                    </div>
+                `;
+                selectedAccountIdForLaunch = null;
+            } else {
+                listEl.innerHTML = launcherAccs.map((a, idx) => `
+                    <div class="account-select-item ${a.is_active ? 'selected' : ''}" onclick="selectModalAccount('${a.id}', this)">
+                        <div>
+                            <div style="font-weight:700;">${a.display_name} (${a.username})</div>
+                            <div style="font-size:12px; color:var(--text-muted);">${a.is_active ? '🟢 Текущий активный' : '⚪ Требуется Hot-Swap'}</div>
+                        </div>
+                        <span>${a.is_active ? '✔' : '⚡'}</span>
+                    </div>
+                `).join('');
+
+                const active = launcherAccs.find(a => a.is_active);
+                selectedAccountIdForLaunch = active ? active.id : launcherAccs[0].id;
+            }
+
+            document.getElementById('launch-modal').classList.add('open');
+        }
+
+        function selectModalAccount(accId, element) {
+            selectedAccountIdForLaunch = accId;
+            document.querySelectorAll('.account-select-item').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+        }
+
+        function closeLaunchModal() {
+            document.getElementById('launch-modal').classList.remove('open');
+            selectedGameForLaunch = null;
+            selectedAccountIdForLaunch = null;
+        }
+
+        async function executeLaunch() {
+            if (!selectedGameForLaunch) return;
+
+            showToast(`Запуск ${selectedGameForLaunch.name}...`);
+            closeLaunchModal();
+
+            try {
+                const res = await fetch('/api/launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game_id: selectedGameForLaunch.id,
+                        target_account_id: selectedAccountIdForLaunch
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Игра ${selectedGameForLaunch.name} успешно запущена!`, 'success');
+                } else {
+                    showToast(data.error || 'Ошибка запуска', 'error');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // Trigger disk scan
+        async function triggerScan() {
+            showToast('Запущен параллельный поиск игр на всех дисках...');
+            try {
+                const res = await fetch('/api/scan', { method: 'POST' });
+                const games = await res.json();
+                allGames = games;
+                renderGames(allGames);
+                showToast(`Сканирование завершено! Найдено ${games.length} игр.`, 'success');
+            } catch (e) {
+                showToast('Ошибка сканирования: ' + e.message, 'error');
+            }
+        }
+
+        // Auto Claim
+        async function triggerAutoClaim() {
+            showToast('Запуск автоклеймера 100% скидок для всех аккаунтов...');
+            try {
+                const res = await fetch('/api/claim-all', { method: 'POST' });
+                const data = await res.json();
+                if (data.results && data.results.length > 0) {
+                    showToast(`Успешно обработано ${data.results.length} раздач!`, 'success');
+                } else {
+                    showToast('Все доступные раздачи уже были забраны!', 'success');
+                }
+                loadFreebies();
+            } catch (e) {
+                showToast('Ошибка клеймера: ' + e.message, 'error');
+            }
+        }
+
+        // Initial Load
+        loadGames();
+        loadAccounts();
+        loadFreebies();
+    </script>
+</body>
+</html>

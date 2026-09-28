@@ -1,0 +1,18 @@
+{
+  "FormatVersion": 0,
+  "AppName": "Kinglet_DLC_GatheringStorm",
+  "CatalogItemId": "dlc_civ6_gathering_storm_id",
+  "CatalogNamespace": "cd14dcaa4f3443f19f7169a980559c62",
+  "DisplayName": "Civilization VI: Gathering Storm",
+  "InstallationGuid": "{DLC-1234-5678-9ABC-DEF012345678}",
+  "InstallLocation": "/Users/Shared/Epic Games/CivilizationVI/DLC/Expansion2",
+  "InstallSize": 4500000000,
+  "LaunchExecutable": "",
+  "LaunchCommand": "",
+  "MainGameAppName": "Kinglet",
+  "MandatoryAppFolderName": "Expansion2",
+  "AppVersionString": "1.0.0",
+  "bIsIncompleteInstall": false,
+  "bCanRunOffline": true,
+  "bRequiresAuth": true
+}
