@@ -2112,7 +2112,9 @@ mod tests {
         std::env::remove_var("SWCH_EPIC_SIMULATE_LAUNCH");
 
         let (db, store) = setup_handler_test_store().await;
-        let account_id = "acc_404_test";
+        // Match the OAuth fixture's account identity so this test reaches
+        // manifest lookup rather than correctly rejecting mismatched login.
+        let account_id = "acc_mock_test";
         db.upsert_account(&Account {
             id: account_id.to_string(),
             launcher: "epic".to_string(),
@@ -2158,7 +2160,7 @@ mod tests {
         let _lock = TEST_ENV_LOCK.lock().unwrap();
         std::env::set_var("SWCH_EPIC_SIMULATE_LAUNCH", "1");
         let (db, store) = setup_handler_test_store().await;
-        let account_id = "acc_redact_test";
+        let account_id = "acc_mock_test";
         db.upsert_account(&Account {
             id: account_id.to_string(),
             launcher: "epic".to_string(),

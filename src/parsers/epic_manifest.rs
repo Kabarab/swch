@@ -261,6 +261,10 @@ pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifes
 
 /// Platform-specific candidate directories without env overrides (useful for testing).
 pub fn resolve_platform_manifest_dirs(os: &str) -> Vec<PathBuf> {
+    resolve_platform_manifest_dirs_for_home(os, dirs::home_dir())
+}
+
+fn resolve_platform_manifest_dirs_for_home(os: &str, home: Option<PathBuf>) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     match os {
         "windows" => {
@@ -272,12 +276,12 @@ pub fn resolve_platform_manifest_dirs(os: &str) -> Vec<PathBuf> {
         }
         "macos" => {
             dirs.push(PathBuf::from("/Users/Shared/Epic Games/EpicGamesLauncher/Data/Manifests"));
-            if let Some(home) = dirs::home_dir() {
+            if let Some(home) = home {
                 dirs.push(home.join("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"));
             }
         }
         "linux" => {
-            if let Some(home) = dirs::home_dir() {
+            if let Some(home) = home {
                 dirs.push(home.join(".local/share/bottles/bottles/Epic-Games-Store/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests"));
                 dirs.push(home.join(".wine/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests"));
                 dirs.push(home.join(".var/app/com.heroicgameslauncher.hgl/config/heroic/tools/epic/Data/Manifests"));
@@ -510,8 +514,13 @@ mod tests {
         assert!(!mac_dirs.is_empty());
         assert!(mac_dirs[0].to_string_lossy().contains("Epic Games"));
 
-        let linux_dirs = resolve_platform_manifest_dirs("linux");
-        assert!(!linux_dirs.is_empty());
+        // Linux candidate paths require a home directory, which is not
+        // guaranteed in a Windows test process. Supply it explicitly.
+        let home = tempdir().unwrap();
+        let linux_dirs = resolve_platform_manifest_dirs_for_home("linux", Some(home.path().to_path_buf()));
+        assert_eq!(linux_dirs.len(), 3);
+        assert!(linux_dirs.iter().all(|path| path.starts_with(home.path())));
+        assert!(resolve_platform_manifest_dirs_for_home("linux", None).is_empty());
     }
 
     #[test]
