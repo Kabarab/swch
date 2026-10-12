@@ -68,17 +68,19 @@ const assert = require('node:assert/strict');
 
   // Verify button text
   for (let i = 0; i < btnCount; i++) {
-    const text = await openButtons.nth(i).innerText();
+    const text = await openButtons.nth(i).textContent();
     assert.equal(text.trim(), 'Открыть в лаунчере');
   }
 
   // Click "Открыть в лаунчере" on steam account s2
+  await page.locator('.account-row').filter({hasText:'Steam 2'}).locator('.account-management > summary').click();
   await page.locator('button[data-action="open-launcher"][data-account="s2"]').click();
   await page.waitForTimeout(100);
   assert.equal(writes.at(-1)[0], '/api/steam/open-launcher');
   assert.equal(writes.at(-1)[1].account_name, 's2');
 
   // Click "Открыть в лаунчере" on epic account e2
+  await page.locator('.account-row').filter({hasText:'Epic Two'}).locator('.account-management > summary').click();
   await page.locator('button[data-action="open-launcher"][data-account="e2"]').click();
   await page.waitForTimeout(100);
   assert.equal(writes.at(-1)[0], '/api/epic/open-launcher');

@@ -37,13 +37,122 @@ pub struct Database {
 }
 
 impl Database {
+    /// Replace a third-party platform's games and ownership atomically.
+    pub async fn replace_mod_games(&self, platform: &str, games: &[Game], links: &[GameAccount]) -> Result<(), DbError> {
+        if !valid_mod_platform(platform) || games.iter().any(|g| g.launcher != platform || !g.id.starts_with(&format!("{platform}:game:")))
+            || links.iter().any(|l| l.launcher != platform || !l.game_id.starts_with(&format!("{platform}:game:")) || !l.account_id.starts_with(&format!("{platform}:account:"))) {
+            return Err(DbError::Io("Invalid mod ownership".into()));
+        }
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM game_accounts WHERE launcher=?1", [platform])?;
+        tx.execute("DELETE FROM games WHERE launcher=?1", [platform])?;
+        for g in games {
+            tx.execute("INSERT INTO games (id,launcher,app_id,name,install_path,executable_path,size_bytes,is_installed,banner_url,launch_uri,namespace) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)", params![g.id,g.launcher,g.app_id,g.name,g.install_path,g.executable_path,g.size_bytes,g.is_installed,g.banner_url,g.launch_uri,g.namespace])?;
+        }
+        for l in links {
+            let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND launcher=?2)", params![l.account_id,platform], |r|r.get(0))?;
+            if !exists { return Err(DbError::Io("Mod returned ownership for an unknown account".into())); }
+            tx.execute("INSERT INTO game_accounts (game_id,account_id,launcher) VALUES (?1,?2,?3)", params![l.game_id,l.account_id,l.launcher])?;
+        }
+        tx.commit()?; Ok(())
+    }
+
+    pub async fn replace_mod_accounts(&self, platform: &str, accounts: &[Account]) -> Result<(), DbError> {
+        if !valid_mod_platform(platform) || accounts.iter().any(|a| a.launcher != platform || !a.id.starts_with(&format!("{platform}:account:"))) { return Err(DbError::Io("Invalid mod account ownership".into())); }
+        let mut conn = self.conn.lock().await; let tx = conn.transaction()?;
+        let old: Vec<String> = {let mut s=tx.prepare("SELECT id FROM accounts WHERE launcher=?1")?;let rows=s.query_map([platform],|r|r.get(0))?.collect::<std::result::Result<Vec<_>,_>>()?;rows};
+        for id in old { if !accounts.iter().any(|a|a.id==id) {tx.execute("DELETE FROM game_accounts WHERE account_id=?1 AND launcher=?2",params![id,platform])?;tx.execute("DELETE FROM accounts WHERE id=?1 AND launcher=?2",params![id,platform])?;} }
+        for a in accounts {tx.execute("INSERT INTO accounts (id,launcher,username,display_name,email,is_active,last_used) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET username=excluded.username,display_name=excluded.display_name,email=excluded.email,is_active=excluded.is_active,last_used=excluded.last_used",params![a.id,a.launcher,a.username,a.display_name,a.email,a.is_active,a.last_used])?;}
+        tx.commit()?; Ok(())
+    }
+
+    pub async fn clear_mod_data(&self, id: &str) -> Result<(), DbError> {
+        if !crate::mods::types::valid_id(id) { return Err(DbError::Io("Invalid mod ID".into())); }
+        let prefix=format!("mod:{id}:");let mut conn=self.conn.lock().await;let tx=conn.transaction()?;
+        for table in ["game_accounts","games","accounts"] {tx.execute(&format!("DELETE FROM {table} WHERE substr(launcher,1,length(?1))=?1"),[&prefix])?;}
+        tx.commit()?;Ok(())
+    }
+    /// Replace one GOG account's ownership in a transaction; other accounts retain their games.
+    pub async fn replace_gog_library(&self, account_id: &str, games: &[Game]) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND launcher='gog')", [account_id], |row| row.get(0))?;
+        if !exists || games.iter().any(|g| g.launcher != "gog" || g.id != format!("gog_{}", g.app_id) || !crate::launchers::gog::valid_id(&g.app_id)) {
+            return Err(DbError::Io("Некорректная библиотека GOG".into()));
+        }
+        tx.execute("DELETE FROM game_accounts WHERE account_id=?1 AND launcher='gog'", [account_id])?;
+        for game in games {
+            tx.execute("INSERT INTO games (id,launcher,app_id,name,install_path,executable_path,size_bytes,is_installed,banner_url,launch_uri,namespace) VALUES (?1,'gog',?2,?3,NULL,NULL,0,0,?4,NULL,NULL) ON CONFLICT(id) DO UPDATE SET name=excluded.name,banner_url=excluded.banner_url",
+                params![game.id,game.app_id,game.name,game.banner_url])?;
+            tx.execute("INSERT INTO game_accounts (game_id,account_id,launcher) VALUES (?1,?2,'gog')", params![game.id,account_id])?;
+        }
+        tx.execute("DELETE FROM games WHERE launcher='gog' AND id NOT IN (SELECT game_id FROM game_accounts WHERE launcher='gog')", [])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Activate a connected GOG library in SWCH. This does not alter GALAXY's own login.
+    pub async fn set_active_gog_account(&self, id: &str) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND launcher='gog')", [id], |row| row.get(0))?;
+        if !exists { return Err(DbError::Io("Аккаунт GOG не найден".into())); }
+        tx.execute("UPDATE accounts SET is_active=0 WHERE launcher='gog'", [])?;
+        tx.execute("UPDATE accounts SET is_active=1,last_used=?2 WHERE id=?1 AND launcher='gog'", params![id,chrono::Utc::now().to_rfc3339()])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub async fn delete_gog_account(&self, id: &str) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM game_accounts WHERE account_id=?1 AND launcher='gog'", [id])?;
+        tx.execute("DELETE FROM accounts WHERE id=?1 AND launcher='gog'", [id])?;
+        tx.execute("DELETE FROM games WHERE launcher='gog' AND id NOT IN (SELECT game_id FROM game_accounts WHERE launcher='gog')", [])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Replace only the local Ubisoft catalog, including removed installations.
+    pub async fn replace_ubisoft_games(&self, games: &[Game]) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM games WHERE launcher = 'ubisoft'", [])?;
+        for game in games {
+            tx.execute("INSERT INTO games (id, launcher, app_id, name, install_path, executable_path, size_bytes, is_installed, banner_url, launch_uri, namespace) VALUES (?1, 'ubisoft', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![game.id, game.app_id, game.name, game.install_path, game.executable_path, game.size_bytes, game.is_installed, game.banner_url, game.launch_uri, game.namespace])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Replace the local HoYoverse catalog, including removed installations.
+    pub async fn replace_hoyoverse_games(&self, games: &[Game]) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM games WHERE launcher = 'hoyoverse'", [])?;
+        for game in games {
+            tx.execute("INSERT INTO games (id, launcher, app_id, name, install_path, executable_path, size_bytes, is_installed, banner_url, launch_uri, namespace) VALUES (?1, 'hoyoverse', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![game.id, game.app_id, game.name, game.install_path, game.executable_path, game.size_bytes, game.is_installed, game.banner_url, game.launch_uri, game.namespace])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Normalized profile data only: credentials never enter this table.
     pub async fn riot_profiles(&self) -> Result<Vec<crate::launchers::riot::profile::Profile>, DbError> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare("SELECT payload FROM riot_profiles ORDER BY account_id, app_id")?;
         let rows = stmt.query_map([], |r| r.get::<_,String>(0))?;
-        let mut profiles=Vec::new();
-        for row in rows { profiles.push(serde_json::from_str(&row?).map_err(|_|DbError::Io("Invalid Riot snapshot".into()))?); }
+        let mut profiles = Vec::new();
+        for row in rows {
+            if let Ok(json_str) = row {
+                if let Ok(prof) = serde_json::from_str(&json_str) {
+                    profiles.push(prof);
+                }
+            }
+        }
         Ok(profiles)
     }
     pub async fn save_riot_profile(&self, mut profile: crate::launchers::riot::profile::Profile) -> Result<(), DbError> {
@@ -53,6 +162,27 @@ impl Database {
         if let Some(old)=old.and_then(|s|serde_json::from_str(&s).ok()) { profile.retain_failed_sections(old); }
         let payload=serde_json::to_string(&profile).map_err(|_|DbError::Io("Invalid Riot snapshot".into()))?;
         conn.execute("INSERT INTO riot_profiles VALUES (?1,?2,?3) ON CONFLICT(account_id,app_id) DO UPDATE SET payload=excluded.payload",params![profile.account_id,profile.app_id,payload])?;
+        Ok(())
+    }
+
+    /// Refresh only the public Riot ID; keep session flags and game timestamps intact.
+    pub async fn update_riot_display_name(&self, account_id: &str, name: &str) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("UPDATE accounts SET display_name=?1 WHERE id=?2 AND launcher='riot'", params![name, account_id])?;
+        let payloads = {
+            let mut stmt = tx.prepare("SELECT app_id, payload FROM riot_profiles WHERE account_id=?1")?;
+            let rows = stmt.query_map([account_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        for (app, payload) in payloads {
+            if let Ok(mut profile) = serde_json::from_str::<crate::launchers::riot::profile::Profile>(&payload) {
+                profile.display_name = name.into();
+                let payload = serde_json::to_string(&profile).map_err(|_| DbError::Io("Invalid Riot snapshot".into()))?;
+                tx.execute("UPDATE riot_profiles SET payload=?1 WHERE account_id=?2 AND app_id=?3", params![payload, account_id, app])?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -170,6 +300,7 @@ impl Database {
             r#"
             CREATE TABLE IF NOT EXISTS riot_profiles (account_id TEXT NOT NULL, app_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(account_id, app_id));
             CREATE TABLE IF NOT EXISTS steam_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS auto_claim_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
             -- Games table
             CREATE TABLE IF NOT EXISTS games (
@@ -1394,6 +1525,15 @@ impl Database {
         self.delete_account(account_id, "epic").await
     }
 
+    pub async fn delete_riot_account(&self, account_id: &str) -> Result<(), DbError> {
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM riot_profiles WHERE account_id = ?1", [account_id])?;
+        tx.execute("DELETE FROM accounts WHERE id = ?1 AND launcher = 'riot'", [account_id])?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Fetches restrictions for a specific account.
     pub async fn get_account_restrictions(&self, account_id: &str) -> Result<Option<AccountRestrictions>, DbError> {
         let conn = self.conn.lock().await;
@@ -1589,6 +1729,46 @@ impl Database {
             links.push(link?);
         }
         Ok(links)
+    }
+
+    /// Records a claimed game offer in claim_history.
+    pub async fn auto_claim_value(&self, key: &str) -> Result<Option<String>, DbError> {
+        let conn = self.conn.lock().await;
+        Ok(conn.query_row("SELECT value FROM auto_claim_state WHERE key=?1", [key], |row| row.get(0)).optional()?)
+    }
+    pub async fn set_auto_claim_value(&self, key: &str, value: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().await;
+        conn.execute("INSERT INTO auto_claim_state (key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![key,value])?;
+        Ok(())
+    }
+    pub async fn auto_claim_values(&self,prefix:&str)->Result<Vec<String>,DbError> {
+        let conn=self.conn.lock().await;
+        let mut stmt=conn.prepare("SELECT value FROM auto_claim_state WHERE substr(key,1,length(?1))=?1 ORDER BY key")?;
+        let rows=stmt.query_map([prefix],|r|r.get(0))?;
+        Ok(rows.collect::<Result<Vec<String>,_>>()?)
+    }
+    pub async fn record_auto_claim_key(&self,id:&str,value:&str)->Result<(),DbError> {
+        let conn=self.conn.lock().await;
+        conn.execute("INSERT INTO auto_claim_state(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE json_extract(auto_claim_state.value,'$.status')='code_received'",params![format!("key-receipt:{id}"),value])?;
+        Ok(())
+    }
+    pub async fn confirm_key_redemption(&self,id:&str,value:&str,claim:&ClaimHistory)->Result<(),DbError> {
+        let mut conn=self.conn.lock().await;
+        let tx=conn.transaction()?;
+        tx.execute("INSERT INTO claim_history(offer_id,launcher,game_title,account_id,claimed_at) SELECT ?1,?2,?3,?4,?5 WHERE NOT EXISTS(SELECT 1 FROM claim_history WHERE offer_id=?1 AND launcher=?2 AND account_id=?4)",params![claim.offer_id,claim.launcher,claim.game_title,claim.account_id,claim.claimed_at])?;
+        tx.execute("INSERT INTO auto_claim_state(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",params![format!("key-receipt:{id}"),value])?;
+        tx.commit()?;Ok(())
+    }
+    pub async fn has_claim(&self, launcher: &str, account: &str, offer: &str) -> Result<bool, DbError> {
+        let conn = self.conn.lock().await;
+        Ok(conn.query_row("SELECT EXISTS(SELECT 1 FROM claim_history WHERE launcher=?1 AND account_id=?2 AND offer_id=?3)",
+            params![launcher,account,offer], |row| row.get(0))?)
+    }
+    pub async fn record_claim_once(&self, claim: &ClaimHistory) -> Result<(), DbError> {
+        let conn = self.conn.lock().await;
+        conn.execute("INSERT INTO claim_history (offer_id,launcher,game_title,account_id,claimed_at) SELECT ?1,?2,?3,?4,?5 WHERE NOT EXISTS(SELECT 1 FROM claim_history WHERE offer_id=?1 AND launcher=?2 AND account_id=?4)",
+            params![claim.offer_id,claim.launcher,claim.game_title,claim.account_id,claim.claimed_at])?;
+        Ok(())
     }
 
     /// Records a claimed game offer in claim_history.
@@ -1870,6 +2050,10 @@ impl Database {
         tx.commit()?;
         Ok(())
     }
+}
+
+fn valid_mod_platform(platform: &str) -> bool {
+    let parts:Vec<_>=platform.split(':').collect();parts.len()==3 && parts[0]=="mod" && parts[1..].iter().all(|p|crate::mods::types::valid_id(p))
 }
 
 #[cfg(test)]

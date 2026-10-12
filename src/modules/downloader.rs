@@ -91,6 +91,9 @@ impl ModuleDownloader {
                 ModuleId::Riot => 8_200_000,
                 ModuleId::Roblox => 10_500_000,
                 ModuleId::Minecraft => 9_500_000,
+                ModuleId::Ubisoft => 0,
+                ModuleId::Gog => 0,
+                ModuleId::Hoyoverse => 0,
             },
             launcher_path: launcher_path.map(|p| p.to_string_lossy().to_string()),
         };

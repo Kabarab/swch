@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Вход в Epic Games — SWCH</title>
+  <link rel="stylesheet" href="/ui/epic-browser-bridge.css">
+  <script defer src="/ui/epic-browser-bridge.js"></script>
+<link rel="stylesheet" href="/ui/i18n.css"><script type="module">import {initI18n} from "/ui/i18n.js"; await initI18n();</script></head>
+<body>
+  <main>
+    <span class="brand">SWCH · EPIC GAMES</span>
+    <h1 id="bridge-title">Подключение Epic Games</h1>
+    <p id="bridge-status" role="status" aria-live="polite">Проверяем расширение SWCH…</p>
+    <p>Вход откроется в отдельном обычном окне этого браузера. Твои аккаунты Google и автозаполнение доступны согласно настройкам профиля.</p>
+    <section id="helper-install" hidden>
+      <h2>Один раз установи расширение SWCH</h2>
+      <p>Оно передаст результат входа приложению автоматически.</p>
+      <ol>
+        <li>Открой папку <strong>browser-extension/epic</strong> рядом с приложением SWCH.</li>
+        <li>В Chrome открой <strong>chrome://extensions</strong>, в Edge — <strong>edge://extensions</strong>. Включи «Режим разработчика».</li>
+        <li>Нажми «Загрузить распакованное расширение» и выбери папку <strong>epic</strong>.</li>
+        <li>Вернись сюда и нажми «Расширение установлено».</li>
+      </ol>
+      <p>В Brave используй <strong>brave://extensions</strong>. Эта версия расширения поддерживает браузеры на Chromium.</p>
+      <button id="helper-reload">Расширение установлено</button>
+    </section>
+    <p class="muted">Расширение читает только JSON с результатом выбранного входа Epic. Оно не читает пароли, cookies или другие вкладки.</p>
+    <div class="actions">
+      <button id="bridge-cancel">Отменить вход</button>
+      <a href="/">Открыть SWCH в браузере</a>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,15 @@
+name: Publish a SWCH mod
+description: Automatically register a public personal GitHub repository in the mod catalog.
+title: '[SWCH Mod] Publish'
+body:
+  - type: markdown
+    attributes:
+      value: 'Publish a stable vX.Y.Z release with a mod.zip asset first. Submit this form from the GitHub account that owns the repository. Package validation does not execute your code.'
+  - type: input
+    id: repository
+    attributes:
+      label: Repository
+      description: Public personal repository containing your mod release.
+      placeholder: owner/repository
+    validations:
+      required: true

@@ -25,6 +25,8 @@ pub struct GameStats {
     pub stale: bool,
     pub metrics: Vec<Metric>,
     pub notes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadlock: Option<super::deadlock_stats::DeadlockDetail>,
 }
 impl GameStats {
     pub fn new(id: &str, app: &str) -> Self {
@@ -44,6 +46,7 @@ impl GameStats {
             stale: false,
             metrics: vec![],
             notes: vec![note.into()],
+            deadlock: None,
         }
     }
     fn metric(&mut self, label: &str, value: Option<Value>, unit: &str) {
@@ -323,15 +326,24 @@ impl StatsClient {
                     out.status = "partial".into();
                 }
             }
-            _ => match self
-                .get(
-                    format!("{}/v1/players/{account}/match-history", self.deadlock),
-                    &[],
-                )
-                .await
-            {
-                Ok(v) => parse_deadlock(&mut out, &v),
-                Err(e) => out.notes.push(e),
+            _ => {
+                let account=account.to_string();
+                let normal_query=[("account_ids",account.as_str()),("game_mode","normal"),("match_mode","unranked,ranked")];
+                let standard_query=[("account_ids",account.as_str()),("game_mode","normal"),("match_mode","unranked")];
+                let (history,normal,standard,seasons)=tokio::join!(
+                    self.get(format!("{}/v1/players/{account}/match-history",self.deadlock),&[]),
+                    self.get(format!("{}/v1/players/hero-stats",self.deadlock),&normal_query),
+                    self.get(format!("{}/v1/players/hero-stats",self.deadlock),&standard_query),
+                    self.get(format!("{}/v1/assets/ranked-seasons",self.deadlock),&[])
+                );
+                for error in [history.as_ref().err(),normal.as_ref().err(),standard.as_ref().err(),seasons.as_ref().err()].into_iter().flatten() {
+                    if !out.notes.contains(error){out.notes.push(error.clone());}
+                }
+                if let Ok(value)=&history {parse_deadlock(&mut out,value);}
+                let detail=super::deadlock_stats::build(id,history.as_ref().unwrap_or(&Value::Null),normal.as_ref().unwrap_or(&Value::Null),standard.as_ref().unwrap_or(&Value::Null),seasons.as_ref().unwrap_or(&Value::Null),chrono::Utc::now().timestamp());
+                if !detail.heroes.is_empty()&&out.status=="unavailable"{out.status="partial".into();}
+                out.deadlock=Some(detail);
+                out.notes.push("Статистика персонажей учитывает Standard и Ranked; Brawl и приватные игры исключены. Доступ к рейтингу оценивается по известным победам Standard и рейтинговым матчам текущего сезона. Неполная история не подтверждает закрытый рейтинг; ограничения входа проверяются в игре.".into());
             },
         }
         out

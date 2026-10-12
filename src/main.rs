@@ -6,7 +6,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use swch::launchers::epic::EpicAuthStore;
 use swch::launchers::minecraft::MinecraftManager;
 use swch::launchers::roblox::RobloxManager;
-use swch::server::{create_app_with_state, AppState};
+use swch::server::{create_app_with_auto_claim_and_mods, AppState};
 use swch::storage::Database;
 
 #[tokio::main]
@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Database::open(&db_path)?;
     db.run_migrations().await?;
     info!("Database initialized and migrations applied.");
+    swch::server::riot::start_session_refresh_loop();
 
     // Initialize Modular Engine and detect installed launchers
     let module_manager = Arc::new(swch::modules::ModuleManager::new(db.clone()));
@@ -71,18 +72,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let update_manager = Arc::new(swch::server::updater::UpdateManager::new());
 
-    let app = create_app_with_state(AppState {
+    let auto_claimer = swch::auto_claim::AutoClaimer::new(db.clone(), epic_store.clone());
+    let auto_claim_task = auto_claimer.start();
+    let mods = Arc::new(swch::mods::ModManager::new(db.clone()));
+    mods.initialize().await;
+    let app = create_app_with_auto_claim_and_mods(AppState {
         db,
         epic_store,
         module_manager,
         roblox_manager,
         minecraft_manager,
         update_manager,
-    });
+    }, auto_claimer, mods.clone());
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    auto_claim_task.abort();
+    mods.shutdown().await;
+    if let Err(e) = swch::launchers::riot::session::RiotSessionManager::new().refresh_saved_session() {
+        warn!("Could not save the latest Riot session on shutdown: {}", e);
+    }
 
     info!("swch2 server has stopped gracefully. Goodbye!");
     Ok(())

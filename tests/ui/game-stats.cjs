@@ -2,8 +2,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
+const {emptyApi,launchOptions}=require('./harness.cjs');
 (async()=>{
- const browser=await chromium.launch({channel:'chrome',headless:true});
+ const browser=await chromium.launch(launchOptions);
  try {
  const page=await browser.newPage({viewport:{width:1440,height:1100}}), errors=[], writes=[], reads=[];
  page.on('pageerror',e=>errors.push(e.message));
@@ -16,11 +17,11 @@ const path=require('node:path');
   if(u.origin!=='http://swch.test')return route.abort();
   if(!u.pathname.startsWith('/api/')){
    const file=u.pathname==='/'?'index.html':u.pathname.slice(1);
-   if(!['index.html','ui/launcher.js','ui/launcher.css','ui/model.mjs'].includes(file))return route.fulfill({status:404,body:''});
+   if(file!=='index.html'&&!file.startsWith('ui/'))return route.fulfill({status:404,body:''});
    return route.fulfill({body:await fs.readFile(path.resolve(__dirname,'../..',file)),contentType:file.endsWith('css')?'text/css':file.endsWith('html')?'text/html':'text/javascript'});
   }
   if(req.method()==='POST')writes.push([u.pathname,req.postDataJSON()]);
-  let json={};
+  let json=emptyApi(u.pathname);
   if(u.pathname==='/api/steam/library')json={accounts,games,warnings:[]};
   if(u.pathname==='/api/epic/accounts')json={accounts:[]};
   if(u.pathname==='/api/steam/game-prices')json=[];
@@ -47,14 +48,17 @@ const path=require('node:path');
  assert.equal(reads.filter(([id,app])=>id===a&&app==='570').length,1);
  assert((await panel.innerText()).includes('—'));
  await panel.scrollIntoViewIfNeeded();
- await page.screenshot({path:'/tmp/swch-game-stats-desktop.png'});
+ const output=path.resolve(__dirname,'../../output/game-stats');await fs.mkdir(output,{recursive:true});
+ await page.screenshot({path:path.join(output,'desktop.png')});
  for(const width of [800,390]){
   await page.setViewportSize({width,height:950});
   assert.equal(await panel.evaluate(el=>el.scrollWidth>el.clientWidth+1),false,`stats overflow ${width}`);
-  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`page overflow ${width}`);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
+  if(overflow){await page.screenshot({path:path.join(output,'overflow-'+width+'.png')});console.log(await page.evaluate(()=>({inner:innerWidth,root:document.documentElement.scrollWidth,body:document.body.scrollWidth,modal:document.getElementById('game-modal').getBoundingClientRect().toJSON(),elements:[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,cls:el.className,right:el.getBoundingClientRect().right,width:el.getBoundingClientRect().width,scroll:el.scrollWidth})).filter(el=>el.width>0&&(el.right>innerWidth+1||el.scroll>innerWidth)).slice(0,15)})));}
+  assert.equal(overflow,false,`page overflow ${width}`);
  }
  await panel.scrollIntoViewIfNeeded();
- await page.screenshot({path:'/tmp/swch-game-stats-mobile.png'});
+ await page.screenshot({path:path.join(output,'mobile.png')});
  await page.evaluate(()=>document.getElementById('game-modal').close());
  await page.setViewportSize({width:1440,height:1100});
  await page.getByRole('button',{name:'Открыть Counter-Strike 2',exact:true}).click();
@@ -63,7 +67,8 @@ const path=require('node:path');
  await panel.getByText('123',{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes('test-only-secret')),false);
  assert.equal(await panel.locator('[data-game-stats-key]').inputValue(),'');
- assert.deepEqual(writes,[['/api/steam/game-stats',{api_key:'test-only-secret'}]]);
+ assert.deepEqual(writes.filter(([endpoint])=>endpoint!=='/api/steam/check-restrictions'),[['/api/steam/game-stats',{api_key:'test-only-secret'}]]);
+ assert.ok(!writes.some(([endpoint])=>/switch-account|open-launcher|\/launch/.test(endpoint)),'Statistics must not change launcher state');
  await page.evaluate(()=>document.getElementById('game-modal').close());
  await page.getByRole('button',{name:'Открыть Deadlock',exact:true}).click();
  await panel.getByText('Обновить не удалось. Показана сохранённая статистика.').waitFor();

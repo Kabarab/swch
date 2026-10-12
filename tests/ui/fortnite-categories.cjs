@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const {launchOptions}=require('./harness.cjs');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/Users/nazarzukov/Desktop/zcode-account-manager-public-main/node_modules/playwright');
 
 const rootDir = path.resolve(__dirname, '../..');
@@ -34,7 +35,7 @@ const server = http.createServer((req, res) => {
   await new Promise(resolve => server.listen(4321, '127.0.0.1', resolve));
   console.log('Test static server listening on http://127.0.0.1:4321');
 
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const browser = await chromium.launch(launchOptions);
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -173,6 +174,7 @@ const server = http.createServer((req, res) => {
 
     console.log('7. Verifying Steam tab and Steam game selector logos...');
     await page.locator('[data-inventory-launcher="steam"]').click();
+    await page.locator('[data-disclosure="inventory-games"] > summary').click();
     await page.locator('.steam-game-logos-bar').waitFor();
     const gameLogoBtns = page.locator('.steam-game-logo-btn');
     assert(await gameLogoBtns.count() >= 1, 'Should display games with skins');

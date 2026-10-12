@@ -1,0 +1,1 @@
+{"id":"author.launcher","name":"Демонстрационный лаунчер","version":"1.0.0","api":"^1.0.0","platforms":["windows-x64","macos-arm64"],"description":"Пример библиотеки, аккаунтов, переключения и запуска отдельного процесса.","backend":"backend.mjs","ui":"index.html"}

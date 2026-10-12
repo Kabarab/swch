@@ -1,5 +1,7 @@
 pub mod launchers;
+pub mod auto_claim;
 pub mod modules;
+pub mod mods;
 pub mod parsers;
 pub mod server;
 pub mod storage;

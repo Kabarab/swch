@@ -29,7 +29,7 @@ async fn request(path: &str, body: Option<&str>) -> (StatusCode, Value) {
 async fn catalog_is_local_and_capabilities_are_honest() {
     let (status, data) = request("/api/riot/library", None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(data["capabilities"]["account_switch"], false);
+    assert_eq!(data["capabilities"]["account_switch"], true);
     assert_eq!(data["capabilities"]["inventory"], true);
     assert_eq!(data["capabilities"]["launch"], data["client_installed"]);
     let games = data["games"].as_array().unwrap();
@@ -49,8 +49,8 @@ async fn rejects_unknown_products_and_account_switch_without_launching() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(data["code"], "unknown_product");
     let (status, data) = request("/api/riot/switch-account", Some("{}")).await;
-    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-    assert_eq!(data["code"], "unsupported_operation");
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(data["code"], "missing_account");
     assert_eq!(
         request("/api/riot/launch", Some("{}")).await.0,
         StatusCode::BAD_REQUEST

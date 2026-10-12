@@ -1,0 +1,122 @@
+/* Shared density and readable controls, after platform-specific themes. */
+body{font-size:14px}
+select{color-scheme:dark}
+select option,optgroup{background:var(--panel,#1b1c22);color:var(--text,#f2f3f5)}
+.game-time{display:flex;align-items:center;gap:5px;margin-top:5px;color:var(--text);font-size:12px;flex-wrap:wrap}
+.game-time svg{width:13px;height:13px;flex-shrink:0;color:var(--muted)}
+.game-time-scope{color:var(--muted);font-size:12px}.game-time-scope:before{content:'· ';}
+.game-modal-meta-row .game-time{margin:0;padding:5px 9px;border-radius:6px;background:#ffffff0f}
+.riot-playtime strong{color:var(--text)}.riot-playtime small{display:block}
+[hidden]{display:none!important}
+:is(button,a,input,select,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.page-heading{margin-bottom:24px}.page-heading h1{font-size:32px}.eyebrow{display:none}
+.page-heading p,.muted,.small-text{font-size:12px}.page-heading-actions{gap:10px}
+.sidebar .nav-item,.sidebar .platform-item,.sidebar .connect-link{font-size:13px}
+.sidebar .nav-item{padding:11px 14px}.sidebar .platform-item{padding:9px 14px;min-height:40px}
+.sidebar .brand{padding-bottom:20px}.workspace-label{display:none}.section-label{font-size:11px}
+.sidebar{overflow-y:auto}.sidebar-bottom{flex-shrink:0}
+.sidebar .profile strong,.sidebar .profile small{font-size:12px}
+.platform-mark.platform-logo{display:inline-flex;width:26px;height:26px;padding:0;border-radius:5px;background:transparent;flex-shrink:0}
+.platform-logo img{display:block;width:100%;height:100%;object-fit:contain;border-radius:4px}
+.platform-logo:has(img[src*="hoyoverse"]){background:#fff}
+.account-platform-tabs .platform-logo{width:18px;height:18px}.account-group-heading .platform-logo{width:22px;height:22px}
+.connect-tab-btn .platform-logo{width:22px;height:22px}.connect-tab-btn{display:flex;align-items:center;gap:8px}
+.mobile-platform-control{display:none}
+.ux-disclosure{border:1px solid var(--line);border-radius:10px;margin:12px 0;background:transparent;min-width:0}
+.ux-disclosure>summary{cursor:pointer;min-height:42px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.5}
+.ux-disclosure[open]>summary{color:var(--text);border-bottom:1px solid var(--line)}
+.ux-disclosure>summary:hover{color:var(--text);background:var(--panel-hover)}
+.ux-disclosure[open]>*:not(summary){margin:14px}
+.library-advanced{margin:4px 0 20px}.library-advanced .steam-filters{padding:0;margin:0;border:0;background:transparent;flex-wrap:wrap}
+.library-toolbar{gap:14px}.library-toolbar button,.library-toolbar select,.library-toolbar input{font-size:13px}
+.filter-tabs button{font-size:14px}.search input{font-size:14px}.collection-heading{margin:18px 0}
+.collection-heading>span{display:none}.card-caption h3{font-size:14px}.card-caption small{font-size:12px}
+.card-play{font-size:14px;min-height:40px}.poster-platform{font-size:11px}.poster-name{display:none}
+.game-info{font-size:12px;flex-wrap:wrap}.game-info strong{font-size:14px}
+.account-search{min-width:210px}.account-search input{width:180px;font-size:14px}
+.account-platform-tabs button,.accounts-list-heading,.account-row-identity p{font-size:12px}
+.account-group-heading h2{font-size:15px}.account-row-status,.account-row-actions .text-button{font-size:12px}
+.account-row-actions .primary,.account-row-actions .secondary{font-size:12px;min-height:40px;min-width:145px}
+.account-row-main{padding:14px 16px;gap:16px}.account-warning{font-size:12px}.account-row-identity h3{font-size:15px}
+.account-management>summary{font-size:12px;padding:8px 16px;min-height:34px}
+.account-management-actions .secondary,.account-settings-line,.accounts-service{font-size:12px}
+.account-management .account-restrictions-box small,.restriction-badge,.accounts-hint{font-size:12px}
+.accounts-hint{margin:18px 0}.account-tile.account-row{border-radius:10px}
+.inventory-launcher-bar{padding:0;border:0;background:transparent;box-shadow:none;margin-bottom:14px}
+.inventory-launcher-tabs{gap:6px}.launcher-tab-btn{gap:8px;padding:9px 12px;border-radius:8px}
+.launcher-tab-info strong{font-size:13px}.launcher-tab-info small{display:none}
+.inventory-toolbar{margin:12px 0;gap:12px;align-items:end}.inventory-toolbar label{font-size:12px;min-width:0}
+.inventory-toolbar input,.inventory-toolbar select{font-size:14px;min-height:40px;max-width:100%;box-sizing:border-box}
+.inventory-toolbar #inventory-search{min-width:200px}.inventory-actions{margin:10px 0;gap:8px}
+.inventory-actions button,.inventory-more{font-size:13px;padding:9px 12px;min-height:40px}.inventory-more{margin:12px 0}
+.inventory-setting-box{padding:12px}.inventory-setting-box small,.inventory-toggle-label{font-size:12px}
+.inventory-workspace .cs-inventory-browser{padding:16px;background:var(--panel);margin:12px 0}
+.cs-browser-heading h3{font-size:18px}.cs-browser-heading .eyebrow,.cs-browser-heading .cs-eyebrow{display:none}
+.cs-inventory-search{font-size:12px;max-width:440px}.cs-inventory-search input{font-size:14px;padding:10px;box-sizing:border-box}
+.cs-category{padding:8px;min-height:88px;flex-basis:110px}.cs-category-image{height:36px}.cs-category-image img{max-height:36px}
+.cs-category strong,.cs-category small{font-size:12px}.cs-category-tabs{gap:8px;margin-top:12px}
+.cs-inventory-grid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}.cs-item-info h3{font-size:14px}
+.cs-item-info small,.cs-item-footer,.cs-item-details summary,.cs-item-details p{font-size:12px}
+.cs-item-art{height:130px}.cs-item-details{margin-top:10px}.cs-item-details summary{padding:6px 0}
+.inventory-item h3{font-size:14px}.inventory-item p,.item-owner,.inventory-account-status small{font-size:12px}
+.inventory-bottom-info{margin-top:18px;padding-top:12px}.inventory-summary-compact p{margin:0;font-size:12px}
+.inventory-partial{font-size:12px;color:#e6b477;align-self:center}
+.ux-disclosure.cs-advanced-filters,.ux-disclosure.cs-valuation-details{padding:0}
+.cs-inventory-browser>header{gap:12px;align-items:center;margin-bottom:10px}
+.cs-inventory-browser>header h3{font-size:18px;margin:0}.cs-inventory-browser .cs-eyebrow{display:none}
+.cs-inventory-browser .cs-inventory-search{margin:10px 0 0}.cs-category-tabs{margin:12px 0 0}
+.inventory-bottom-info .ux-disclosure .steam-game-logos-bar{margin:12px}
+.inventory-grid{margin-top:14px}.inventory-warning,.inventory-note,.error-text{font-size:12px;line-height:1.6}
+.hero-filter-box{padding:14px}.hero-search-input{font-size:14px}.hero-filter-title,.hero-filter-caption{font-size:12px}
+.riot-inventory-search{font-size:12px}.riot-inventory-search input{font-size:14px;box-sizing:border-box}
+.riot-inventory-tools{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:16px 0}
+.riot-inventory-tools .riot-inventory-search{flex:1 1 260px;max-width:420px;margin:0}
+.riot-inventory-weapon{flex:0 1 230px;font-size:12px;min-width:0}
+.riot-inventory-weapon select{display:block;width:100%;max-width:100%;min-height:44px;padding:10px 12px;font-size:14px;margin-top:8px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--bg-elevated);color:var(--text)}
+.deadlock-ranked-summary{padding:14px;border:1px solid var(--line);border-radius:10px;margin:12px 0}
+.deadlock-ranked-summary h4,.deadlock-selected-hero h4{margin:0 0 8px;font-size:14px}
+.deadlock-ranked-summary p{font-size:12px;line-height:1.5;margin:8px 0 0;overflow-wrap:anywhere}
+.deadlock-hero-select{display:block;font-size:12px;max-width:100%;margin:16px 0}
+.deadlock-hero-select select{display:block;width:100%;max-width:100%;min-width:0;min-height:44px;padding:10px;margin-top:8px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--bg-elevated);color:var(--text);font-size:14px}
+.deadlock-selected-hero{display:flex;gap:12px;align-items:center;margin:14px 0}
+.deadlock-selected-hero img{width:56px;height:56px;object-fit:contain;flex-shrink:0}
+.deadlock-selected-hero div{min-width:0}.deadlock-selected-hero p{font-size:12px;margin:6px 0;overflow-wrap:anywhere}
+.deadlock-selected-hero small{font-size:12px;overflow-wrap:anywhere}
+.game-modal-backdrop-blur{inset:0;transform:none;contain:paint}
+.app-shell{overflow-x:clip}
+.riot-weapon-filters .cs-category-tabs{margin:0 0 16px}
+.riot-item-kind{font-size:12px;color:var(--muted)}
+.riot-item-owners{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.riot-item-owners small{font-size:13px;color:var(--text);opacity:.85;overflow-wrap:anywhere}
+.riot-collection-section{margin:24px 0}
+.riot-collection-section>h3{display:flex;gap:10px;align-items:center;font-size:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.riot-collection-section>h3 span{font-size:12px;color:var(--muted);font-weight:400}
+@media(max-width:600px){.riot-inventory-weapon{flex:1 1 180px}.riot-weapon-filters .cs-category-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.riot-inventory-accounts{margin:0}.riot-inventory-heading{font-size:16px}
+.metrics .metric span,.metrics .metric small,.account-section .small-text{font-size:12px}
+.settings-tabs button,.claim-tabs button,.settings-group p,.settings-group small{font-size:12px}
+.statusbar{font-size:11px}.statusbar>span:last-child{display:none}
+@media(max-width:1180px){.account-row-actions .primary,.account-row-actions .secondary{min-width:125px}.account-row-main{gap:12px}}
+@media(max-width:900px){
+ .sidebar .nav-item{font-size:0;min-height:44px;padding:12px}.sidebar .platform-item{display:none}
+ .mobile-platform-control{display:flex;gap:12px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:18px}
+ .mobile-platform-control select{max-width:100%;font-size:14px;flex:1;min-width:0;min-height:40px}
+}
+@media(max-width:650px){
+ .page-heading{flex-direction:row;gap:10px;align-items:center}.page-heading h1{font-size:25px}.page-heading p{display:none}
+ .sidebar{width:58px;padding:18px 5px 0}.sidebar .brand{padding:0 8px 20px}.brand-symbol{width:30px;height:30px}
+ .main-shell{margin-left:58px}main{padding:20px 12px}.sidebar-bottom .nav-item{padding:12px}
+ .library-controls{flex-wrap:wrap}.library-controls .search{flex-basis:100%}.library-controls select{flex:1;max-width:100%;font-size:12px}
+ .account-row-main{padding:12px;grid-template-columns:minmax(0,1fr) auto}.account-row-status{max-width:105px}
+ .account-row-actions{gap:8px}.account-row-actions .primary,.account-row-actions .secondary{min-width:0;white-space:normal}
+ .account-search{min-width:0}.account-search input{width:100%}.account-platform-tabs{gap:4px}.account-platform-tabs button{padding:8px}
+ .account-row-identity h3{font-size:14px}.account-row-identity .avatar{width:32px;height:32px}
+ .inventory-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-toolbar label:has(input){grid-column:1/-1}
+ .inventory-toolbar #inventory-search{min-width:0}.inventory-toolbar button{grid-column:1/-1}.inventory-actions{flex-wrap:wrap}
+ .cs-browser-heading{flex-wrap:wrap;gap:10px}.cs-view-switch button{font-size:12px}.cs-inventory-search{max-width:100%}
+ .cs-inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.cs-item-art{height:100px}
+ .cs-item-info{padding:10px}.cs-item-footer{flex-wrap:wrap}.cs-item-details a{overflow-wrap:anywhere}
+ .inventory-launcher-tabs{display:flex;flex-wrap:wrap}.launcher-tab-btn{padding:8px;font-size:12px}.platform-logo{width:22px!important;height:22px!important}
+ .ux-disclosure[open]>*:not(summary){margin:10px}.facet-grid{grid-template-columns:1fr}.valuation-card{padding:14px}
+ .game-modal-launch-row{flex-wrap:wrap}.statusbar{padding:0 12px}
+}

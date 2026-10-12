@@ -1,0 +1,1 @@
+{"id":"author.tab","name":"Моя библиотека","version":"1.0.0","api":"^1.0.0","platforms":["windows-x64","macos-arm64"],"description":"Пример вкладки и действия со счётчиком запусков.","backend":"backend.mjs","ui":"index.html"}

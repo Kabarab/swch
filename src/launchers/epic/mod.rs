@@ -1,4 +1,5 @@
 pub mod client;
+pub mod browser;
 pub mod keyring;
 pub mod launch;
 pub mod models;

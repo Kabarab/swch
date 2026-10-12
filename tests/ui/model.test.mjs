@@ -19,6 +19,19 @@ const a=normalizeEpic([{app_name:'shared',title:'Shared',is_installed:false}],'a
 const b=normalizeEpic([{app_name:'shared',title:'Shared',is_installed:true},{app_name:'other',title:'Other'}],'b');
 const merged=mergeLibraries([a,b]);assert.equal(merged.length,2);assert.deepEqual(merged[0].owner_ids,['a','b']);assert.equal(merged[0].is_installed,true);
 });
+test('Fortnite catalog aliases share installation and artwork across owners',()=>{
+ const cloud=normalizeEpic([{app_name:'new-catalog',namespace:'fn',title:'Fortnite',is_installed:false,banner_url:'https://cdn1.epicgames.com/current.jpg'}],'a');
+ const local=normalizeEpic([{app_name:'old-catalog',namespace:'fn',title:'Fortnite',is_installed:true,install_path:'G:/epic/Fortnite',size_bytes:123,banner_url:null}],'b');
+ for(const libs of [[cloud,local],[local,cloud]]){
+  const merged=mergeLibraries(libs);
+  assert.equal(merged.length,1);assert.equal(merged[0].app_id,'Fortnite');
+  assert.equal(merged[0].is_installed,true);assert.equal(merged[0].install_path,'G:/epic/Fortnite');
+  assert.equal(merged[0].banner_url,'https://cdn1.epicgames.com/current.jpg');
+  assert.deepEqual(new Set(merged[0].owner_ids),new Set(['a','b']));
+ }
+ const unrelated=normalizeEpic([{app_name:'other',namespace:'other-store-game',title:'Fortnite'}],'c');
+ assert.equal(mergeLibraries([cloud,unrelated]).length,2);
+});
 
 import {normalizeSteam,steamStats,inventoryKey,appendInventory} from '../../ui/model.mjs';
 test('Steam merges accounts without mixing individual playtime or ownership',()=>{
@@ -34,7 +47,7 @@ test('inventory isolates contexts and deduplicates overlapping pages using strin
 import {eligibleSteamAccounts,aggregateSteamStats,filterInventory,inventoryIdentity,priceKey,inventoryValue,isItemUnsellable} from '../../ui/model.mjs';
 test('favorites stay above all other games for every sort, including playtime',()=>{
  const favorite=['steam:730'],minutes={'steam:570':900,'steam:730':0};
- for(const sort of ['name','recent','hours'])assert.equal(filterGames(games,{favoriteKeys:favorite,sort,playtime:minutes})[0].app_id,'730');
+ for(const sort of ['default','name','recent','hours'])assert.equal(filterGames(games,{favoriteKeys:favorite,sort,playtime:minutes})[0].app_id,'730');
  assert.equal(filterGames(games,{sort:'hours',playtime:minutes})[0].app_id,'570');
 });
 test('account-game association requires ownership, sharing or positive playtime, even for free games',()=>{

@@ -1,0 +1,21 @@
+{
+  "Как создать и опубликовать мод": "How to create and publish a mod",
+  "Создать мод с помощью ИИ": "Create a mod with AI",
+  "Скопировать промпт на английском": "Copy the English prompt",
+  "Промпт скопирован": "Prompt copied",
+  "Текст выделен. Скопируй его сочетанием Ctrl+C или ⌘C.": "Text selected. Press Ctrl+C or ⌘C to copy it.",
+  "Для обновления увеличивай версию и выпускай новый релиз. Не заменяй ZIP уже опубликованной версии. Организации GitHub, зависимости от других модов и нативные Node.js-дополнения не поддерживаются.": "To update your mod, increase its version and publish a new release. Never replace the ZIP of a published version. GitHub organizations, dependencies on other mods, and native Node.js addons are not supported.",
+  "Открой «Установка из ZIP и разработка», укажи полный путь к проекту и нажми «Подключить папку». После правок нажимай «Перезагрузить». Проверь работу и сохранение настроек после перезапуска.": "Open “Installation from ZIP and development”, enter the full project path, and click “Connect folder”. After editing, click “Reload”. Test your mod and check that its settings survive a restart.",
+  "От имени владельца репозитория открой заявку по ссылке ниже и укажи": "As the repository owner, open the submission form below and enter",
+  "Автоматическая проверка подтверждает структуру пакета и владельца, но не безопасность кода. Мод работает с правами пользователя; устанавливай только моды, авторам которых доверяешь.": "Automatic validation checks the package structure and repository owner, but does not audit code security. Mods run with your user permissions; only install mods from authors you trust.",
+  ". Workflow выпустит стабильный релиз с файлом": ". The workflow will publish a stable release containing",
+  "Подключить папку": "Connect folder",
+  "Установка из ZIP и разработка": "Installation from ZIP and development",
+  "Перезагрузить": "Reload",
+  "Машинный перевод": "Machine translation",
+  "Язык интерфейса": "Interface language",
+  "Скачать и применить": "Download and apply",
+  "Для первой загрузки нужен интернет. Затем перевод работает без интернета.": "An internet connection is needed to download a language for the first time. Installed translations work offline.",
+  "ч": "h",
+  "мин": "min"
+}

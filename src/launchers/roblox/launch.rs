@@ -72,6 +72,7 @@ impl RobloxLauncher {
     }
 
     /// Dispatches the URI protocol to the operating system.
+    #[allow(unused_variables)]
     fn execute_uri(uri: &str, multi_instance: bool) -> Result<(), String> {
         if std::env::var("SWCH_DRY_RUN").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false) {
             info!("Dry run: skipping process launch for URI: {}", uri);

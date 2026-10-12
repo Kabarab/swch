@@ -460,7 +460,9 @@ async fn steam_launch_dry_run_switches_only_on_dispatch_and_rejects_non_owner() 
         .oneshot(call("76561197960265730", false, false))
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let status = response.status();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
     let library =
         swch::launchers::steam::library::scan(&swch::launchers::steam::SteamPaths::new(root))
             .unwrap();
@@ -472,6 +474,33 @@ async fn steam_launch_dry_run_switches_only_on_dispatch_and_rejects_non_owner() 
             .unwrap()
             .is_active
     );
+    // Regression: MostRecent survives a closed Steam client / account chooser.
+    // Even the already selected account must have auto-login prepared on launch.
+    let registry_path = root.join("registry.vdf");
+    let stale_registry = r#""Registry" { "HKCU" { "Software" { "Valve" { "Steam" { "AutoLoginUser" "" "RememberPassword" "0" } } } } }"#;
+    std::fs::write(&registry_path, stale_registry).unwrap();
+    let config_path = root.join("config/config.vdf");
+    std::fs::write(&config_path, r#""InstallConfigStore" { "Software" { "Valve" { "Steam" { "AutoLoginUser" "" "RememberPassword" "0" } } } }"#).unwrap();
+    let response = create_app(db.clone())
+        .oneshot(call("76561197960265730", true, false))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(std::fs::read_to_string(&registry_path).unwrap(), stale_registry,
+        "dry run must not prepare auto-login");
+    for update_only in [false, true] {
+        std::fs::write(&registry_path, stale_registry).unwrap();
+        let response = create_app(db.clone())
+            .oneshot(call("76561197960265730", false, update_only))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let registry = swch::parsers::vdf::VdfDocument::from_file(&registry_path).unwrap();
+        assert_eq!(registry.get_path_str(&["Registry", "HKCU", "Software", "Valve", "Steam"], "AutoLoginUser"), Some("two"));
+        assert_eq!(registry.get_path_str(&["Registry", "HKCU", "Software", "Valve", "Steam"], "RememberPassword"), Some("1"));
+        let config = swch::parsers::vdf::VdfDocument::from_file(&config_path).unwrap();
+        assert_eq!(config.get_path_str(&["InstallConfigStore", "Software", "Valve", "Steam"], "AutoLoginUser"), Some("two"));
+    }
     let response = create_app(db.clone())
         .oneshot(call("76561197960265730", true, true))
         .await
@@ -592,7 +621,7 @@ async fn test_open_launcher_endpoints() {
     std::env::set_var("SWCH_EPIC_WEBCACHE_DIR", &epic_webcache);
     std::env::set_var("SWCH_EPIC_SESSIONS_DIR", &sessions_dir);
 
-    // 3. Test POST /api/epic/open-launcher with existing account
+    // 3. An account row alone cannot authenticate the native Epic launcher.
     let epic_acc = Account {
         id: "epic_test_1".into(),
         launcher: "epic".into(),
@@ -612,11 +641,10 @@ async fn test_open_launcher_endpoints() {
         .unwrap();
 
     let resp_epic = app.clone().oneshot(req_epic).await.unwrap();
-    assert_eq!(resp_epic.status(), StatusCode::OK);
+    assert_eq!(resp_epic.status(), StatusCode::UNAUTHORIZED);
     let body_bytes_epic = resp_epic.into_body().collect().await.unwrap().to_bytes();
     let json_epic: Value = serde_json::from_slice(&body_bytes_epic).unwrap();
-    assert_eq!(json_epic["status"], "success");
-    assert!(json_epic["message"].as_str().unwrap().contains("Epic"));
+    assert!(json_epic["error"].as_str().unwrap().contains("нет данных входа"));
 
     // 4. Test POST /api/epic/open-launcher with nonexistent account -> 404
     let req_epic_404 = Request::builder()

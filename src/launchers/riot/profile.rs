@@ -45,6 +45,15 @@ pub struct Playtime {
     pub scope: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RankedInfo {
+    pub rank: Option<String>,
+    pub rating: Option<u64>,
+    pub season_id: Option<String>,
+    pub placements_remaining: Option<u64>,
+    pub eligibility: Option<bool>,
+    pub note: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     pub account_id: String,
     pub app_id: String,
@@ -56,17 +65,41 @@ pub struct Profile {
     pub champions: Section<Vec<Item>>,
     pub skins: Section<Vec<Item>>,
     pub playtime: Section<Playtime>,
+    #[serde(default)]
+    pub ranked: Option<Section<RankedInfo>>,
+    #[serde(default)]
+    pub buddies: Option<Section<Vec<Item>>>,
+}
+
+/// A Riot ID is shared across products. Choose the latest valid snapshot,
+/// rather than letting an old League name overwrite a renamed VALORANT player.
+pub fn latest_display_name<'a>(profiles: &'a [Profile], account_id: &str) -> Option<&'a str> {
+    profiles.iter()
+        .filter(|p| p.account_id.eq_ignore_ascii_case(account_id))
+        .filter(|p| !p.display_name.trim().is_empty() && p.display_name.contains('#'))
+        .filter_map(|p| chrono::DateTime::parse_from_rfc3339(&p.synced_at).ok().map(|at| (at, p)))
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, p)| p.display_name.as_str())
 }
 impl Profile {
     pub fn retain_failed_sections(&mut self, old: Self) {
         if self.account_id != old.account_id || self.app_id != old.app_id {
             return;
         }
+        if !self.display_name.contains('#') && old.display_name.contains('#') {
+            self.display_name = old.display_name.clone();
+        }
         self.has_play_history |= old.has_play_history;
         self.level = self.level.or(old.level);
         self.champions.retain_on_error(old.champions);
         self.skins.retain_on_error(old.skins);
         self.playtime.retain_on_error(old.playtime);
+        if let Some(new) = &mut self.ranked {
+            if let Some(previous) = old.ranked { new.retain_on_error(previous); }
+        } else { self.ranked = old.ranked; }
+        if let Some(new) = &mut self.buddies {
+            if let Some(previous) = old.buddies { new.retain_on_error(previous); }
+        } else { self.buddies = old.buddies; }
     }
 }
 
@@ -98,11 +131,31 @@ pub fn league_items(data: &Value, skins: bool) -> Result<Vec<Item>, String> {
             Item {
                 id: id.to_string(),
                 name,
-                image_url: league_image(row),
+                image_url: league_image(row).or_else(|| (!skins).then(|| format!(
+                    "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/{id}.png"
+                ))),
             },
         );
     }
-    Ok(items.into_values().collect())
+    // The endpoint includes owned mode-specific copies (e.g. Shen 98 and
+    // Shen 60098). Sorted IDs keep the original champion and its portrait.
+    let mut names = std::collections::HashSet::new();
+    Ok(items.into_values().filter(|item| skins || names.insert(item.name.trim().to_lowercase())).collect())
+}
+
+/// Skins belonging to the original champion roster; mode copies are separate
+/// catalog entries and must not inflate the player's collection.
+pub fn league_skins(data: &Value, champions: &Value) -> Result<Vec<Item>, String> {
+    let roster: std::collections::HashSet<_> = league_items(champions, false)?
+        .into_iter().map(|item| item.id).collect();
+    let rows = data.as_array().ok_or("Клиент вернул неизвестный формат коллекции.")?;
+    let mut original = Vec::new();
+    for row in rows {
+        let champion = row["championId"].as_u64().filter(|id| *id > 0)
+            .ok_or("Клиент не указал чемпиона для облика.")?;
+        if roster.contains(&champion.to_string()) { original.push(row.clone()); }
+    }
+    league_items(&Value::Array(original), true)
 }
 
 pub fn league_playtime(data: &Value) -> Result<Playtime, String> {
@@ -127,6 +180,19 @@ pub fn league_playtime(data: &Value) -> Result<Playtime, String> {
         seconds: matches.values().sum(),
         matches: matches.len(),
         scope: "recent_matches".into(),
+    })
+}
+
+pub fn league_ranked(data: &Value, level: Option<u64>) -> Result<RankedInfo, String> {
+    let queues = data["queues"].as_array().ok_or("Рейтинг League of Legends недоступен.")?;
+    let solo = queues.iter().find(|row| row["queueType"] == "RANKED_SOLO_5x5");
+    let rank = solo.and_then(|row| row["tier"].as_str()).filter(|tier| !tier.is_empty() && *tier != "NONE" && *tier != "UNRANKED")
+        .map(|tier| format!("{} {}", tier, solo.and_then(|row| row["division"].as_str()).unwrap_or("")).trim().to_string());
+    Ok(RankedInfo {
+        eligibility:if rank.is_some() { Some(true) } else { level.map(|v| v >= 30) },
+        rating:if rank.is_some() { solo.and_then(|row| row["leaguePoints"].as_u64()) } else { None },
+        rank, season_id:None, placements_remaining:None,
+        note:"Ранг одиночной/парной очереди. Для рейтинга также нужны чемпионы; ограничения проверяются в игре.".into(),
     })
 }
 

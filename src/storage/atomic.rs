@@ -85,6 +85,27 @@ fn generate_temp_path(target_path: &Path) -> Result<PathBuf, AtomicError> {
     Ok(parent.join(temp_file_name))
 }
 
+/// Renames a file from `from` to `to`, with retry logic on Windows to withstand
+/// transient file lock contention (e.g. while terminated launcher processes are closing handles).
+pub fn robust_rename(from: &Path, to: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let mut attempts = 0;
+        loop {
+            match fs::rename(from, to) {
+                Ok(()) => return Ok(()),
+                Err(e) if attempts < 25 && (e.raw_os_error() == Some(5) || e.raw_os_error() == Some(32)) => {
+                    attempts += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(15 * attempts));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    fs::rename(from, to)
+}
+
 /// Atomically writes raw byte contents to `target_path`.
 ///
 /// Steps:
@@ -92,7 +113,7 @@ fn generate_temp_path(target_path: &Path) -> Result<PathBuf, AtomicError> {
 /// 2. Writes data to a temporary file located in the exact same directory (same filesystem).
 /// 3. Flushes and explicitly calls `sync_all()` (`fsync`) to guarantee data is committed to disk.
 /// 4. Closes the temporary file handle before renaming (essential for Windows handle locking).
-/// 5. Executes an atomic `fs::rename` from the temporary file to `target_path`.
+/// 5. Executes an atomic `robust_rename` from the temporary file to `target_path`.
 /// 6. Commits directory entry metadata on Unix platforms via directory fsync.
 /// 7. Automatically cleans up the temporary file if any step fails.
 pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(
@@ -166,7 +187,7 @@ pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(
     }
 
     // Atomic rename
-    fs::rename(&temp_path, target).map_err(|e| AtomicError::IoWithPath {
+    robust_rename(&temp_path, target).map_err(|e| AtomicError::IoWithPath {
         path: target.to_path_buf(),
         source: e,
     })?;
@@ -271,7 +292,7 @@ impl AtomicFileWriter {
             }
         }
 
-        fs::rename(&self.temp_path, &self.target_path).map_err(|e| AtomicError::IoWithPath {
+        robust_rename(&self.temp_path, &self.target_path).map_err(|e| AtomicError::IoWithPath {
             path: self.target_path.clone(),
             source: e,
         })?;
@@ -406,13 +427,30 @@ pub fn copy_dir_all<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> Result<()
                 }
             }
             #[cfg(windows)]
-            if let Ok(meta) = fs::metadata(&target_path) {
-                let mut perms = meta.permissions();
-                if perms.readonly() {
-                    perms.set_readonly(false);
-                    let _ = fs::set_permissions(&target_path, perms);
+            {
+                if let Ok(meta) = fs::metadata(&target_path) {
+                    let mut perms = meta.permissions();
+                    if perms.readonly() {
+                        perms.set_readonly(false);
+                        let _ = fs::set_permissions(&target_path, perms);
+                    }
+                }
+                let mut attempts = 0;
+                loop {
+                    match fs::copy(entry_path, &target_path) {
+                        Ok(_) => break,
+                        Err(e) if attempts < 10 && (e.raw_os_error() == Some(5) || e.raw_os_error() == Some(32)) => {
+                            attempts += 1;
+                            std::thread::sleep(std::time::Duration::from_millis(15 * attempts));
+                        }
+                        Err(e) => return Err(AtomicError::IoWithPath {
+                            path: target_path,
+                            source: e,
+                        }),
+                    }
                 }
             }
+            #[cfg(not(windows))]
             fs::copy(entry_path, &target_path).map_err(|e| AtomicError::IoWithPath {
                 path: target_path,
                 source: e,
@@ -507,7 +545,7 @@ pub fn atomic_copy<P: AsRef<Path>, Q: AsRef<Path>>(
         }
     }
 
-    fs::rename(&temp_path, tgt).map_err(|e| AtomicError::IoWithPath {
+    robust_rename(&temp_path, tgt).map_err(|e| AtomicError::IoWithPath {
         path: tgt.to_path_buf(),
         source: e,
     })?;

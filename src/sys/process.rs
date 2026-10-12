@@ -7,6 +7,9 @@ use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessStatus, Signal, System};
 use thiserror::Error;
 use tracing::{error, info, warn};
 
+/// Shared by user-driven launcher switching and opt-in native claim automation.
+pub static LAUNCHER_SWITCH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Error types for process management operations.
 #[derive(Error, Debug)]
 pub enum ProcessError {
@@ -30,6 +33,7 @@ pub enum LauncherType {
     RiotGames,
     BattleNet,
     Minecraft,
+    Hoyoverse,
 }
 
 impl LauncherType {
@@ -41,6 +45,7 @@ impl LauncherType {
             Self::RiotGames => "riot",
             Self::BattleNet => "battlenet",
             Self::Minecraft => "minecraft",
+            Self::Hoyoverse => "hoyoverse",
         }
     }
 
@@ -52,7 +57,8 @@ impl LauncherType {
             "epic" | "epicgames" | "epic_games" => Some(Self::EpicGames),
             "riot" | "riotgames" | "riot_games" => Some(Self::RiotGames),
             "battlenet" | "battle.net" | "bnet" => Some(Self::BattleNet),
-            "minecraft" | "mc" => Some(Self::Minecraft),
+            "minecraft" | "mc" | "tlauncher" | "t-launcher" | "tl" => Some(Self::Minecraft),
+            "hoyoverse" | "mihoyo" | "hoyo" | "hoyoplay" => Some(Self::Hoyoverse),
             _ => None,
         }
     }
@@ -77,12 +83,16 @@ impl LauncherType {
                     || clean.eq_ignore_ascii_case("epicgameslauncher")
                     || clean.eq_ignore_ascii_case("epic games launcher")
                     || clean.eq_ignore_ascii_case("epicwebhelper")
+                    || clean.starts_with("epiconlineservices")
+                    || clean.starts_with("eosoverlayrenderer")
             }
             Self::RiotGames => {
                 clean.eq_ignore_ascii_case("riot")
                     || clean.eq_ignore_ascii_case("riotgames")
                     || clean.eq_ignore_ascii_case("riotclient")
                     || clean.eq_ignore_ascii_case("riotclientservices")
+                    || clean.eq_ignore_ascii_case("riotclientux")
+                    || clean.eq_ignore_ascii_case("riotclientuxrender")
             }
             Self::BattleNet => {
                 clean.eq_ignore_ascii_case("battlenet")
@@ -94,6 +104,24 @@ impl LauncherType {
                 clean.eq_ignore_ascii_case("minecraft")
                     || clean.eq_ignore_ascii_case("minecraftlauncher")
                     || clean.eq_ignore_ascii_case("minecraft launcher")
+                    || clean.eq_ignore_ascii_case("tlauncher")
+                    || clean.eq_ignore_ascii_case("t-launcher")
+                    || clean.eq_ignore_ascii_case("tl")
+                    || clean.starts_with("tlauncher")
+            }
+            Self::Hoyoverse => {
+                clean.eq_ignore_ascii_case("hoyoverse")
+                    || clean.eq_ignore_ascii_case("mihoyo")
+                    || clean.eq_ignore_ascii_case("hoyoplay")
+                    || clean.eq_ignore_ascii_case("hyp")
+                    || clean.eq_ignore_ascii_case("genshin")
+                    || clean.eq_ignore_ascii_case("genshinimpact")
+                    || clean.eq_ignore_ascii_case("yuanshen")
+                    || clean.eq_ignore_ascii_case("starrail")
+                    || clean.eq_ignore_ascii_case("zenless")
+                    || clean.eq_ignore_ascii_case("zenlesszonezero")
+                    || clean.eq_ignore_ascii_case("honkai")
+                    || clean.eq_ignore_ascii_case("honkai3rd")
             }
         }
     }
@@ -117,12 +145,22 @@ impl LauncherType {
                 "EpicWebHelper.exe",
                 "EpicWebHelper",
                 "EpicWebHe",
+                "EpicOnlineServicesUserHelper.exe",
+                "EpicOnlineServicesUserHelper",
+                "EpicOnlineServices.exe",
+                "EpicOnlineServices",
+                "EOSOverlayRenderer-Win64-Shipping.exe",
+                "EOSOverlayRenderer-Win64-Shipping",
+                "EOSOverlayRenderer-Win32-Shipping.exe",
+                "EOSOverlayRenderer-Win32-Shipping",
             ],
             Self::RiotGames => &[
                 "RiotClientServices.exe",
                 "RiotClientServices",
                 "RiotClientUx.exe",
                 "RiotClientUx",
+                "RiotClientUxRender.exe",
+                "RiotClientUxRender",
                 "RiotClientCrashHandler.exe",
                 "RiotClientCrashHandler",
             ],
@@ -140,6 +178,26 @@ impl LauncherType {
                 "Minecraft.exe",
                 "minecraft-launcher",
                 "launcher",
+                "TLauncher.exe",
+                "tlauncher.exe",
+                "TL.exe",
+                "tlauncher",
+            ],
+            Self::Hoyoverse => &[
+                "GenshinImpact.exe",
+                "GenshinImpact",
+                "YuanShen.exe",
+                "YuanShen",
+                "StarRail.exe",
+                "StarRail",
+                "ZenlessZoneZero.exe",
+                "ZenlessZoneZero",
+                "BH3.exe",
+                "BH3",
+                "HYP.exe",
+                "hyp.exe",
+                "hyp_desktop.exe",
+                "HoYoPlay.exe",
             ],
         }
     }
@@ -232,6 +290,21 @@ impl LauncherType {
                         Some(p)
                     }
                 }
+                Self::Hoyoverse => {
+                    let p = PathBuf::from("/Applications/Genshin Impact.app");
+                    if p.exists() {
+                        Some(p)
+                    } else if let Some(ref ha) = home_apps {
+                        let hp = ha.join("Genshin Impact.app");
+                        if hp.exists() {
+                            Some(hp)
+                        } else {
+                            Some(p)
+                        }
+                    } else {
+                        Some(p)
+                    }
+                }
             }
         }
         #[cfg(target_os = "windows")]
@@ -267,6 +340,18 @@ impl LauncherType {
                         let prog64 = std::env::var("ProgramFiles")
                             .unwrap_or_else(|_| "C:\\Program Files".into());
                         Some(PathBuf::from(prog64).join("Minecraft Launcher\\MinecraftLauncher.exe"))
+                    }
+                }
+                Self::Hoyoverse => {
+                    let prog64 = std::env::var("ProgramFiles")
+                        .unwrap_or_else(|_| "C:\\Program Files".into());
+                    let p = PathBuf::from(prog64).join("HoYoPlay\\launcher.exe");
+                    if p.exists() {
+                        Some(p)
+                    } else {
+                        let prog32 = std::env::var("ProgramFiles(x86)")
+                            .unwrap_or_else(|_| "C:\\Program Files (x86)".into());
+                        Some(PathBuf::from(prog32).join("HoYoPlay\\launcher.exe"))
                     }
                 }
             }
@@ -409,6 +494,7 @@ pub fn expand_launcher_names(names: &[&str]) -> Vec<String> {
             LauncherType::RiotGames,
             LauncherType::BattleNet,
             LauncherType::Minecraft,
+            LauncherType::Hoyoverse,
         ] {
             if launcher.matches_alias(trimmed) {
                 for proc in launcher.process_names() {
@@ -470,6 +556,7 @@ pub fn find_all_launcher_processes(system: &System) -> Vec<(LauncherType, Vec<Pr
         LauncherType::RiotGames,
         LauncherType::BattleNet,
         LauncherType::Minecraft,
+        LauncherType::Hoyoverse,
     ];
 
     launchers
@@ -538,6 +625,30 @@ pub fn check_process_status(system: &mut System, pid: Pid) -> ProcessLifecycleSt
         }
     }
 
+    #[cfg(windows)]
+    {
+        extern "system" {
+            fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> isize;
+            fn GetExitCodeProcess(handle: isize, exit_code: *mut u32) -> i32;
+            fn CloseHandle(handle: isize) -> i32;
+        }
+        const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+        const STILL_ACTIVE: u32 = 259;
+
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid.as_u32());
+            if handle == 0 {
+                return ProcessLifecycleStatus::Terminated;
+            }
+            let mut exit_code: u32 = 0;
+            let ok = GetExitCodeProcess(handle, &mut exit_code);
+            CloseHandle(handle);
+            if ok != 0 && exit_code != STILL_ACTIVE {
+                return ProcessLifecycleStatus::Terminated;
+            }
+        }
+    }
+
     if !system.refresh_process_specifics(pid, ProcessRefreshKind::new()) {
         return ProcessLifecycleStatus::Terminated;
     }
@@ -575,10 +686,10 @@ pub struct TerminateOptions {
 impl Default for TerminateOptions {
     fn default() -> Self {
         Self {
-            graceful_timeout: Duration::from_millis(4000), // 4 seconds (satisfies 3-5 seconds requirement)
-            poll_interval: Duration::from_millis(200),     // 200 ms check step
+            graceful_timeout: Duration::from_millis(3000), // Up to 3 seconds for graceful shutdown
+            poll_interval: Duration::from_millis(100),     // 100 ms check step for fast responsiveness
             force_timeout: Duration::from_millis(2000),    // 2 seconds force kill wait
-            settle_delay: Duration::from_millis(100),      // 100 ms kernel fd release guarantee
+            settle_delay: Duration::from_millis(150),      // 150 ms kernel fd release guarantee
             include_descendants: true,                     // Terminate whole process tree
         }
     }
@@ -598,9 +709,39 @@ impl TerminationReport {
     }
 }
 
+#[cfg(windows)]
+unsafe fn post_wm_close_to_pid(pid: u32) -> bool {
+    extern "system" {
+        fn EnumWindows(lp_enum_func: unsafe extern "system" fn(isize, isize) -> i32, l_param: isize) -> i32;
+        fn GetWindowThreadProcessId(h_wnd: isize, lpdw_process_id: *mut u32) -> u32;
+        fn PostMessageW(h_wnd: isize, msg: u32, w_param: usize, l_param: isize) -> i32;
+    }
+    const WM_CLOSE: u32 = 0x0010;
+
+    struct Context {
+        pid: u32,
+        found: bool,
+    }
+
+    unsafe extern "system" fn enum_proc(hwnd: isize, lparam: isize) -> i32 {
+        let ctx = &mut *(lparam as *mut Context);
+        let mut wnd_pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut wnd_pid);
+        if wnd_pid == ctx.pid {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            ctx.found = true;
+        }
+        1
+    }
+
+    let mut ctx = Context { pid, found: false };
+    EnumWindows(enum_proc, &mut ctx as *mut Context as isize);
+    ctx.found
+}
+
 /// Low-level helper to send a graceful termination signal.
 /// On Unix: sends `SIGTERM` (signal 15).
-/// On Windows: runs `taskkill /PID <pid>` without `/F` to request graceful window closure.
+/// On Windows: attempts `WM_CLOSE` to GUI windows and runs `taskkill /PID <pid>`.
 pub fn send_sigterm(pid: u32) -> bool {
     #[cfg(unix)]
     {
@@ -612,12 +753,7 @@ pub fn send_sigterm(pid: u32) -> bool {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let mut cmd = std::process::Command::new("taskkill.exe");
-        cmd.arg("/PID").arg(pid.to_string());
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd.status().map(|s| s.success()).unwrap_or(false)
+        unsafe { post_wm_close_to_pid(pid) }
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -691,17 +827,24 @@ pub fn verify_file_descriptors_released(pids: &[u32]) -> bool {
 
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        use std::process::Command;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        extern "system" {
+            fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> isize;
+            fn CloseHandle(handle: isize) -> i32;
+            fn GetExitCodeProcess(process: isize, exit_code: *mut u32) -> i32;
+        }
+        const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+        const STILL_ACTIVE: u32 = 259;
+
         for &pid in pids {
-            let mut cmd = Command::new("tasklist.exe");
-            cmd.args(["/FI", &format!("PID eq {}", pid)]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            if let Ok(output) = cmd.output() {
-                let out = String::from_utf8_lossy(&output.stdout);
-                if out.contains(&format!(" {}", pid)) {
-                    return false;
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle != 0 {
+                    let mut exit_code: u32 = 0;
+                    let ok = GetExitCodeProcess(handle, &mut exit_code);
+                    CloseHandle(handle);
+                    if ok != 0 && exit_code == STILL_ACTIVE {
+                        return false;
+                    }
                 }
             }
         }
@@ -771,18 +914,30 @@ pub fn terminate_pids_blocking(
     );
 
     // Stage 1: Send Graceful SIGTERM
+    let mut any_sigterm_sent = false;
     for &pid in &alive {
         if let Some(proc) = system.process(pid) {
             let _ = proc.kill_with(Signal::Term);
         }
-        send_sigterm(pid.as_u32());
+        if send_sigterm(pid.as_u32()) {
+            any_sigterm_sent = true;
+        }
     }
 
     let start_graceful = Instant::now();
     let mut gracefully_terminated = Vec::new();
 
-    // Polling loop with step 200ms
-    while !alive.is_empty() && start_graceful.elapsed() < options.graceful_timeout {
+    #[cfg(windows)]
+    let effective_graceful_timeout = if any_sigterm_sent {
+        options.graceful_timeout
+    } else {
+        options.graceful_timeout.min(Duration::from_millis(2000))
+    };
+    #[cfg(not(windows))]
+    let effective_graceful_timeout = options.graceful_timeout;
+
+    // Polling loop
+    while !alive.is_empty() && start_graceful.elapsed() < effective_graceful_timeout {
         std::thread::sleep(options.poll_interval);
         system.refresh_processes();
 
@@ -893,17 +1048,29 @@ pub async fn terminate_pids(
     );
 
     // Stage 1: Send Graceful SIGTERM
+    let mut any_sigterm_sent = false;
     for &pid in &alive {
         if let Some(proc) = system.process(pid) {
             let _ = proc.kill_with(Signal::Term);
         }
-        send_sigterm(pid.as_u32());
+        if send_sigterm(pid.as_u32()) {
+            any_sigterm_sent = true;
+        }
     }
 
     let start_graceful = Instant::now();
     let mut gracefully_terminated = Vec::new();
 
-    while !alive.is_empty() && start_graceful.elapsed() < options.graceful_timeout {
+    #[cfg(windows)]
+    let effective_graceful_timeout = if any_sigterm_sent {
+        options.graceful_timeout
+    } else {
+        options.graceful_timeout.min(Duration::from_millis(2000))
+    };
+    #[cfg(not(windows))]
+    let effective_graceful_timeout = options.graceful_timeout;
+
+    while !alive.is_empty() && start_graceful.elapsed() < effective_graceful_timeout {
         tokio::time::sleep(options.poll_interval).await;
         system.refresh_processes();
 
@@ -1184,6 +1351,23 @@ pub fn launch_app(config: &LaunchConfig) -> Result<LaunchedApp, ProcessError> {
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let is_lnk = config.target.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("lnk"))
+            .unwrap_or(false);
+
+        if is_lnk {
+            let mut lnk_cmd = std::process::Command::new("cmd");
+            lnk_cmd.args(["/C", "start", "", &config.target.to_string_lossy()]);
+            lnk_cmd.creation_flags(CREATE_NO_WINDOW);
+            info!("Launching shortcut via cmd: {:?}", lnk_cmd);
+            let child = lnk_cmd.spawn().map_err(|e| {
+                ProcessError::LaunchFailed(format!("Failed to spawn shortcut {:?}: {}", config.target, e))
+            })?;
+            return Ok(LaunchedApp::Child(child));
+        }
+
         if config.no_window {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
@@ -1439,10 +1623,44 @@ mod tests {
         assert!(!LauncherType::Minecraft.process_names().contains(&"java"));
         assert!(!LauncherType::Minecraft.process_names().contains(&"javaw"));
         assert!(!LauncherType::Minecraft.process_names().contains(&"javaw.exe"));
+
+        // Hoyoverse assertions
+        assert_eq!(
+            LauncherType::from_name("hoyoverse"),
+            Some(LauncherType::Hoyoverse)
+        );
+        assert_eq!(
+            LauncherType::from_name("mihoyo"),
+            Some(LauncherType::Hoyoverse)
+        );
+        assert_eq!(
+            LauncherType::from_name("hoyoplay"),
+            Some(LauncherType::Hoyoverse)
+        );
+        assert!(LauncherType::Hoyoverse
+            .process_names()
+            .contains(&"GenshinImpact.exe"));
+        assert!(LauncherType::Hoyoverse
+            .process_names()
+            .contains(&"StarRail.exe"));
+        assert!(LauncherType::Hoyoverse
+            .process_names()
+            .contains(&"ZenlessZoneZero.exe"));
+        assert!(LauncherType::Hoyoverse
+            .process_names()
+            .contains(&"BH3.exe"));
+        assert!(LauncherType::Hoyoverse
+            .process_names()
+            .contains(&"HYP.exe"));
     }
 
     #[test]
     fn test_expand_launcher_names() {
+        // Hoyoverse expansion
+        let hoyo_exp = expand_launcher_names(&["genshin"]);
+        assert!(hoyo_exp.iter().any(|s| s.eq_ignore_ascii_case("GenshinImpact.exe")));
+        assert!(hoyo_exp.iter().any(|s| s.eq_ignore_ascii_case("StarRail.exe")));
+
         // Minecraft expansion
         let mc_exp = expand_launcher_names(&["MinecraftLauncher"]);
         assert!(mc_exp.iter().any(|s| s.eq_ignore_ascii_case("MinecraftLauncher.exe")));
@@ -1488,6 +1706,23 @@ mod tests {
             .any(|s| s.eq_ignore_ascii_case("RiotClientUx")));
     }
 
+    fn spawn_sleeper(seconds: u32) -> std::process::Child {
+        #[cfg(windows)]
+        {
+            let _ = seconds;
+            std::process::Command::new("notepad.exe")
+                .spawn()
+                .expect("Failed to spawn sleeper child process")
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new("sleep")
+                .arg(seconds.to_string())
+                .spawn()
+                .expect("Failed to spawn sleep child process")
+        }
+    }
+
     #[test]
     fn test_process_lifecycle_status_and_transitions() {
         let mut system = System::new();
@@ -1511,10 +1746,7 @@ mod tests {
         assert!(!is_pid_alive(&mut system, fake_pid));
 
         // Spawn real short-lived child and check transition to Terminated
-        let mut child = std::process::Command::new("sleep")
-            .arg("1")
-            .spawn()
-            .expect("Failed to spawn sleep child");
+        let mut child = spawn_sleeper(1);
         let child_pid = Pid::from_u32(child.id());
 
         system.refresh_processes();
@@ -1553,13 +1785,11 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_graceful_shutdown_real_process() {
         // Spawn a background process that accepts SIGTERM
-        let mut child = std::process::Command::new("sleep")
-            .arg("60")
-            .spawn()
-            .expect("Failed to spawn sleep child process");
+        let mut child = spawn_sleeper(60);
 
         let pid = Pid::from_u32(child.id());
         let mut system = System::new();
@@ -1650,10 +1880,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_terminate_pids() {
-        let mut child = std::process::Command::new("sleep")
-            .arg("60")
-            .spawn()
-            .expect("Failed to spawn sleep child process");
+        let mut child = spawn_sleeper(60);
 
         let pid = Pid::from_u32(child.id());
         let mut system = System::new();
@@ -1695,16 +1922,22 @@ mod tests {
 
     #[test]
     fn test_launch_app_binary_execution() {
-        // Execute a fast standard command directly
-        let config = LaunchConfig::new("/bin/echo")
-            .arg("swch_launch_test")
-            .prefer_open(false);
+        let (cmd, args) = if cfg!(windows) {
+            ("cmd", vec!["/C", "echo swch_launch_test"])
+        } else {
+            ("/bin/echo", vec!["swch_launch_test"])
+        };
+        let mut builder = LaunchConfig::new(cmd);
+        for a in args {
+            builder = builder.arg(a);
+        }
+        let config = builder.prefer_open(false);
 
-        let mut app = launch_app(&config).expect("Launching echo binary should succeed");
+        let mut app = launch_app(&config).expect("Launching binary should succeed");
         assert!(!app.is_detached());
 
         if let Some(child) = app.child_mut() {
-            let status = child.wait().expect("Failed to wait on echo child");
+            let status = child.wait().expect("Failed to wait on child");
             assert!(status.success());
         } else {
             panic!("Expected Child variant from direct binary invocation");

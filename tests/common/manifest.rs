@@ -34,6 +34,29 @@ pub fn parse_manifest_file<P: AsRef<Path>>(path: P) -> Result<EpicManifestItem, 
     parse_manifest_from_str(&content)
 }
 
+fn scan_items_in_directory(dir: &Path, items: &mut Vec<EpicManifestItem>) -> Result<(), ManifestError> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    let entries = fs::read_dir(dir)?;
+    for entry in entries.flatten() {
+        let file_path = entry.path();
+        if file_path.is_file() {
+            if let Some(ext) = file_path.extension() {
+                if ext.eq_ignore_ascii_case("item") {
+                    match parse_manifest_file(&file_path) {
+                        Ok(item) => items.push(item),
+                        Err(e) => {
+                            tracing::warn!("Failed to parse manifest {}: {}", file_path.display(), e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Scans a directory for all `.item` files and parses them
 pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifestItem>, ManifestError> {
     let path = dir.as_ref();
@@ -42,22 +65,16 @@ pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifes
     }
 
     let mut items = Vec::new();
-    let entries = fs::read_dir(path)?;
+    scan_items_in_directory(path, &mut items)?;
 
-    for entry in entries.flatten() {
-        let file_path = entry.path();
-        if file_path.is_file() {
-            if let Some(ext) = file_path.extension() {
-                if ext == "item" {
-                    match parse_manifest_file(&file_path) {
-                        Ok(item) => items.push(item),
-                        Err(e) => {
-                            // Log warning or skip corrupt files in scan
-                            tracing::warn!("Failed to parse manifest {}: {}", file_path.display(), e);
-                        }
-                    }
-                }
-            }
+    // Scan Pending subfolder (e.g. Data\Manifests\Pending) for updating/downloading games
+    let pending_dir = path.join("Pending");
+    if pending_dir.is_dir() {
+        scan_items_in_directory(&pending_dir, &mut items)?;
+    } else {
+        let pending_lower = path.join("pending");
+        if pending_lower.is_dir() && pending_lower != pending_dir {
+            scan_items_in_directory(&pending_lower, &mut items)?;
         }
     }
 

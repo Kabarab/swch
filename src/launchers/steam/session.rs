@@ -1,7 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{info, warn};
 
@@ -211,6 +211,59 @@ fn query_windows_steam_path() -> Result<PathBuf, ()> {
     Err(())
 }
 
+#[cfg(target_os = "windows")]
+fn parse_windows_active_process(text: &str) -> Option<(u32, u32)> {
+    let mut account_id = None;
+    let mut pid = None;
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(name) = parts.next() else { continue };
+        if parts.next() != Some("REG_DWORD") {
+            continue;
+        }
+        let Some(raw) = parts.next() else { continue };
+        let value = raw
+            .strip_prefix("0x")
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+            .or_else(|| raw.parse().ok());
+        if name.eq_ignore_ascii_case("ActiveUser") {
+            account_id = value;
+        } else if name.eq_ignore_ascii_case("pid") {
+            pid = value;
+        }
+    }
+    // ActiveUser is zero while the account chooser / login screen is open.
+    Some((
+        account_id.filter(|id| *id != 0)?,
+        pid.filter(|id| *id != 0)?,
+    ))
+}
+
+#[cfg(target_os = "windows")]
+fn running_windows_steam_user(paths: &SteamPaths, system: &sysinfo::System) -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let output = std::process::Command::new("reg")
+        .args(["query", r"HKCU\Software\Valve\Steam\ActiveProcess"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let (account_id, pid) = parse_windows_active_process(&String::from_utf8_lossy(&output.stdout))?;
+    let process = system.process(sysinfo::Pid::from_u32(pid))?;
+    let expected_exe = paths.steam_dir.join("steam.exe");
+    let actual_exe = process.exe()?;
+    if !process.name().eq_ignore_ascii_case("steam.exe")
+        || !actual_exe.to_string_lossy().replace('/', "\\")
+            .eq_ignore_ascii_case(&expected_exe.to_string_lossy().replace('/', "\\"))
+    {
+        return None;
+    }
+    Some((super::library::STEAM_ID_BASE + u64::from(account_id)).to_string())
+}
+
 /// Metadata stored in swch local storage alongside backed-up session files.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionBackupManifest {
@@ -353,10 +406,76 @@ impl SteamSessionManager {
         resolve_swch_sessions_dir()
     }
 
-    /// Terminates all running Steam processes (steam, steamwebhelper, GameOverlayUI).
     pub async fn terminate_processes(&self) -> Result<TerminationReport, ProcessError> {
-        let options = TerminateOptions::default();
-        terminate_by_names(STEAM_PROCESS_NAMES, &options).await
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes();
+        if crate::sys::process::find_processes_by_names(&sys, STEAM_PROCESS_NAMES).is_empty() {
+            return Ok(TerminationReport::default());
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(paths) = self.paths() {
+                let exe = paths.steam_dir.join("steam.exe");
+                if exe.is_file() {
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+                    if let Ok(mut child) = tokio::process::Command::new(&exe)
+                        .arg("-shutdown")
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .spawn() {
+                        // The shutdown command must be delivered before we modify
+                        // profiles or start the next client; otherwise it can
+                        // shut down the newly launched instance on the first click.
+                        if tokio::time::timeout(std::time::Duration::from_secs(5), child.wait()).await.is_err() {
+                            let _ = child.kill().await;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut options = TerminateOptions::default();
+        options.graceful_timeout = std::time::Duration::from_millis(3500);
+        options.force_timeout = std::time::Duration::from_millis(3500);
+
+        let report = terminate_by_names(STEAM_PROCESS_NAMES, &options).await;
+        match report {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                let mut sys = sysinfo::System::new();
+                sys.refresh_processes();
+                let remaining = crate::sys::process::find_processes_by_names(
+                    &sys,
+                    crate::sys::process::LauncherType::Steam.process_names(),
+                );
+                if remaining.is_empty() {
+                    Ok(TerminationReport::default())
+                } else {
+                    #[cfg(target_os = "windows")]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        const CREATE_NO_WINDOW: u32 = 0x08000000;
+                        let _ = std::process::Command::new("taskkill.exe")
+                            .args(["/F", "/IM", "steamwebhelper.exe", "/T"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .status();
+                        let _ = std::process::Command::new("taskkill.exe")
+                            .args(["/F", "/IM", "steam.exe", "/T"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .status();
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        sys.refresh_processes();
+                        let still_remaining = crate::sys::process::find_processes_by_names(
+                            &sys,
+                            crate::sys::process::LauncherType::Steam.process_names(),
+                        );
+                        if still_remaining.is_empty() {
+                            return Ok(TerminationReport::default());
+                        }
+                    }
+                    Err(e)
+                }
+            }
+        }
     }
 
     /// Backs up sentry files and configuration for the specified account into swch local storage.
@@ -383,11 +502,32 @@ impl SteamSessionManager {
             }
         }
 
-        // 2. Backup loginusers.vdf
+        // 2. Backup loginusers.vdf and individual user VDF block
         let loginusers = paths.loginusers_path();
         if loginusers.exists() {
             let dest = account_dir.join("loginusers.vdf");
             atomic_copy(&loginusers, &dest)?;
+
+            if let Ok(doc) = VdfDocument::from_file(&loginusers) {
+                if let Some(users_tbl) = doc.get_obj("users") {
+                    for (sid, val) in users_tbl.iter() {
+                        let matches = steam_id == Some(sid.as_str())
+                            || val
+                                .as_obj()
+                                .and_then(|u| u.get_str("AccountName"))
+                                .is_some_and(|a| a.eq_ignore_ascii_case(account_name));
+                        if matches {
+                            if let Some(u_tbl) = val.as_obj() {
+                                let mut user_doc = VdfDocument::new();
+                                user_doc.root.set(sid.clone(), VdfValue::Obj(u_tbl.clone()));
+                                let user_block_path = account_dir.join("user_block.vdf");
+                                let _ = user_doc.save_atomic(&user_block_path);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // 3. Backup registry.vdf if present
@@ -493,6 +633,169 @@ impl SteamSessionManager {
         }
     }
 
+    /// Waits for file locks to be released on the target path (e.g. after terminating Steam processes).
+    pub async fn wait_for_file_release(path: &Path, timeout: std::time::Duration) -> Result<(), SteamError> {
+        let start = std::time::Instant::now();
+        let poll_interval = std::time::Duration::from_millis(150);
+        while start.elapsed() < timeout {
+            match std::fs::OpenOptions::new().read(true).write(true).open(path) {
+                Ok(_) => return Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(_) => {
+                    tokio::time::sleep(poll_interval).await;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Saves a VDF document with atomic file replacement and retry upon file lock contention.
+    pub fn save_vdf_with_retry(doc: &VdfDocument, path: &Path, max_attempts: usize) -> Result<(), SteamError> {
+        let mut last_err = None;
+        for attempt in 0..max_attempts {
+            match doc.save_atomic(path) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    last_err = Some(e);
+                    std::thread::sleep(std::time::Duration::from_millis((100 * (attempt + 1)) as u64));
+                }
+            }
+        }
+        if let Some(e) = last_err {
+            Err(e.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Reinjects an evicted account's user block into loginusers.vdf if missing.
+    ///
+    /// Steam official client purges old accounts from `loginusers.vdf`. swch stores all accounts
+    /// permanently. When switching to an account that was evicted from `loginusers.vdf`, swch restores
+    /// its VDF block and sentry files.
+    pub fn reinject_account_to_loginusers(
+        &self,
+        paths: &SteamPaths,
+        account_name: &str,
+    ) -> Result<bool, SteamError> {
+        let clean = account_name.trim();
+        let loginusers_path = paths.loginusers_path();
+        if !loginusers_path.exists() {
+            return Ok(false);
+        }
+
+        let mut doc = VdfDocument::from_file(&loginusers_path)?;
+        let users_tbl = doc
+            .get_obj_mut("users")
+            .ok_or(SteamError::InvalidLoginUsers)?;
+
+        // If account is already present, no injection needed
+        let already_present = users_tbl.iter().any(|(id, value)| {
+            id.eq_ignore_ascii_case(clean)
+                || value
+                    .as_obj()
+                    .and_then(|u| u.get_str("AccountName"))
+                    .is_some_and(|name| name.eq_ignore_ascii_case(clean))
+        });
+
+        if already_present {
+            return Ok(false);
+        }
+
+        // Locate saved session directory
+        let sessions_root = self.sessions_dir()?;
+        let folder = sanitize_account_folder(clean);
+        let mut session_dir = sessions_root.join(&folder);
+
+        if !session_dir.exists() {
+            // Search all session manifests
+            if let Ok(entries) = fs::read_dir(&sessions_root) {
+                for entry in entries.flatten() {
+                    let m_path = entry.path().join("session_manifest.json");
+                    if let Ok(data) = fs::read(&m_path) {
+                        if let Ok(m) = serde_json::from_slice::<SessionBackupManifest>(&data) {
+                            if m.account_name.eq_ignore_ascii_case(clean)
+                                || m.steam_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(clean))
+                            {
+                                session_dir = entry.path();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !session_dir.exists() {
+            return Ok(false);
+        }
+
+        // 1. Try restoring from user_block.vdf
+        let user_block_file = session_dir.join("user_block.vdf");
+        if user_block_file.exists() {
+            if let Ok(saved_doc) = VdfDocument::from_file(&user_block_file) {
+                if let Some((sid, val)) = saved_doc.root.iter().next() {
+                    users_tbl.set(sid.clone(), val.clone());
+                    Self::save_vdf_with_retry(&doc, &loginusers_path, 5)?;
+                    info!("Successfully reinjected user block for '{}' from user_block.vdf", clean);
+                    return Ok(true);
+                }
+            }
+        }
+
+        // 2. Try restoring from backup loginusers.vdf in session dir
+        let backup_vdf = session_dir.join("loginusers.vdf");
+        if backup_vdf.exists() {
+            if let Ok(saved_doc) = VdfDocument::from_file(&backup_vdf) {
+                if let Some(saved_users) = saved_doc.get_obj("users") {
+                    for (sid, val) in saved_users.iter() {
+                        let matches = sid.eq_ignore_ascii_case(clean)
+                            || val
+                                .as_obj()
+                                .and_then(|u| u.get_str("AccountName"))
+                                .is_some_and(|a| a.eq_ignore_ascii_case(clean));
+                        if matches {
+                            users_tbl.set(sid.clone(), val.clone());
+                            Self::save_vdf_with_retry(&doc, &loginusers_path, 5)?;
+                            info!("Successfully reinjected user block for '{}' from backup loginusers.vdf", clean);
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: construct user block from session_manifest.json
+        let m_path = session_dir.join("session_manifest.json");
+        if m_path.exists() {
+            if let Ok(data) = fs::read(&m_path) {
+                if let Ok(m) = serde_json::from_slice::<SessionBackupManifest>(&data) {
+                    let sid = m.steam_id.clone().unwrap_or_else(|| clean.to_string());
+                    let mut u_tbl = crate::parsers::vdf::VdfTable::new();
+                    u_tbl.set_str("AccountName", &m.account_name);
+                    if let Some(ref p) = m.persona_name {
+                        u_tbl.set_str("PersonaName", p);
+                    }
+                    u_tbl.set_str("RememberPassword", "1");
+                    u_tbl.set_str("MostRecent", "1");
+                    let now_ts = Utc::now().timestamp().to_string();
+                    u_tbl.set_str("Timestamp", &now_ts);
+                    u_tbl.set_str("timestamp", &now_ts);
+                    u_tbl.set_str("WantsOfflineMode", "0");
+                    u_tbl.set_str("SkipOfflineModeWarning", "0");
+                    u_tbl.set_str("AllowAutoLogin", "1");
+                    u_tbl.set_str("AutoLogin", "1");
+                    users_tbl.set(sid, VdfValue::Obj(u_tbl));
+                    Self::save_vdf_with_retry(&doc, &loginusers_path, 5)?;
+                    info!("Successfully synthesized and reinjected user block for '{}'", clean);
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
     /// Updates registry settings for Steam auto-login.
     ///
     /// macOS / Linux: updates "AutoLoginUser" and "RememberPassword" in `registry.vdf` (checking root and config/).
@@ -502,7 +805,7 @@ impl SteamSessionManager {
         paths: &SteamPaths,
         account_name: &str,
     ) -> Result<(), SteamError> {
-        // macOS / Linux registry.vdf update: update both root and config/ if present
+        // macOS / Linux and mock tests registry.vdf update: update both root and config/ if present
         let candidate_registry_paths = [
             paths.steam_dir.join("registry.vdf"),
             paths.config_dir().join("registry.vdf"),
@@ -511,10 +814,15 @@ impl SteamSessionManager {
         let mut any_updated = false;
         for reg_path in &candidate_registry_paths {
             if reg_path.exists() {
-                if let Ok(mut doc) = VdfDocument::from_file(reg_path) {
-                    Self::apply_registry_doc_keys(&mut doc, account_name);
-                    doc.save_atomic(reg_path)?;
-                    any_updated = true;
+                for _attempt in 0..5 {
+                    if let Ok(mut doc) = VdfDocument::from_file(reg_path) {
+                        Self::apply_registry_doc_keys(&mut doc, account_name);
+                        if doc.save_atomic(reg_path).is_ok() {
+                            any_updated = true;
+                            break;
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
             }
         }
@@ -527,30 +835,40 @@ impl SteamSessionManager {
             if let Some(parent) = default_reg.parent() {
                 let _ = fs::create_dir_all(parent);
             }
-            doc.save_atomic(&default_reg)?;
+            let _ = doc.save_atomic(&default_reg);
         }
 
-        // If config.vdf exists, update AutoLoginUser and RememberPassword there as well
+        // If config.vdf exists, update AutoLoginUser and RememberPassword there as well with retry loop
         let config_vdf_path = paths.config_vdf_path();
         if config_vdf_path.exists() {
-            if let Ok(mut config_doc) = VdfDocument::from_file(&config_vdf_path) {
-                let steam_path: &[&str] = if config_doc
-                    .find_obj_path_mut(&["InstallConfigStore", "Software", "Valve", "Steam"])
-                    .is_some()
-                {
-                    &["InstallConfigStore", "Software", "Valve", "Steam"]
-                } else {
-                    &["Software", "Valve", "Steam"]
-                };
-                config_doc.set_path_value(steam_path, "AutoLoginUser", account_name);
-                config_doc.set_path_value(steam_path, "RememberPassword", "1");
-                config_doc.save_atomic(&config_vdf_path)?;
+            let mut saved = false;
+            for attempt in 0..10 {
+                if let Ok(mut config_doc) = VdfDocument::from_file(&config_vdf_path) {
+                    let steam_path: &[&str] = if config_doc
+                        .find_obj_path_mut(&["InstallConfigStore", "Software", "Valve", "Steam"])
+                        .is_some()
+                    {
+                        &["InstallConfigStore", "Software", "Valve", "Steam"]
+                    } else {
+                        &["Software", "Valve", "Steam"]
+                    };
+                    config_doc.set_path_value(steam_path, "AutoLoginUser", account_name);
+                    config_doc.set_path_value(steam_path, "RememberPassword", "1");
+                    if config_doc.save_atomic(&config_vdf_path).is_ok() {
+                        saved = true;
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis((150 * (attempt + 1)) as u64));
+            }
+            if !saved {
+                warn!("Notice: could not update config.vdf after 10 attempts (file locked by Steam). Proceeding with Windows Registry update.");
             }
         }
 
         // Windows Registry update
         #[cfg(target_os = "windows")]
-        {
+        if self.custom_paths.is_none() && !self.skip_process_termination {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -577,7 +895,7 @@ impl SteamSessionManager {
                 )));
             }
 
-            let _ = std::process::Command::new("reg")
+            let status = std::process::Command::new("reg")
                 .args([
                     "add",
                     r#"HKCU\Software\Valve\Steam"#,
@@ -590,13 +908,20 @@ impl SteamSessionManager {
                     "/f",
                 ])
                 .creation_flags(CREATE_NO_WINDOW)
-                .status();
+                .status()
+                .map_err(|e| SteamError::Registry(format!("Failed to execute reg.exe: {}", e)))?;
+            if !status.success() {
+                return Err(SteamError::Registry(format!(
+                    "Failed to set RememberPassword: {}", status
+                )));
+            }
         }
 
         info!("Updated Steam AutoLoginUser registry to '{}'", account_name);
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn apply_registry_doc_keys(doc: &mut VdfDocument, account_name: &str) {
         let steam_path: &[&str] = if doc
             .find_obj_path_mut(&["Registry", "HKCU", "Software", "Valve", "Steam"])
@@ -755,13 +1080,44 @@ impl SteamSessionManager {
         // Serialize changes and validate the target before stopping Steam.
         static SWITCH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
         let _switch_guard = SWITCH_LOCK.lock().await;
-        let preflight = VdfDocument::from_file(&loginusers_path)?;
+
+        // R7: Re-inject account if it was evicted by Steam from loginusers.vdf
+        let _ = self.reinject_account_to_loginusers(&paths, clean_target);
+
+        // Preflight with retry in case Steam is currently writing
+        let mut preflight_attempts = 0;
+        let preflight = loop {
+            match VdfDocument::from_file(&loginusers_path) {
+                Ok(doc) => break doc,
+                Err(_e) if preflight_attempts < 4 => {
+                    preflight_attempts += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(200 * preflight_attempts)).await;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        };
         let users = preflight.get_obj("users").ok_or(SteamError::InvalidLoginUsers)?;
         if !users.iter().any(|(id, value)| id == clean_target || value.as_obj().and_then(|u| u.get_str("AccountName")).is_some_and(|name| name.eq_ignore_ascii_case(clean_target))) {
             return Err(SteamError::AccountNotFound(clean_target.into()));
         }
 
-        let active_user_id = detect_active_steam_user(&paths, users);
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes();
+        #[cfg(target_os = "windows")]
+        let active_user_id = if self.custom_paths.is_none() && !self.skip_process_termination {
+            running_windows_steam_user(&paths, &sys)
+        } else {
+            None
+        };
+        #[cfg(not(target_os = "windows"))]
+        let active_user_id = if !crate::sys::process::find_processes_by_names(
+            &sys,
+            crate::sys::process::LauncherType::Steam.process_names(),
+        ).is_empty() {
+            detect_active_steam_user(&paths, users)
+        } else {
+            None
+        };
         let is_already_active = users.iter().any(|(id, value)| {
             let matches_target = id == clean_target
                 || value
@@ -771,29 +1127,15 @@ impl SteamSessionManager {
             matches_target && active_user_id.as_deref() == Some(id.as_str())
         });
 
-        let mut sys = sysinfo::System::new();
-        sys.refresh_processes();
-        let steam_running = !crate::sys::process::find_processes_by_names(
-            &sys,
-            crate::sys::process::LauncherType::Steam.process_names(),
-        )
-        .is_empty();
-
-        if is_already_active && steam_running {
-            // Steam is already running with target account active.
-            // Do not terminate processes or touch sentry files!
-            let mut doc = VdfDocument::from_file(&loginusers_path)?;
-            let users_tbl = doc
-                .get_obj_mut("users")
-                .ok_or(SteamError::InvalidLoginUsers)?;
-
+        if is_already_active {
+            // Reuse the confirmed running session. Steam owns its config files
+            // while running, so only synchronize SWCH's account records here.
             let mut canonical_target_name = clean_target.to_string();
             let mut target_steam_id = None;
             let mut target_persona_name = None;
-            let now_ts = Utc::now().timestamp().to_string();
 
-            for (steam_id, val) in users_tbl.iter_mut() {
-                if let VdfValue::Obj(ref mut u_tbl) = val {
+            for (steam_id, val) in users.iter() {
+                if let VdfValue::Obj(u_tbl) = val {
                     let acc = u_tbl.get_str("AccountName").unwrap_or("");
                     let matches = steam_id == clean_target || acc.eq_ignore_ascii_case(clean_target);
                     if matches {
@@ -802,18 +1144,9 @@ impl SteamSessionManager {
                         }
                         target_steam_id = Some(steam_id.clone());
                         target_persona_name = u_tbl.get_str("PersonaName").map(|p| p.to_string());
-                        u_tbl.set_str("MostRecent", "1");
-                        u_tbl.set_str("RememberPassword", "1");
-                        u_tbl.set_str("AllowAutoLogin", "1");
-                        u_tbl.set_str("Timestamp", &now_ts);
-                    } else {
-                        u_tbl.set_str("MostRecent", "0");
                     }
                 }
             }
-
-            let _ = doc.save_atomic(&loginusers_path);
-            let _ = self.update_registry(&paths, &canonical_target_name);
 
             if let Some(database) = db {
                 let mut target_account_existed = false;
@@ -863,11 +1196,36 @@ impl SteamSessionManager {
         }
 
         if !self.skip_process_termination {
-            self.terminate_processes().await?;
+            if let Err(e) = self.terminate_processes().await {
+                warn!("Steam termination initial attempt: {}. Verifying process status...", e);
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let mut sys = sysinfo::System::new();
+                sys.refresh_processes();
+                let remaining = crate::sys::process::find_processes_by_names(
+                    &sys,
+                    crate::sys::process::LauncherType::Steam.process_names(),
+                );
+                if !remaining.is_empty() {
+                    self.terminate_processes().await?;
+                }
+            }
+            // R8: Wait for file locks to be released after process exit (up to 5 seconds)
+            let _ = Self::wait_for_file_release(&loginusers_path, std::time::Duration::from_secs(5)).await;
+            let _ = Self::wait_for_file_release(&paths.config_vdf_path(), std::time::Duration::from_secs(5)).await;
         }
 
-        // 2. Read and parse loginusers.vdf through AST
-        let mut doc = VdfDocument::from_file(&loginusers_path)?;
+        // 2. Read and parse loginusers.vdf through AST with retry on transient file locks
+        let mut read_attempts = 0;
+        let mut doc = loop {
+            match VdfDocument::from_file(&loginusers_path) {
+                Ok(d) => break d,
+                Err(_e) if read_attempts < 12 => {
+                    read_attempts += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        };
         let users_tbl = doc
             .get_obj_mut("users")
             .ok_or(SteamError::InvalidLoginUsers)?;
@@ -1020,24 +1378,42 @@ impl SteamSessionManager {
                     u_tbl.set_str("MostRecent", "1");
                     u_tbl.set_str("RememberPassword", "1");
                     u_tbl.set_str("Timestamp", &now_ts);
+                    u_tbl.set_str("timestamp", &now_ts);
                     u_tbl.set_str("WantsOfflineMode", "0");
                     u_tbl.set_str("SkipOfflineModeWarning", "0");
                     u_tbl.set_str("AllowAutoLogin", "1");
+                    u_tbl.set_str("AutoLogin", "1");
                 } else {
                     u_tbl.set_str("MostRecent", "0");
+                    u_tbl.set_str("AllowAutoLogin", "0");
+                    u_tbl.set_str("AutoLogin", "0");
                 }
             }
         }
 
-        // Atomically save modified loginusers.vdf
-        doc.save_atomic(&loginusers_path)?;
+        // Commit registry selection first. A registry failure must not leave
+        // MostRecent pointing at an account that Steam has not selected.
+        self.update_registry(&paths, &canonical_target_name)?;
+
+        // Atomically save modified loginusers.vdf with retry
+        let mut save_attempts = 0;
+        loop {
+            match doc.save_atomic(&loginusers_path) {
+                Ok(()) => break,
+                Err(e) if save_attempts < 10 => {
+                    save_attempts += 1;
+                    warn!("Failed to save loginusers.vdf (attempt {}): {}. Retrying...", save_attempts, e);
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
         info!(
             "loginusers.vdf updated atomically with active account '{}'",
             canonical_target_name
         );
 
         // 6. Update Steam Registry (AutoLoginUser & RememberPassword)
-        self.update_registry(&paths, &canonical_target_name)?;
 
         // 7. Backup target account session with its new active state
         if let Err(e) = self.backup_session(
@@ -1105,6 +1481,19 @@ impl SteamSessionManager {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_account_chooser_does_not_count_as_a_logged_in_session() {
+        let chooser = r"HKEY_CURRENT_USER\Software\Valve\Steam\ActiveProcess
+    pid    REG_DWORD    0x1234
+    ActiveUser    REG_DWORD    0x0";
+        assert_eq!(parse_windows_active_process(chooser), None);
+        let logged_in = chooser.replace("ActiveUser    REG_DWORD    0x0", "ActiveUser    REG_DWORD    0x2a");
+        assert_eq!(parse_windows_active_process(&logged_in), Some((42, 0x1234)));
+        assert_eq!(parse_windows_active_process("ActiveUser REG_DWORD 0x2a"), None);
+        assert_eq!(parse_windows_active_process("pid REG_DWORD 0\nActiveUser REG_DWORD 42"), None);
+    }
 
     fn setup_mock_steam_env() -> (tempfile::TempDir, SteamPaths) {
         let dir = tempdir().unwrap();
@@ -1402,5 +1791,85 @@ mod tests {
         assert_eq!(sanitize_account_folder("Игрок123"), "игрок123");
         let fallback = sanitize_account_folder("???");
         assert!(fallback.starts_with("account_"));
+    }
+
+    #[tokio::test]
+    async fn test_reinject_account_to_loginusers() {
+        let temp = tempdir().unwrap();
+        let steam_dir = temp.path().join("Steam");
+        let config_dir = steam_dir.join("config");
+        let sessions_dir = temp.path().join("sessions");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&sessions_dir).unwrap();
+
+        // loginusers.vdf only contains user_alpha (user_beta was purged by Steam)
+        let loginusers_content = r#""users"
+{
+	"76561198000000001"
+	{
+		"AccountName"		"user_alpha"
+		"PersonaName"		"Alpha"
+		"RememberPassword"		"1"
+		"MostRecent"		"1"
+	}
+}
+"#;
+        fs::write(config_dir.join("loginusers.vdf"), loginusers_content).unwrap();
+
+        let paths = SteamPaths::new(steam_dir);
+        let manager = SteamSessionManager::with_paths(paths.clone())
+            .with_sessions_dir(&sessions_dir)
+            .with_skip_process_termination(true);
+
+        // Save a mock session for user_beta
+        let beta_session_dir = sessions_dir.join("user_beta");
+        fs::create_dir_all(&beta_session_dir).unwrap();
+        let manifest = SessionBackupManifest {
+            account_name: "user_beta".to_string(),
+            steam_id: Some("76561198000000002".to_string()),
+            persona_name: Some("BetaPlayer".to_string()),
+            backed_up_at: Utc::now().to_rfc3339(),
+            sentry_files: vec![],
+        };
+        fs::write(
+            beta_session_dir.join("session_manifest.json"),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        // user_beta should not be in loginusers yet
+        let doc_before = VdfDocument::from_file(paths.loginusers_path()).unwrap();
+        let users_before = doc_before.get_obj("users").unwrap();
+        assert_eq!(users_before.len(), 1);
+
+        // Reinject user_beta
+        let reinjected = manager
+            .reinject_account_to_loginusers(&paths, "user_beta")
+            .unwrap();
+        assert!(reinjected);
+
+        // Verify user_beta is now in loginusers.vdf
+        let doc_after = VdfDocument::from_file(paths.loginusers_path()).unwrap();
+        let users_after = doc_after.get_obj("users").unwrap();
+        assert_eq!(users_after.len(), 2);
+        assert!(users_after.get("76561198000000002").is_some());
+
+        // Now test full switch_account to previously-evicted user_beta
+        let switch_res = manager.switch_account("user_beta", None).await.unwrap();
+        assert_eq!(switch_res.account_name, "user_beta");
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_file_release() {
+        let temp = tempdir().unwrap();
+        let test_file = temp.path().join("test_file.vdf");
+        fs::write(&test_file, "content").unwrap();
+
+        let res = SteamSessionManager::wait_for_file_release(
+            &test_file,
+            std::time::Duration::from_millis(500),
+        )
+        .await;
+        assert!(res.is_ok());
     }
 }

@@ -1,6 +1,7 @@
-pub(super) static SWITCH_API: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(super) use crate::sys::process::LAUNCHER_SWITCH_LOCK as SWITCH_API;
 static AUTO_RESTRICTIONS_CHECK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const AUTO_RESTRICTIONS_INTERVAL_SECS: i64 = 15 * 60;
+use std::collections::HashSet;
 use std::sync::Arc;
 use axum::{
     extract::{Query, State},
@@ -14,7 +15,7 @@ use crate::launchers::epic::{
     FortniteAccountSummary, FortniteCosmeticItem, FortniteCosmeticType,
 };
 use crate::launchers::steam::{SteamError, SteamSessionManager};
-use crate::storage::models::{AccountRestrictions, EpicLibraryGame};
+use crate::storage::models::AccountRestrictions;
 use crate::storage::{Account, Database, Game};
 use crate::modules::ModuleManager;
 
@@ -120,16 +121,19 @@ pub async fn shutdown() -> &'static str {
 pub async fn get_games(
     State(db): State<Database>,
     State(module_manager): State<Arc<ModuleManager>>,
+    axum::Extension(mods): axum::Extension<Arc<crate::mods::ModManager>>,
 ) -> Result<Json<Vec<Game>>, (StatusCode, Json<ErrorResponse>)> {
     match db.get_games().await {
-        Ok(games) => {
+        Ok(mut games) => {
+            let mod_platforms = mods.platforms().await;
+            games.retain(|g| !g.launcher.starts_with("mod:") || mod_platforms.iter().any(|p|p.id==g.launcher));
             let active = module_manager.get_active_launcher_ids().await;
             let filtered = if active.is_empty() {
                 games
             } else {
                 games
                     .into_iter()
-                    .filter(|g| active.iter().any(|l| l.eq_ignore_ascii_case(&g.launcher)))
+                    .filter(|g| active.iter().any(|l| l.eq_ignore_ascii_case(&g.launcher)) || mod_platforms.iter().any(|p|p.id==g.launcher))
                     .collect()
             };
             Ok(Json(filtered))
@@ -147,16 +151,57 @@ pub async fn get_games(
 pub async fn get_accounts(
     State(db): State<Database>,
     State(module_manager): State<Arc<ModuleManager>>,
+    axum::Extension(mods): axum::Extension<Arc<crate::mods::ModManager>>,
 ) -> Result<Json<Vec<Account>>, (StatusCode, Json<ErrorResponse>)> {
     match db.get_accounts().await {
-        Ok(accounts) => {
+        Ok(mut accounts) => {
+            let mod_platforms=mods.platforms().await;
+            accounts.retain(|a|!a.launcher.starts_with("mod:") || mod_platforms.iter().any(|p|p.id==a.launcher));
+            // Also merge Riot sessions from disk so saved Riot accounts are always available
+            let riot_mgr = crate::launchers::riot::session::RiotSessionManager::new();
+            let riot_current = riot_mgr.read_current_account();
+            for s in riot_mgr.list_sessions() {
+                let id = format!("riot_{}", s.account_id);
+                if !accounts.iter().any(|a| a.id.eq_ignore_ascii_case(&id) || a.username.eq_ignore_ascii_case(&s.account_id)) {
+                    let uname = s.username
+                        .or_else(|| s.display_name.as_ref().map(|d| d.split('#').next().unwrap_or(d).to_string()))
+                        .unwrap_or_else(|| s.account_id.clone());
+                    let dname = s.display_name.clone().or_else(|| Some(uname.clone()));
+                    let is_active = riot_current.account_id.as_deref() == Some(&s.account_id);
+                    accounts.push(crate::storage::Account {
+                        id,
+                        launcher: "riot".to_string(),
+                        username: uname,
+                        display_name: dname,
+                        email: None,
+                        is_active,
+                        last_used: Some(s.backed_up_at),
+                    });
+                }
+            }
+
+            // Also merge HoYoverse accounts from disk so saved accounts are always available
+            let hoyo_mgr = crate::launchers::hoyoverse::session::HoyoverseSessionManager::default();
+            if let Ok(hoyo_accounts) = hoyo_mgr.accounts(None) {
+                for h in hoyo_accounts {
+                    if !accounts.iter().any(|a| a.id.eq_ignore_ascii_case(&h.id)) {
+                        accounts.push(h);
+                    }
+                }
+            }
+
             let active = module_manager.get_active_launcher_ids().await;
             let filtered = if active.is_empty() {
                 accounts
             } else {
                 accounts
                     .into_iter()
-                    .filter(|a| active.iter().any(|l| l.eq_ignore_ascii_case(&a.launcher)))
+                    .filter(|a| {
+                        active.iter().any(|l| l.eq_ignore_ascii_case(&a.launcher))
+                            || a.launcher.eq_ignore_ascii_case("riot")
+                            || a.launcher.eq_ignore_ascii_case("hoyoverse")
+                            || mod_platforms.iter().any(|p|p.id==a.launcher)
+                    })
                     .collect()
             };
             Ok(Json(filtered))
@@ -179,6 +224,8 @@ pub struct RestrictionsListResponse {
 pub struct CheckRestrictionsRequest {
     pub account_id: Option<String>,
     #[serde(default)]
+    pub account_ids: Vec<String>,
+    #[serde(default)]
     pub api_key: Option<String>,
 }
 
@@ -194,7 +241,7 @@ pub struct CheckRestrictionsResponse {
 pub async fn get_restrictions(
     State(db): State<Database>,
 ) -> Result<Json<RestrictionsListResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let mut restrictions = db.get_all_account_restrictions().await.map_err(|e| {
+    let restrictions = db.get_all_account_restrictions().await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -203,20 +250,8 @@ pub async fn get_restrictions(
         )
     })?;
 
-    // Auto-inspect any steam accounts that don't have records yet
-    if let Ok(accounts) = db.get_accounts().await {
-        for a in accounts {
-            if a.launcher.eq_ignore_ascii_case("steam") {
-                if !restrictions.iter().any(|r| r.account_id == a.id) {
-                    let (updated, success) = auto_check_steam_restrictions(&db, &a.id).await;
-                    if success {
-                        restrictions.push(updated);
-                    }
-                }
-            }
-        }
-    }
-
+    // Online checks use the canonical SteamIDs supplied by the library after boot.
+    // Stored launcher accounts can still have legacy username-based IDs.
     Ok(Json(RestrictionsListResponse { restrictions }))
 }
 
@@ -517,6 +552,30 @@ mod player_ban_tests {
         assert!(!checked);
         assert_eq!(observed.game_bans_count, 1);
     }
+
+    #[tokio::test]
+    async fn automatic_batch_checks_library_steamids_and_rejects_legacy_names() {
+        let db = Database::open_in_memory().unwrap();
+        db.run_migrations().await.unwrap();
+        let id = "76561197960265729";
+        let legacy: Account = serde_json::from_value(serde_json::json!({
+            "id":"steam_old_login", "launcher":"steam", "username":"old_login",
+            "display_name":null, "email":null, "is_active":false, "last_used":null
+        })).unwrap();
+        db.upsert_account(&legacy).await.unwrap();
+        db.upsert_account_restrictions(&AccountRestrictions {
+            account_id:id.into(), game_bans_count:1, ..Default::default()
+        }).await.unwrap();
+        db.steam_cache_put(&format!("restrictions:auto-check:v1:{id}"), "attempted").await.unwrap();
+        let request = serde_json::from_value(serde_json::json!({"account_ids":[id,id]})).unwrap();
+        let Json(response) = check_steam_restrictions(State(db.clone()), Some(Json(request))).await.unwrap();
+        assert_eq!(response.restrictions.len(), 1);
+        assert_eq!(response.restrictions[0].account_id, id);
+        assert_eq!(response.restrictions[0].game_bans_count, 1);
+        assert!(response.checked_account_ids.is_empty());
+        let request = serde_json::from_value(serde_json::json!({"account_ids":["steam_old_login"]})).unwrap();
+        assert_eq!(check_steam_restrictions(State(db), Some(Json(request))).await.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
 }
 
 /// Helper function to perform online check for a single Steam account.
@@ -659,6 +718,17 @@ pub async fn check_steam_restrictions(
     let mut supplied_key = None;
     let mut explicit_check = false;
     if let Some(Json(req)) = payload {
+        if !req.account_ids.is_empty() {
+            if req.account_id.is_some() || req.account_ids.len() > 64
+                || req.account_ids.iter().any(|id| !crate::launchers::steam::library::valid_steam_id(id)) {
+                return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse {
+                    error: "Укажи список SteamID из библиотеки (не более 64).".into(),
+                })));
+            }
+            ids_to_check = req.account_ids;
+            ids_to_check.sort();
+            ids_to_check.dedup();
+        }
         supplied_key = req.api_key.map(|key| key.trim().to_owned()).filter(|key| !key.is_empty());
         explicit_check = supplied_key.is_some();
         if let Some(id) = req.account_id {
@@ -685,11 +755,19 @@ pub async fn check_steam_restrictions(
         // Find all steam accounts from DB
         if let Ok(accounts) = db.get_accounts().await {
             for a in accounts {
-                if a.launcher.eq_ignore_ascii_case("steam") {
+                if a.launcher.eq_ignore_ascii_case("steam") && crate::launchers::steam::library::valid_steam_id(&a.id) {
                     ids_to_check.push(a.id);
                 }
             }
         }
+        if let Ok(Some((cached, _))) = db.steam_cache_get("local").await {
+            if let Ok(library) = serde_json::from_str::<crate::launchers::steam::library::SteamLibrary>(&cached) {
+                ids_to_check.extend(library.accounts.into_iter().map(|a| a.id)
+                    .filter(|id| crate::launchers::steam::library::valid_steam_id(id)));
+            }
+        }
+        ids_to_check.sort();
+        ids_to_check.dedup();
     }
 
     let mut results = Vec::new();
@@ -701,7 +779,10 @@ pub async fn check_steam_restrictions(
             auto_check_steam_restrictions(&db, &id).await
         };
         if success {
-            checked_account_ids.push(id);
+            checked_account_ids.push(id.clone());
+        } else if db.get_account_restrictions(&id).await.ok().flatten().is_none() {
+            // A failed request does not establish a clean account status.
+            continue;
         }
         results.push(updated);
     }
@@ -854,6 +935,26 @@ pub async fn epic_auth_url() -> Json<EpicAuthUrlResponse> {
     })
 }
 
+/// Handler for POST /api/epic/auth/open
+pub async fn open_epic_auth_browser() -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let url = EpicClient::auth_url();
+    let opened = tokio::task::spawn_blocking(move || {
+        open::that(url)
+    }).await;
+    match opened {
+        Ok(Ok(())) => Ok(Json(serde_json::json!({
+            "status": "opened",
+            "url": url,
+        }))),
+        _ => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Не удалось открыть браузер по умолчанию".into(),
+            }),
+        )),
+    }
+}
+
 /// Handler for POST /api/epic/auth/login
 pub async fn epic_login(
     State(epic_store): State<Arc<EpicAuthStore>>,
@@ -933,41 +1034,7 @@ pub async fn switch_epic_account(
     State(epic_store): State<Arc<EpicAuthStore>>,
     Json(payload): Json<SwitchEpicAccountRequest>,
 ) -> Result<Json<SwitchEpicAccountResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let target = payload.target_account().unwrap_or("").trim();
-    if target.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "account_id or account_name must not be empty".to_string(),
-            }),
-        ));
-    }
-
-    match epic_store.switch_active_account(target).await {
-        Ok(account) => Ok(Json(SwitchEpicAccountResponse {
-            status: "success",
-            message: format!("Switched active Epic account to '{}'", account.display_name),
-            account,
-        })),
-        Err(EpicError::AccountNotFound(id)) => Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: format!("Epic account '{}' not found", id),
-            }),
-        )),
-        Err(EpicError::Database(ref msg)) if msg.contains("not found in database") => Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: format!("Epic account '{}' not found", target),
-            }),
-        )),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: format!("Failed to switch Epic account: {}", e),
-            }),
-        )),
-    }
+    open_epic_launcher(State(epic_store), Json(payload)).await
 }
 
 /// Handler for POST /api/epic/open-launcher
@@ -992,32 +1059,37 @@ pub async fn open_epic_launcher(
         }),
     ))?;
 
-    match epic_store.switch_active_account(target).await {
+    match epic_store.find_account(target).await {
         Ok(account) => {
-            let session_mgr = EpicSessionManager::new();
-            let switch_res = session_mgr
-                .switch_account(&account.account_id, Some(&account.display_name))
-                .await;
+            // API account credentials can be valid even when the native launcher
+            // has no saved cookies. Authenticate first, before stopping Epic.
+            let launcher_token = epic_store.launcher_refresh_token(&account.account_id).await
+                .map_err(|e| {
+                    let (status, message) = match e {
+                        EpicError::Reqwest(_) => (StatusCode::BAD_GATEWAY,
+                            "Не удалось связаться с Epic. Проверь подключение и повтори переключение.".to_string()),
+                        EpicError::Api { status, code, .. } => {
+                            // Error identifiers are safe; API messages can include credentials.
+                            let code = code.filter(|c| c.len() < 160 && c.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_'))
+                                .unwrap_or_else(|| "unknown".into());
+                            (StatusCode::UNAUTHORIZED, format!("Epic отклонил автоматический вход (HTTP {}, {}). Подключи аккаунт заново в SWCH.", status.as_u16(), code))
+                        }
+                        EpicError::DeviceAuthNotFound(_) => (StatusCode::UNAUTHORIZED,
+                            "Для этого аккаунта нет данных входа. Подключи аккаунт в SWCH.".into()),
+                        _ => (StatusCode::BAD_GATEWAY,
+                            "Не удалось подготовить автоматический вход Epic.".into()),
+                    };
+                    (status, Json(ErrorResponse { error: message }))
+                })?;
+            EpicSessionManager::new().login_with_refresh_token(&account.account_id, &account.display_name, &launcher_token).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
+                    error: format!("Не удалось запустить вход Epic: {}", e),
+                })))?;
+            let message = format!("Epic Games Launcher: выполнен вход в '{}'", account.display_name);
 
-            let message = match switch_res {
-                Ok(res) if res.already_active => {
-                    format!("Epic Games Launcher уже активен с аккаунтом '{}'", account.display_name)
-                }
-                Ok(res) if res.restored_saved_session => {
-                    format!("Epic Games Launcher открыт. Аккаунт переключен на '{}'", account.display_name)
-                }
-                Ok(_) => {
-                    format!(
-                        "Epic Games Launcher открыт. Пожалуйста, выполните вход в '{}' — SWCH сохранит сессию для мгновенных переключений.",
-                        account.display_name
-                    )
-                }
-                Err(e) => {
-                    tracing::warn!("EpicSessionManager warning: {}", e);
-                    format!("Активный аккаунт Epic переключен на '{}'", account.display_name)
-                }
-            };
-
+            let account = epic_store.switch_active_account(&account.account_id).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse { error: e.to_string() })))?;
             Ok(Json(SwitchEpicAccountResponse {
                 status: "success",
                 message,
@@ -1111,6 +1183,26 @@ pub struct EpicLibrarySyncResponse {
     pub installed_count: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpicLibraryGameResponse {
+    pub id: String,
+    pub app_name: String,
+    pub catalog_item_id: String,
+    pub namespace: String,
+    pub title: String,
+    pub install_path: Option<String>,
+    pub executable_path: Option<String>,
+    pub is_installed: bool,
+    pub size_bytes: i64,
+    pub banner_url: Option<String>,
+    pub launch_uri: Option<String>,
+    pub account_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_incomplete_install: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<crate::launchers::steam::library::UpdateState>,
+}
+
 /// Handler for GET /api/epic/library
 ///
 /// Query parameter: optional `account_id`.
@@ -1118,7 +1210,7 @@ pub struct EpicLibrarySyncResponse {
 pub async fn get_epic_library(
     State(epic_store): State<Arc<EpicAuthStore>>,
     Query(params): Query<EpicLibraryQuery>,
-) -> Result<Json<Vec<EpicLibraryGame>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<Vec<EpicLibraryGameResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let account_id = match params.account_id.filter(|s| !s.trim().is_empty()) {
         Some(id) => id,
         None => {
@@ -1145,15 +1237,143 @@ pub async fn get_epic_library(
         }
     };
 
-    match epic_store.database().get_epic_library(Some(&account_id)).await {
-        Ok(games) => Ok(Json(games)),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: format!("Failed to retrieve Epic library: {}", e),
-            }),
-        )),
+    let db_games = epic_store
+        .database()
+        .get_epic_library(Some(&account_id))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to retrieve Epic library: {}", e),
+                }),
+            )
+        })?;
+
+    // Scan local manifests (including Pending) to resolve update/incomplete status
+    let local_manifests = if epic_store.client().is_mock() {
+        Vec::new()
+    } else {
+        let manifest_dirs = crate::parsers::resolve_default_manifest_dirs();
+        let mut manifests = Vec::new();
+        for dir in manifest_dirs {
+            if let Ok(items) = crate::parsers::scan_manifest_directory(&dir) {
+                manifests.extend(items);
+            }
+        }
+        manifests
+    };
+
+    let mut response_games: Vec<EpicLibraryGameResponse> = Vec::with_capacity(db_games.len());
+    let mut matched_manifest_keys: HashSet<String> = HashSet::new();
+
+    for g in db_games {
+        let matching_manifest = local_manifests.iter().find(|m| {
+            m.app_name.eq_ignore_ascii_case(&g.app_name)
+                || m.catalog_item_id.eq_ignore_ascii_case(&g.catalog_item_id)
+                || m.catalog_item_id.eq_ignore_ascii_case(&g.app_name)
+                || m.display_name.eq_ignore_ascii_case(&g.title)
+        });
+
+        let is_incomplete = matching_manifest
+            .and_then(|m| m.is_incomplete_install)
+            .unwrap_or(false);
+
+        if let Some(m) = matching_manifest {
+            matched_manifest_keys.insert(m.catalog_item_id.to_lowercase());
+            matched_manifest_keys.insert(m.app_name.to_lowercase());
+            matched_manifest_keys.insert(m.display_name.to_lowercase());
+        }
+
+        let (is_installed, update, is_incomplete_opt) = if is_incomplete {
+            (
+                false,
+                Some(crate::launchers::steam::library::UpdateState {
+                    required: false,
+                    phase: "downloading".to_string(),
+                    downloaded: 0,
+                    download_total: 0,
+                    staged: 0,
+                    stage_total: 0,
+                }),
+                Some(true),
+            )
+        } else {
+            (matching_manifest.map_or(g.is_installed, |m| m.is_valid_installation()), None, None)
+        };
+
+        response_games.push(EpicLibraryGameResponse {
+            id: g.id,
+            app_name: g.app_name,
+            catalog_item_id: g.catalog_item_id,
+            namespace: g.namespace,
+            title: g.title,
+            install_path: matching_manifest.map(|m| m.install_location.clone()).or(g.install_path),
+            executable_path: matching_manifest.map(|m| m.resolve_executable_path().to_string_lossy().into_owned()).or(g.executable_path),
+            is_installed,
+            size_bytes: matching_manifest.map_or(g.size_bytes, |m| m.install_size),
+            banner_url: g.banner_url,
+            launch_uri: g.launch_uri,
+            account_id: g.account_id,
+            is_incomplete_install: is_incomplete_opt,
+            update,
+        });
     }
+
+    // Also include any base game manifests with incomplete/pending installs that were not yet in db
+    for m in local_manifests {
+        if m.is_dlc() {
+            continue;
+        }
+        let cat_key = m.catalog_item_id.to_lowercase();
+        let app_key = m.app_name.to_lowercase();
+        let title_key = m.display_name.to_lowercase();
+        if matched_manifest_keys.contains(&cat_key)
+            || matched_manifest_keys.contains(&app_key)
+            || matched_manifest_keys.contains(&title_key)
+        {
+            continue;
+        }
+        matched_manifest_keys.insert(cat_key);
+        matched_manifest_keys.insert(app_key);
+        matched_manifest_keys.insert(title_key);
+
+        let is_incomplete = m.is_incomplete_install.unwrap_or(false);
+        let update = if is_incomplete {
+            Some(crate::launchers::steam::library::UpdateState {
+                required: false,
+                phase: "downloading".to_string(),
+                downloaded: 0,
+                download_total: 0,
+                staged: 0,
+                stage_total: 0,
+            })
+        } else {
+            None
+        };
+
+        let is_installed = m.is_valid_installation();
+        let game_id = format!("epic_{}", m.catalog_item_id);
+
+        response_games.push(EpicLibraryGameResponse {
+            id: game_id,
+            app_name: m.app_name.clone(),
+            catalog_item_id: m.catalog_item_id.clone(),
+            namespace: m.catalog_namespace.clone(),
+            title: m.display_name.clone(),
+            install_path: Some(m.install_location.clone()),
+            executable_path: Some(m.resolve_executable_path().to_string_lossy().to_string()),
+            is_installed,
+            size_bytes: m.install_size,
+            banner_url: None,
+            launch_uri: Some(format!("epic://launch/{}", m.catalog_item_id)),
+            account_id: account_id.clone(),
+            is_incomplete_install: if is_incomplete { Some(true) } else { None },
+            update,
+        });
+    }
+
+    Ok(Json(response_games))
 }
 
 /// Handler for POST /api/epic/library/sync

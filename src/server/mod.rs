@@ -1,4 +1,6 @@
 pub mod handlers;
+pub mod auto_claim;
+pub mod epic_browser;
 pub mod modules;
 pub mod riot;
 pub mod roblox;
@@ -6,6 +8,12 @@ pub mod steam;
 pub mod currency;
 pub mod minecraft;
 pub mod updater;
+pub mod ubisoft;
+pub mod gog;
+pub mod hoyoverse;
+pub mod playtime;
+pub mod mods;
+pub mod i18n;
 
 use axum::{
     routing::{delete, get, post},
@@ -180,6 +188,16 @@ pub fn create_app(db: Database) -> Router {
 
 /// Constructs the router with custom AppState (useful for tests with mock client or in-memory keyring).
 pub fn create_app_with_state(state: AppState) -> Router {
+    let claimer = crate::auto_claim::AutoClaimer::new(state.db.clone(), state.epic_store.clone());
+    create_app_with_auto_claim(state, claimer)
+}
+
+pub fn create_app_with_auto_claim(state: AppState, claimer: Arc<crate::auto_claim::AutoClaimer>) -> Router {
+    let manager=Arc::new(crate::mods::ModManager::new(state.db.clone()));
+    create_app_with_auto_claim_and_mods(state,claimer,manager)
+}
+
+pub fn create_app_with_auto_claim_and_mods(state: AppState, claimer: Arc<crate::auto_claim::AutoClaimer>, manager: Arc<crate::mods::ModManager>) -> Router {
     let index_path = resolve_index_path();
     let static_dir = index_path
         .parent()
@@ -188,8 +206,45 @@ pub fn create_app_with_state(state: AppState) -> Router {
     let cors = CorsLayer::permissive();
 
     Router::new()
+        .merge(mods::router())
+        .merge(i18n::router())
+        .merge(auto_claim::router(claimer.clone(), state.epic_store.clone()).with_state::<AppState>(()))
         // Core & System routes
         .route("/api/health", get(handlers::health))
+        .route("/api/playtime", get(playtime::get))
+        .route("/api/gog/auth/url", get(gog::auth_url))
+        .route("/api/gog/auth/open", post(gog::open_auth))
+        .route("/api/gog/auth/login", post(gog::login))
+        .route("/api/gog/accounts", get(gog::accounts))
+        .route("/api/gog/accounts/remove", post(gog::remove))
+        .route("/api/gog/switch-account", post(gog::switch_account))
+        .route("/api/gog/library", get(gog::library))
+        .route("/api/gog/library/sync", post(gog::sync))
+        .route("/api/gog/open-launcher", post(gog::open_launcher))
+        .route("/api/gog/launch", post(gog::launch))
+        .route("/api/ubisoft/library", get(ubisoft::library))
+        .route("/api/ubisoft/library/sync", post(ubisoft::library))
+        .route("/api/ubisoft/accounts", get(ubisoft::accounts))
+        .route("/api/ubisoft/current-account", get(ubisoft::current_account))
+        .route("/api/ubisoft/sessions/save", post(ubisoft::save_session))
+        .route("/api/ubisoft/accounts/prepare", post(ubisoft::prepare_account))
+        .route("/api/ubisoft/auth/status", get(ubisoft::automatic_status))
+        .route("/api/ubisoft/auth/cancel", post(ubisoft::automatic_cancel))
+        .route("/api/ubisoft/switch-account", post(ubisoft::switch_account))
+        .route("/api/ubisoft/open-launcher", post(ubisoft::open_launcher))
+        .route("/api/ubisoft/launch", post(ubisoft::launch))
+        .route("/api/ubisoft/accounts/remove", post(ubisoft::remove_account))
+        // HoYoverse routes
+        .route("/api/hoyoverse/games", get(hoyoverse::library))
+        .route("/api/hoyoverse/library", get(hoyoverse::library))
+        .route("/api/hoyoverse/accounts", get(hoyoverse::accounts))
+        .route("/api/hoyoverse/current-account", get(hoyoverse::current_account))
+        .route("/api/hoyoverse/sessions/save", post(hoyoverse::save_session))
+        .route("/api/hoyoverse/switch-account", post(hoyoverse::switch_account))
+        .route("/api/hoyoverse/accounts/prepare", post(hoyoverse::prepare_account))
+        .route("/api/hoyoverse/accounts/remove", post(hoyoverse::remove_account))
+        .route("/api/hoyoverse/launch", post(hoyoverse::launch_game))
+        .route("/api/hoyoverse/open-launcher", post(hoyoverse::open_launcher))
         .route("/api/system/shutdown", post(handlers::shutdown))
         .route("/api/modules", get(modules::list_modules))
         .route("/api/modules/scan", post(modules::scan_modules))
@@ -224,6 +279,7 @@ pub fn create_app_with_state(state: AppState) -> Router {
         .route("/api/steam/avatar", get(steam::avatar))
         .route("/api/steam/price", get(steam::price))
         .route("/api/steam/game-details", get(steam::game_details))
+        .route("/api/steam/artwork", get(steam::artwork))
         .route("/api/steam/game-stats/automatic-key", post(steam::automatic_key_stats))
         .route("/api/steam/open-api-key", post(steam::open_api_key))
         .route("/api/steam/game-stats", get(steam::game_stats).post(steam::game_stats_with_key))
@@ -237,9 +293,24 @@ pub fn create_app_with_state(state: AppState) -> Router {
         .route("/api/riot/library/sync", post(riot::library))
         .route("/api/riot/launch", post(riot::launch))
         .route("/api/riot/open-launcher", post(riot::open_launcher))
-        .route("/api/riot/switch-account", post(riot::unsupported))
+        .route("/api/riot/switch-account", post(riot::switch_account))
+        .route("/api/riot/accounts/save", post(riot::save_session))
+        .route("/api/riot/accounts/remove", post(riot::remove_account))
+        .route("/api/riot/current-session", get(riot::current_session))
+        .route("/api/riot/sessions", get(riot::list_sessions))
         // Epic Games routes
+        .route("/epic/connect", get(epic_browser::bridge))
+        .route("/api/epic/auth/browser/start", post(epic_browser::start))
+        .route("/api/epic/auth/browser/open", post(epic_browser::open_browser))
+        .route("/api/epic/auth/browser/prepare", post(epic_browser::prepare))
+        .route("/api/epic/auth/browser/status", post(epic_browser::status))
+        .route("/api/epic/auth/browser/complete", post(epic_browser::complete))
+        .route("/api/epic/auth/browser/cancel", post(epic_browser::cancel))
         .route("/api/epic/auth/url", get(handlers::epic_auth_url))
+        .route(
+            "/api/epic/auth/open",
+            post(handlers::open_epic_auth_browser).get(handlers::open_epic_auth_browser),
+        )
         .route("/api/epic/auth/login", post(handlers::epic_login))
         .route("/api/epic/accounts", get(handlers::get_epic_accounts))
         .route(
@@ -286,6 +357,7 @@ pub fn create_app_with_state(state: AppState) -> Router {
         .route("/api/minecraft/library", get(minecraft::library))
         .route("/api/minecraft/accounts", get(minecraft::list_accounts))
         .route("/api/minecraft/accounts/scan", post(minecraft::scan_accounts))
+        .route("/api/minecraft/accounts/add", post(minecraft::add_account))
         .route("/api/minecraft/accounts/remove", post(minecraft::remove_account))
         .route("/api/minecraft/switch-account", post(minecraft::switch_account))
         .route("/api/minecraft/accounts/switch", post(minecraft::switch_account))
@@ -305,6 +377,10 @@ pub fn create_app_with_state(state: AppState) -> Router {
         .route_service("/", ServeFile::new(&index_path))
         .fallback_service(ServeDir::new(static_dir).fallback(ServeFile::new(&index_path)))
         .layer(cors)
+        .layer(axum::Extension(crate::launchers::gog::auth::GogStore::shared()))
+        .layer(axum::Extension(claimer))
+        .layer(axum::middleware::from_fn(mods::notify_changes))
+        .layer(axum::Extension(manager))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

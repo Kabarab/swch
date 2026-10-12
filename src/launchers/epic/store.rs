@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
@@ -26,6 +26,40 @@ pub struct CachedToken {
     pub expires_at: DateTime<Utc>,
 }
 
+fn native_claim_paths_from_games(games: &[Game]) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for game in games.iter().filter(|game| game.launcher == "epic" && game.is_installed) {
+        if let Some(path) = game.executable_path.as_deref().filter(|v| !v.trim().is_empty()) {
+            let path = PathBuf::from(path);
+            if path.is_absolute() && !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+
+#[cfg(test)]
+mod native_claim_path_tests {
+    use super::*;
+
+    #[test]
+    fn only_installed_epic_absolute_executables_are_game_guards() {
+        let path = std::env::temp_dir().join("native-claim-game.exe");
+        let fixture = |launcher: &str, installed, executable_path| Game {
+            id: "fixture".into(), launcher: launcher.into(), app_id: "fixture".into(),
+            name: "fixture".into(), install_path: None, executable_path,
+            size_bytes: 0, is_installed: installed, banner_url: None, launch_uri: None,
+            namespace: None,
+        };
+        let valid = fixture("epic", true, Some(path.to_string_lossy().into_owned()));
+        let games = [valid.clone(), valid, fixture("steam", true, Some(path.to_string_lossy().into_owned())),
+            fixture("epic", false, Some(path.to_string_lossy().into_owned())),
+            fixture("epic", true, None), fixture("epic", true, Some("game.exe".into()))];
+        assert_eq!(native_claim_paths_from_games(&games), vec![path]);
+    }
+}
+
 impl CachedToken {
     /// Returns true if token has at least 60 seconds of validity remaining.
     pub fn is_valid(&self) -> bool {
@@ -45,11 +79,13 @@ pub struct SessionRestoreReport {
 /// Coordinates in-memory caching, OS Keyring storage, and SQLite database persistence.
 #[derive(Clone)]
 pub struct EpicAuthStore {
+    pub browser_auth: Arc<super::browser::BrowserAuth>,
     database: Database,
     keyring: Arc<dyn CredentialStore>,
     client: Arc<EpicClient>,
     active_account_id: Arc<RwLock<Option<String>>>,
     token_cache: Arc<RwLock<HashMap<String, CachedToken>>>,
+    token_refresh_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
 }
 
 impl EpicAuthStore {
@@ -60,11 +96,13 @@ impl EpicAuthStore {
         client: Arc<EpicClient>,
     ) -> Self {
         Self {
+            browser_auth: Arc::new(super::browser::BrowserAuth::default()),
             database,
             keyring,
             client,
             active_account_id: Arc::new(RwLock::new(None)),
             token_cache: Arc::new(RwLock::new(HashMap::new())),
+            token_refresh_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -132,9 +170,8 @@ impl EpicAuthStore {
         };
 
         // 3. Store in Database and Keyring
-        if let Ok(json) = serde_json::to_string(&device_auth) {
-            let _ = self.database.save_epic_credential(&device_auth.account_id, &json).await;
-        }
+        let json = serde_json::to_string(&device_auth)?;
+        self.database.save_epic_credential(&device_auth.account_id, &json).await?;
         self.keyring.set_device_auth(&device_auth)?;
 
         // 4. Check if an active account already exists or if this is the active account re-logging in
@@ -219,47 +256,15 @@ impl EpicAuthStore {
                     let _ = self.keyring.set_device_auth(&device_auth);
                     if account.is_active {
                         active_id = Some(account.id.clone());
-                        // Proactively pre-warm token for active account
-                        let login_res = if !device_auth.device_id.is_empty() && !device_auth.secret.is_empty() {
-                            match self.client.login_with_device_auth(&device_auth).await {
-                                Ok(resp) => Ok(resp),
-                                Err(e) => {
-                                    if let Some(ref rt) = device_auth.refresh_token {
-                                        self.client.login_with_refresh_token(rt).await
-                                    } else {
-                                        Err(e)
-                                    }
-                                }
-                            }
-                        } else if let Some(ref rt) = device_auth.refresh_token {
-                            self.client.login_with_refresh_token(rt).await
-                        } else {
-                            Err(EpicError::DeviceAuthNotFound(account.id.clone()))
-                        };
-
-                        match login_res {
-                            Ok(token_resp) => {
-                                let expires_at = Utc::now() + Duration::seconds(token_resp.expires_in);
-                                self.token_cache.write().await.insert(
-                                    account.id.clone(),
-                                    CachedToken {
-                                        access_token: token_resp.access_token,
-                                        expires_at,
-                                    },
-                                );
-                                if let Some(ref new_rt) = token_resp.refresh_token {
-                                    let mut updated = device_auth.clone();
-                                    updated.refresh_token = Some(new_rt.clone());
-                                    if let Ok(json) = serde_json::to_string(&updated) {
-                                        let _ = self.database.save_epic_credential(&account.id, &json).await;
-                                    }
-                                    let _ = self.keyring.set_device_auth(&updated);
-                                }
+                        // Use the same serialized refresh/persistence path as
+                        // API requests arriving immediately after a restart.
+                        match self.get_valid_access_token(&account.id).await {
+                            Ok(_) => {
                                 info!("Pre-warmed token for active Epic account '{}'", account.id);
                             }
                             Err(e) => {
                                 warn!(
-                                    "Could not refresh active token on boot (network may be unavailable): {}. Session remains valid.",
+                                    "Could not prepare active Epic session on boot: {}. Will retry on demand.",
                                     e
                                 );
                             }
@@ -296,6 +301,11 @@ impl EpicAuthStore {
     /// High-performance fast path: returns cached token if valid (< 1us).
     /// Refresh path: uses permanent DeviceAuth from Keyring to obtain fresh token (< 200ms).
     pub async fn get_valid_access_token(&self, account_id: &str) -> Result<String, EpicError> {
+        // A refresh token can be consumed once. Concurrent API requests on a
+        // cold start must share one refresh and its durably saved replacement.
+        let refresh_lock = self.token_refresh_locks.lock().await
+            .entry(account_id.to_string()).or_default().clone();
+        let _refresh_guard = refresh_lock.lock().await;
         // Fast path: memory cache hit
         {
             let cache = self.token_cache.read().await;
@@ -342,12 +352,15 @@ impl EpicAuthStore {
             return Err(EpicError::DeviceAuthNotFound(account_id.to_string()));
         };
 
+        if token_resp.account_id != account_id {
+            return Err(EpicError::Auth("Epic returned a session for a different account".into()));
+        }
+
         if let Some(ref new_rt) = token_resp.refresh_token {
             let mut updated = device_auth.clone();
             updated.refresh_token = Some(new_rt.clone());
-            if let Ok(json) = serde_json::to_string(&updated) {
-                let _ = self.database.save_epic_credential(account_id, &json).await;
-            }
+            let json = serde_json::to_string(&updated)?;
+            self.database.save_epic_credential(account_id, &json).await?;
             let _ = self.keyring.set_device_auth(&updated);
         }
 
@@ -364,7 +377,46 @@ impl EpicAuthStore {
         Ok(token_resp.access_token)
     }
 
-    /// Switches the active account in < 5ms (atomic SQLite WAL update + in-memory pointer update).
+    /// Obtain a fresh, single-use login for the native launcher. Its cookies and
+    /// RememberMe tokens are independent of SWCH's OAuth session and may expire.
+    pub async fn launcher_exchange_code(&self, account_id: &str) -> Result<String, EpicError> {
+        let access = self.get_valid_access_token(account_id).await?;
+        let exchange = self.client.get_exchange_code(&access).await?;
+        if exchange.code.is_empty() || exchange.code.len() > 512
+            || !exchange.code.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+            return Err(EpicError::Auth("Epic returned an invalid launcher login code".into()));
+        }
+        Ok(exchange.code)
+    }
+
+    pub async fn launcher_refresh_token(&self, account_id: &str) -> Result<String, EpicError> {
+        let code = self.launcher_exchange_code(account_id).await?;
+        let session = self.client.redeem_launcher_exchange(&code).await?;
+        if session.account_id != account_id {
+            return Err(EpicError::Auth("Launcher session belongs to a different account".into()));
+        }
+        session.refresh_token.filter(|t| !t.is_empty())
+            .ok_or_else(|| EpicError::Auth("Epic did not return a launcher refresh token".into()))
+    }
+
+    /// Installed game executables used to avoid disrupting gameplay during
+    /// native claiming. This is local metadata, never credentials or tokens.
+    pub async fn native_claim_game_paths(&self) -> Result<Vec<PathBuf>, EpicError> {
+        let games = self.database.get_games().await?;
+        let mut paths = native_claim_paths_from_games(&games);
+        // Manifests also cover installations whose library has not been synced.
+        for manifest in crate::parsers::scan_all_default_manifests() {
+            if manifest.is_valid_installation() && !manifest.is_dlc() {
+                let path = manifest.resolve_executable_path();
+                if path.is_absolute() && !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+        }
+        Ok(paths)
+    }
+
+    /// Switches the active account in SQLite and the in-memory cache.
     pub async fn switch_active_account(&self, account_id: &str) -> Result<EpicAccount, EpicError> {
         // 1. Atomic SQLite WAL update (< 2ms)
         if let Err(e) = self.database.set_active_epic_account(account_id).await {
@@ -400,6 +452,14 @@ impl EpicAuthStore {
         }
         let db_acc = self.database.get_active_epic_account().await?;
         Ok(db_acc.map(EpicAccount::from))
+    }
+
+    /// Retrieves all Epic accounts from SQLite.
+    pub async fn find_account(&self, target: &str) -> Result<EpicAccount, EpicError> {
+        self.database.get_epic_accounts().await?.into_iter()
+            .find(|a| a.id == target || a.username == target)
+            .map(EpicAccount::from)
+            .ok_or_else(|| EpicError::AccountNotFound(target.to_string()))
     }
 
     /// Retrieves all Epic accounts from SQLite.
@@ -576,6 +636,8 @@ impl EpicAuthStore {
         // 3. Scan local manifests
         let local_manifests = if let Some(dir) = manifests_dir {
             scan_manifest_directory(dir).unwrap_or_default()
+        } else if self.client.is_mock() {
+            Vec::new()
         } else {
             let mut manifests = Vec::new();
             for dir in resolve_default_manifest_dirs() {
@@ -588,13 +650,25 @@ impl EpicAuthStore {
 
         // 4. Index manifests for O(1) matching
         let mut manifest_map: HashMap<String, EpicManifestItem> = HashMap::new();
-        for m in local_manifests {
-            manifest_map.insert(m.catalog_item_id.clone(), m.clone());
-            manifest_map.insert(m.catalog_item_id.to_lowercase(), m.clone());
-            manifest_map.insert(m.app_name.clone(), m.clone());
-            manifest_map.insert(m.app_name.to_lowercase(), m.clone());
-            manifest_map.insert(m.display_name.clone(), m.clone());
-            manifest_map.insert(m.display_name.to_lowercase(), m);
+        for m in &local_manifests {
+            let keys = [
+                m.catalog_item_id.clone(),
+                m.catalog_item_id.to_lowercase(),
+                m.app_name.clone(),
+                m.app_name.to_lowercase(),
+                m.display_name.clone(),
+                m.display_name.to_lowercase(),
+            ];
+            for k in keys {
+                if let Some(existing) = manifest_map.get(&k) {
+                    // Prefer incomplete/updating manifest so updating state is not lost
+                    if !existing.is_incomplete_install.unwrap_or(false) && m.is_incomplete_install.unwrap_or(false) {
+                        manifest_map.insert(k, m.clone());
+                    }
+                } else {
+                    manifest_map.insert(k, m.clone());
+                }
+            }
         }
 
         // 5. Fetch catalog offers concurrently across all unique namespaces for rich metadata (real titles & cover posters)
@@ -857,6 +931,43 @@ impl EpicAuthStore {
 
             games_to_persist.push(game);
 
+            let link = GameAccount {
+                game_id,
+                account_id: canonical_account_id.clone(),
+                launcher: "epic".to_string(),
+            };
+            links_to_persist.push(link);
+        }
+
+        // 6. Include local manifest games not matched by cloud entitlements (e.g. Fortnite, local/offline installs, pending updates)
+        for m in &local_manifests {
+            if m.is_dlc() {
+                continue;
+            }
+            let norm_title = m.display_name.trim().to_lowercase();
+            if !seen_titles.insert(norm_title) {
+                continue;
+            }
+            base_games_count += 1;
+            let is_installed = m.is_valid_installation();
+            if is_installed {
+                installed_count += 1;
+            }
+            let game_id = format!("epic_{}", m.catalog_item_id);
+            let game = Game {
+                id: game_id.clone(),
+                launcher: "epic".to_string(),
+                app_id: m.catalog_item_id.clone(),
+                name: m.display_name.clone(),
+                install_path: Some(m.install_location.clone()),
+                executable_path: Some(m.resolve_executable_path().to_string_lossy().to_string()),
+                size_bytes: m.install_size,
+                is_installed,
+                banner_url: None,
+                launch_uri: Some(format!("epic://launch/{}", m.catalog_item_id)),
+                namespace: Some(m.catalog_namespace.clone()),
+            };
+            games_to_persist.push(game);
             let link = GameAccount {
                 game_id,
                 account_id: canonical_account_id.clone(),

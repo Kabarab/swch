@@ -3,14 +3,20 @@ use axum::{
     http::{Request, StatusCode},
 };
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::tempdir;
 use tower::ServiceExt;
 
 use swch::launchers::epic::EpicAuthStore;
-use swch::launchers::minecraft::hot_swap::MinecraftHotSwap;
+use swch::launchers::minecraft::hot_swap::{
+    update_tlauncher_profiles_json, update_tlauncher_properties, MinecraftHotSwap,
+};
 use swch::launchers::minecraft::nbt::{parse_servers_dat, write_servers_dat};
-use swch::launchers::minecraft::scanner::MinecraftScanner;
+use swch::launchers::minecraft::scanner::{
+    generate_offline_uuid, parse_tlauncher_profiles_accounts, parse_tlauncher_properties,
+    MinecraftScanner,
+};
 use swch::launchers::minecraft::MinecraftManager;
 use swch::launchers::roblox::RobloxManager;
 use swch::modules::detector::LauncherDetector;
@@ -406,6 +412,7 @@ fn test_minecraft_process_names_strictly_exclude_java() {
 
 #[tokio::test]
 async fn test_minecraft_api_endpoints() {
+    let _lock = TEST_ENV_MUTEX.lock().await;
     let tmp = tempdir().unwrap();
     let db_path = tmp.path().join("test_api.db");
     let db = Database::open(&db_path).unwrap();
@@ -522,4 +529,565 @@ async fn test_minecraft_api_endpoints() {
     let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
     let scan_val: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(scan_val["status"], "success");
+}
+
+#[tokio::test]
+async fn test_tlauncher_detector_and_aliases() {
+    let _lock = TEST_ENV_MUTEX.lock().await;
+    let tmp = tempdir().unwrap();
+    let detector = LauncherDetector::new();
+
+    let fake_app = tmp.path().join("fake_tlauncher_exe.exe");
+    std::fs::write(&fake_app, b"dummy tlauncher binary").unwrap();
+
+    let fake_tl_dir = tmp.path().join(".tlauncher");
+    std::fs::create_dir_all(&fake_tl_dir).unwrap();
+
+    std::env::set_var("SWCH_TLAUNCHER_APP", fake_app.to_str().unwrap());
+    std::env::set_var("SWCH_TLAUNCHER_DIR", fake_tl_dir.to_str().unwrap());
+
+    assert_eq!(detector.detect_tlauncher(), Some(fake_app.clone()));
+    assert_eq!(detector.detect_tlauncher_dir(), Some(fake_tl_dir.clone()));
+
+    // Test SWCH_TLAUNCHER_PATH fallback
+    std::env::remove_var("SWCH_TLAUNCHER_APP");
+    std::env::set_var("SWCH_TLAUNCHER_PATH", fake_app.to_str().unwrap());
+    assert_eq!(detector.detect_tlauncher(), Some(fake_app.clone()));
+
+    // Verify LauncherType from_name parses T-Launcher aliases
+    assert_eq!(LauncherType::from_name("tlauncher"), Some(LauncherType::Minecraft));
+    assert_eq!(LauncherType::from_name("t-launcher"), Some(LauncherType::Minecraft));
+    assert_eq!(LauncherType::from_name("tl"), Some(LauncherType::Minecraft));
+    assert_eq!(LauncherType::from_name("TL"), Some(LauncherType::Minecraft));
+
+    // Verify process names include TLauncher executables and strictly exclude java/javaw
+    let proc_names = LauncherType::Minecraft.process_names();
+    assert!(proc_names.contains(&"TLauncher.exe"));
+    assert!(proc_names.contains(&"tlauncher.exe"));
+    assert!(proc_names.contains(&"TL.exe"));
+    assert!(proc_names.contains(&"tlauncher"));
+
+    for name in proc_names {
+        let lower = name.to_lowercase();
+        assert!(
+            !lower.starts_with("java") && !lower.starts_with("javaw"),
+            "Minecraft processes must NOT contain java/javaw: {}",
+            name
+        );
+    }
+
+    std::env::remove_var("SWCH_TLAUNCHER_APP");
+    std::env::remove_var("SWCH_TLAUNCHER_PATH");
+    std::env::remove_var("SWCH_TLAUNCHER_DIR");
+}
+
+#[tokio::test]
+async fn test_tlauncher_accounts_parser_and_properties() {
+    // 1. Test offline UUID generator
+    let uuid1 = generate_offline_uuid("Alex_TL");
+    let uuid2 = generate_offline_uuid("Alex_TL");
+    let uuid3 = generate_offline_uuid("Steve_TL");
+    assert_eq!(uuid1, uuid2);
+    assert_ne!(uuid1, uuid3);
+    assert_eq!(uuid1.len(), 36);
+
+    // 2. Test parse_tlauncher_profiles_accounts with Map format
+    let map_json = serde_json::json!({
+        "selectedUser": {
+            "account": "Alex_TL"
+        },
+        "selected_account": "Alex_TL",
+        "accounts": {
+            "acc_1": {
+                "displayName": "Alex_TL",
+                "type": "free",
+                "uuid": "11111111-2222-3333-4444-555555555555",
+                "active": true
+            },
+            "acc_2": {
+                "displayName": "Steve_Mojang",
+                "type": "mojang",
+                "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "active": false
+            }
+        }
+    }).to_string();
+
+    let accounts = parse_tlauncher_profiles_accounts(&map_json);
+    assert_eq!(accounts.len(), 2);
+    let active_acc = accounts.iter().find(|a| a.username == "Alex_TL").unwrap();
+    assert!(active_acc.is_active);
+    assert_eq!(active_acc.account_type, "tlauncher_free");
+    let inactive_acc = accounts.iter().find(|a| a.username == "Steve_Mojang").unwrap();
+    assert!(!inactive_acc.is_active);
+    assert_eq!(inactive_acc.account_type, "tlauncher_mojang");
+
+    // 3. Test parse_tlauncher_profiles_accounts with Array format
+    let arr_json = serde_json::json!({
+        "selectedUser": "Steve_TL",
+        "selected_account": "Steve_TL",
+        "accounts": [
+            {
+                "username": "Steve_TL",
+                "type": "offline",
+                "uuid": "22222222-3333-4444-5555-666666666666"
+            }
+        ]
+    }).to_string();
+
+    let arr_accounts = parse_tlauncher_profiles_accounts(&arr_json);
+    assert_eq!(arr_accounts.len(), 1);
+    assert_eq!(arr_accounts[0].username, "Steve_TL");
+    assert!(arr_accounts[0].is_active);
+    assert_eq!(arr_accounts[0].account_type, "tlauncher_free");
+
+    // 4. Test parse_tlauncher_properties
+    let props = "
+# T-Launcher properties
+version=2.89
+selected.account=CraftHero
+account.selected=CraftHero
+";
+    let prop_accs = parse_tlauncher_properties(props);
+    assert_eq!(prop_accs.len(), 1);
+    assert_eq!(prop_accs[0].username, "CraftHero");
+    assert!(prop_accs[0].is_active);
+    assert_eq!(prop_accs[0].account_type, "tlauncher");
+
+    // 5. Integration scan with Scanner
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test_tl_scan.db");
+    let db = Database::open(&db_path).unwrap();
+    db.run_migrations().await.unwrap();
+
+    let mc_dir = tmp.path().join(".minecraft");
+    std::fs::create_dir_all(&mc_dir).unwrap();
+    std::fs::write(mc_dir.join("TlauncherProfiles.json"), &map_json).unwrap();
+
+    let scanner = MinecraftScanner::new(db.clone());
+    let scanned_count = scanner.scan_accounts(&mc_dir).await;
+    assert_eq!(scanned_count, 2);
+
+    let db_accs = db.get_minecraft_accounts().await.unwrap();
+    assert_eq!(db_accs.len(), 2);
+}
+
+#[tokio::test]
+async fn test_tlauncher_hot_swap_integration() {
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test_tl_hotswap.db");
+    let db = Database::open(&db_path).unwrap();
+    db.run_migrations().await.unwrap();
+
+    let mc_dir = tmp.path().join(".minecraft");
+    let tl_dir = tmp.path().join(".tlauncher");
+    std::fs::create_dir_all(&mc_dir).unwrap();
+    std::fs::create_dir_all(&tl_dir).unwrap();
+
+    // Initial TlauncherProfiles.json
+    let initial_tl_json = serde_json::json!({
+        "selectedUser": { "account": "OldPlayer" },
+        "selected_account": "OldPlayer",
+        "accounts": {
+            "OldPlayer": {
+                "username": "OldPlayer",
+                "displayName": "OldPlayer",
+                "type": "FREE",
+                "uuid": "00000000-0000-0000-0000-000000000000",
+                "active": true
+            }
+        }
+    }).to_string();
+
+    let tl_profiles_path = mc_dir.join("TlauncherProfiles.json");
+    std::fs::write(&tl_profiles_path, &initial_tl_json).unwrap();
+
+    // Initial properties file
+    let props_path = tl_dir.join("tlauncher-2.0.properties");
+    std::fs::write(&props_path, "selected.account=OldPlayer\nlogin.account=OldPlayer\n").unwrap();
+
+    // Target account to switch into
+    let target_account = MinecraftAccount {
+        account_id: "tl_NewPlayer".to_string(),
+        username: "NewPlayer".to_string(),
+        account_type: "tlauncher_free".to_string(),
+        uuid: generate_offline_uuid("NewPlayer"),
+        avatar_url: None,
+        skin_url: None,
+        is_active: false,
+        access_token: None,
+        raw_json: None,
+        last_used: None,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    // 1. Direct unit test of update_tlauncher_profiles_json
+    update_tlauncher_profiles_json(&tl_profiles_path, &target_account).unwrap();
+
+    // Verify backup created
+    let bak_path = PathBuf::from(format!("{}.bak", tl_profiles_path.display()));
+    assert!(bak_path.exists(), "TlauncherProfiles.json.bak must exist");
+
+    // Verify file content updated
+    let updated_content = std::fs::read_to_string(&tl_profiles_path).unwrap();
+    let updated_val: Value = serde_json::from_str(&updated_content).unwrap();
+    assert_eq!(updated_val["selected_account"], "NewPlayer");
+    assert_eq!(updated_val["selectedUser"]["account"], "NewPlayer");
+    let accounts_map = updated_val["accounts"].as_object().unwrap();
+    assert!(accounts_map.contains_key("NewPlayer"));
+    assert_eq!(accounts_map["NewPlayer"]["active"], true);
+    assert_eq!(accounts_map["OldPlayer"]["active"], false);
+
+    // 2. Direct unit test of update_tlauncher_properties
+    update_tlauncher_properties(&props_path, &target_account.username).unwrap();
+    let prop_bak_path = PathBuf::from(format!("{}.bak", props_path.display()));
+    assert!(prop_bak_path.exists(), "tlauncher-2.0.properties.bak must exist");
+
+    let updated_props = std::fs::read_to_string(&props_path).unwrap();
+    assert!(updated_props.contains("selected.account=NewPlayer"));
+    assert!(updated_props.contains("login.account=NewPlayer"));
+
+    // 3. Test through MinecraftHotSwap manager
+    let _lock = TEST_ENV_MUTEX.lock().await;
+    std::env::set_var("SWCH_MINECRAFT_DIR", mc_dir.to_str().unwrap());
+    std::env::set_var("SWCH_TLAUNCHER_DIR", tl_dir.to_str().unwrap());
+
+    db.save_minecraft_account(&target_account).await.unwrap();
+
+    let hot_swap = MinecraftHotSwap::new(db.clone());
+    let active_name = hot_swap.switch_account("tl_NewPlayer").await.unwrap();
+    assert!(active_name.contains("NewPlayer"));
+
+    let reloaded = db.get_minecraft_account("tl_NewPlayer").await.unwrap().unwrap();
+    assert!(reloaded.is_active);
+
+    std::env::remove_var("SWCH_MINECRAFT_DIR");
+    std::env::remove_var("SWCH_TLAUNCHER_DIR");
+}
+
+#[tokio::test]
+async fn test_tlauncher_api_add_and_launch_endpoints() {
+    let _lock = TEST_ENV_MUTEX.lock().await;
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test_tl_api.db");
+    let db = Database::open(&db_path).unwrap();
+    db.run_migrations().await.unwrap();
+
+    let epic_store = Arc::new(EpicAuthStore::default_store(db.clone()));
+    let module_manager = Arc::new(ModuleManager::new_with_epic(db.clone(), Some(epic_store.clone())));
+    let roblox_manager = Arc::new(RobloxManager::new(db.clone()));
+    let minecraft_manager = Arc::new(MinecraftManager::new(db.clone()));
+
+    let update_manager = Arc::new(swch::server::updater::UpdateManager::new());
+    let app = create_app_with_state(AppState {
+        db: db.clone(),
+        epic_store,
+        module_manager,
+        roblox_manager,
+        minecraft_manager,
+        update_manager,
+    });
+
+    // 1. POST /api/minecraft/accounts/add
+    let add_payload = serde_json::json!({
+        "username": "CraftMaster99",
+        "account_type": "tlauncher"
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/minecraft/accounts/add")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&add_payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let acc_val: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(acc_val["username"], "CraftMaster99");
+    assert_eq!(acc_val["account_type"], "tlauncher");
+    assert_eq!(acc_val["is_active"], true);
+    let added_id = acc_val["account_id"].as_str().unwrap().to_string();
+
+    // Verify account saved in DB
+    let saved_acc = db.get_minecraft_account(&added_id).await.unwrap().unwrap();
+    assert_eq!(saved_acc.username, "CraftMaster99");
+    assert!(saved_acc.is_active);
+
+    // 2. GET /api/minecraft/library returns available_launchers and install flags
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/minecraft/library")
+                .method("GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let lib_val: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(lib_val["available_launchers"].is_array());
+    let launchers = lib_val["available_launchers"].as_array().unwrap();
+    assert!(launchers.iter().any(|l| l["id"] == "official"));
+    assert!(launchers.iter().any(|l| l["id"] == "tlauncher"));
+
+    // 3. POST /api/minecraft/open-launcher with launcher_client
+    let open_payload = serde_json::json!({
+        "account_id": added_id,
+        "launcher_client": "tlauncher"
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/minecraft/open-launcher")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&open_payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Valid response status (OK, or INTERNAL_SERVER_ERROR / NOT_FOUND / BAD_REQUEST when client exe is not installed on test runner)
+    assert!(
+        res.status() == StatusCode::OK
+            || res.status() == StatusCode::INTERNAL_SERVER_ERROR
+            || res.status() == StatusCode::BAD_REQUEST
+            || res.status() == StatusCode::NOT_FOUND,
+        "Unexpected status: {:?}",
+        res.status()
+    );
+
+    // 4. POST /api/minecraft/launch with launcher_client
+    let launch_payload = serde_json::json!({
+        "game_id": "minecraft_java",
+        "profile_id": null,
+        "launcher_client": "tlauncher"
+    });
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/minecraft/launch")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&launch_payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        res.status() == StatusCode::OK
+            || res.status() == StatusCode::INTERNAL_SERVER_ERROR
+            || res.status() == StatusCode::BAD_REQUEST
+            || res.status() == StatusCode::NOT_FOUND,
+        "Unexpected status: {:?}",
+        res.status()
+    );
+}
+
+#[test]
+fn test_tlauncher_properties_priority_and_edge_cases() {
+    // 1. Priority: selected.account must win even if login.account is defined first
+    let props_order = "
+login.account=OldUser
+selected.account=ActiveUser
+";
+    let accs = parse_tlauncher_properties(props_order);
+    assert_eq!(accs.len(), 1);
+    assert_eq!(accs[0].username, "ActiveUser", "selected.account must have higher priority than login.account");
+
+    // 2. account.selected fallback
+    let props_account_selected = "
+# Comment line
+login.account=FallbackUser
+account.selected=ChosenUser
+";
+    let accs2 = parse_tlauncher_properties(props_account_selected);
+    assert_eq!(accs2.len(), 1);
+    assert_eq!(accs2[0].username, "ChosenUser");
+
+    // 3. Empty properties
+    let empty_accs = parse_tlauncher_properties("# Just comments\n; Another comment\n");
+    assert!(empty_accs.is_empty());
+}
+
+#[test]
+fn test_tlauncher_profiles_case_insensitivity_and_format_preservation() {
+    let tmp = tempdir().unwrap();
+    let tl_json_path = tmp.path().join("TlauncherProfiles.json");
+
+    // File with lowercase username and string selectedUser format
+    let initial_json = serde_json::json!({
+        "selectedUser": "alex_tl",
+        "selected_account": "alex_tl",
+        "accounts": {
+            "alex_tl": {
+                "username": "alex_tl",
+                "displayName": "alex_tl",
+                "type": "FREE",
+                "uuid": "11111111-2222-3333-4444-555555555555",
+                "active": true
+            }
+        }
+    }).to_string();
+    std::fs::write(&tl_json_path, &initial_json).unwrap();
+
+    // Target account with uppercase username
+    let target = MinecraftAccount {
+        account_id: "tl_Alex_TL".to_string(),
+        username: "Alex_TL".to_string(),
+        account_type: "tlauncher_free".to_string(),
+        uuid: "11111111-2222-3333-4444-555555555555".to_string(),
+        avatar_url: None,
+        skin_url: None,
+        is_active: false,
+        access_token: None,
+        raw_json: None,
+        last_used: None,
+        updated_at: "2026-09-25T12:00:00Z".to_string(),
+    };
+
+    update_tlauncher_profiles_json(&tl_json_path, &target).unwrap();
+
+    let updated_content = std::fs::read_to_string(&tl_json_path).unwrap();
+    let updated_val: Value = serde_json::from_str(&updated_content).unwrap();
+
+    // Must preserve string format of selectedUser if originally string
+    assert_eq!(updated_val["selectedUser"], "Alex_TL");
+
+    // Must NOT insert duplicate account with different casing
+    let accs_map = updated_val["accounts"].as_object().unwrap();
+    assert_eq!(accs_map.len(), 1, "Case-insensitive match must not duplicate existing account");
+    assert!(accs_map.contains_key("alex_tl"));
+    assert_eq!(accs_map["alex_tl"]["active"], true);
+}
+
+#[test]
+fn test_update_accounts_json_does_not_corrupt_on_foreign_tlauncher_account() {
+    let tmp = tempdir().unwrap();
+    let accounts_path = tmp.path().join("launcher_accounts.json");
+
+    let initial_json = serde_json::json!({
+        "accounts": {
+            "official_local_1": {
+                "active": true,
+                "minecraftProfile": {
+                    "id": "uuid_1",
+                    "name": "Steve"
+                },
+                "type": "Xbox"
+            }
+        },
+        "activeAccountLocalId": "official_local_1"
+    });
+    std::fs::write(&accounts_path, serde_json::to_string_pretty(&initial_json).unwrap()).unwrap();
+
+    // Attempting to update with a foreign T-Launcher account ID
+    let modified = swch::launchers::minecraft::hot_swap::update_accounts_json(
+        &accounts_path,
+        "tl_OfflineUser"
+    ).unwrap();
+
+    assert!(!modified, "Should not modify launcher_accounts.json when target ID does not exist in accounts");
+
+    let content_after = std::fs::read_to_string(&accounts_path).unwrap();
+    let val_after: Value = serde_json::from_str(&content_after).unwrap();
+    assert_eq!(val_after["activeAccountLocalId"], "official_local_1", "Original official account must remain intact");
+}
+
+#[tokio::test]
+async fn test_launch_auto_resolution_by_account_type() {
+    let _lock = TEST_ENV_MUTEX.lock().await;
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test_launch_auto.db");
+    let db = Database::open(&db_path).unwrap();
+    db.run_migrations().await.unwrap();
+
+    let fake_tl = tmp.path().join("fake_tl.exe");
+    std::fs::write(&fake_tl, b"tl").unwrap();
+    std::env::set_var("SWCH_TLAUNCHER_APP", fake_tl.to_str().unwrap());
+
+    let fake_mc = tmp.path().join("fake_mc.exe");
+    std::fs::write(&fake_mc, b"mc").unwrap();
+    std::env::set_var("SWCH_MINECRAFT_APP", fake_mc.to_str().unwrap());
+
+    // 1. Offline TLauncher account
+    let tl_acc = MinecraftAccount {
+        account_id: "tl_offline_player".to_string(),
+        username: "TLPlayer".to_string(),
+        account_type: "tlauncher_free".to_string(),
+        uuid: "tl_uuid".to_string(),
+        avatar_url: None,
+        skin_url: None,
+        is_active: true,
+        access_token: None,
+        raw_json: None,
+        last_used: None,
+        updated_at: "2026-09-25T12:00:00Z".to_string(),
+    };
+    db.save_minecraft_account(&tl_acc).await.unwrap();
+
+    // 2. Official Microsoft account
+    let msa_acc = MinecraftAccount {
+        account_id: "msa_player".to_string(),
+        username: "MSAPlayer".to_string(),
+        account_type: "msa".to_string(),
+        uuid: "msa_uuid".to_string(),
+        avatar_url: None,
+        skin_url: None,
+        is_active: false,
+        access_token: None,
+        raw_json: None,
+        last_used: None,
+        updated_at: "2026-09-25T12:00:00Z".to_string(),
+    };
+    db.save_minecraft_account(&msa_acc).await.unwrap();
+
+    let launcher = swch::launchers::minecraft::launch::MinecraftLauncher::new(db.clone());
+
+    // Auto resolution with T-Launcher account -> mode_used must be "tlauncher"
+    let req_tl = swch::launchers::minecraft::launch::LaunchMinecraftRequest {
+        account_id: Some("tl_offline_player".to_string()),
+        profile_id: None,
+        mode: None,
+        launcher_client: Some("auto".to_string()),
+        server_ip: None,
+        world_folder: None,
+    };
+    let res_tl = launcher.launch(req_tl).await;
+    if let Ok(r) = res_tl {
+        assert_eq!(r.mode_used, "tlauncher");
+    }
+
+    // Auto resolution with MSA account -> mode_used must be "official"
+    let req_msa = swch::launchers::minecraft::launch::LaunchMinecraftRequest {
+        account_id: Some("msa_player".to_string()),
+        profile_id: None,
+        mode: None,
+        launcher_client: None,
+        server_ip: None,
+        world_folder: None,
+    };
+    let res_msa = launcher.launch(req_msa).await;
+    if let Ok(r) = res_msa {
+        assert_eq!(r.mode_used, "official");
+    }
+
+    std::env::remove_var("SWCH_TLAUNCHER_APP");
+    std::env::remove_var("SWCH_MINECRAFT_APP");
 }

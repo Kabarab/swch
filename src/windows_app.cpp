@@ -9,6 +9,7 @@
 #include <string>
 #include "webview2/WebView2.h"
 #include "embedded_loader.h"
+#include "windows_startup.h"
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -79,6 +80,26 @@ static int g_retryCount = 0;
 static bool g_backendReady = false;
 static bool g_isExiting = false;
 
+void HandleStartupMessage(ICoreWebView2* sender, const std::wstring& message) {
+    LSTATUS result = ERROR_SUCCESS;
+    std::wstring mode;
+    if (message != L"startup:get") {
+        mode = message.substr(wcslen(L"startup:set:"));
+        wchar_t exe[32768] = {};
+        DWORD length = GetModuleFileNameW(nullptr, exe, 32768);
+        if (!length || length >= 32768) {
+            result = length ? ERROR_INSUFFICIENT_BUFFER : GetLastError();
+        } else {
+            result = swch_startup::WriteMode(mode, exe);
+        }
+    }
+    if (result == ERROR_SUCCESS) result = swch_startup::ReadMode(mode);
+    const std::wstring reply = L"{\"type\":\"swch-startup\",\"mode\":" +
+        (result == ERROR_SUCCESS ? L"\"" + mode + L"\"" : std::wstring(L"null")) +
+        L",\"errorCode\":" + std::to_wstring(result) + L"}";
+    sender->PostWebMessageAsJson(reply.c_str());
+}
+
 static const wchar_t* kSplashHtml = LR"rawhtml(
 <!DOCTYPE html>
 <html>
@@ -126,9 +147,45 @@ static const wchar_t* kErrorHtml = LR"rawhtml(
 </html>
 )rawhtml";
 
+// The backend writes these fixed, escaped templates when the language changes.
+static std::wstring LocalStartupHtml(const wchar_t* fallback, bool error) {
+    wchar_t path[32768] = {};
+    DWORD count = GetEnvironmentVariableW(L"SWCH_I18N_DIR", path, 32768);
+    std::wstring directory;
+    if (count && count < 32768) directory = path;
+    else {
+        count = GetEnvironmentVariableW(L"APPDATA", path, 32768);
+        if (!count || count >= 32768) return fallback;
+        directory = std::wstring(path) + L"\\swch\\i18n";
+    }
+    const std::wstring marker = directory + L"\\active.txt";
+    HANDLE activeFile = CreateFileW(marker.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (activeFile == INVALID_HANDLE_VALUE) return fallback;
+    char reference[64] = {}; DWORD referenceSize = 0;
+    BOOL readActive = GetFileSize(activeFile, nullptr) == 64 && ReadFile(activeFile, reference, 64, &referenceSize, nullptr);
+    CloseHandle(activeFile);
+    if (!readActive || referenceSize != 64) return fallback;
+    for (char c : reference) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return fallback;
+    directory += L"\\versions\\" + std::wstring(reference, reference + 64);
+    const std::wstring filename = directory + (error ? L"\\error-windows.html" : L"\\loading-windows.html");
+    HANDLE file = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return fallback;
+    DWORD size = GetFileSize(file, nullptr), received = 0;
+    if (size == INVALID_FILE_SIZE || size > 131072) { CloseHandle(file); return fallback; }
+    std::string bytes(size, '\0');
+    BOOL ok = ReadFile(file, bytes.data(), size, &received, nullptr);
+    CloseHandle(file);
+    if (!ok || received != size) return fallback;
+    int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), size, nullptr, 0);
+    if (!length) return fallback;
+    std::wstring html(length, L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), size, html.data(), length);
+    return html;
+}
+
 // Check health of Axum backend at http://127.0.0.1:4242/api/health
 bool CheckBackendHealth() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.2.0",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.0",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -177,7 +234,7 @@ bool CheckBackendHealth() {
 
 // Sends graceful shutdown request to Axum backend at http://127.0.0.1:4242/api/system/shutdown
 void RequestBackendShutdown() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.2.0",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.0",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -225,7 +282,7 @@ DWORD WINAPI ServerWatcherThread(LPVOID lpParam) {
         // Do NOT close the window! Display the error screen so the user can see it.
         KillTimer(hwnd, TIMER_HEALTH_ID);
         if (g_webview) {
-            g_webview->NavigateToString(kErrorHtml);
+            g_webview->NavigateToString(LocalStartupHtml(kErrorHtml, true).c_str());
         }
     }
     return 0;
@@ -322,7 +379,7 @@ void LaunchServerProcess() {
             MB_OK | MB_ICONERROR
         );
         if (g_webview) {
-            g_webview->NavigateToString(kErrorHtml);
+            g_webview->NavigateToString(LocalStartupHtml(kErrorHtml, true).c_str());
         }
         return;
     }
@@ -359,7 +416,7 @@ void LaunchServerProcess() {
             g_hJob = CreateJobObjectW(NULL, NULL);
             if (g_hJob) {
                 JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {};
-                jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
                 SetInformationJobObject(g_hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
             }
         }
@@ -378,7 +435,7 @@ void LaunchServerProcess() {
 void StartBackendAndPolling() {
     g_retryCount = 0;
     if (g_webview) {
-        g_webview->NavigateToString(kSplashHtml);
+        g_webview->NavigateToString(LocalStartupHtml(kSplashHtml, false).c_str());
     }
 
     LaunchServerProcess();
@@ -407,7 +464,7 @@ void RetryLaunch() {
     }
 
     if (g_webview) {
-        g_webview->NavigateToString(kSplashHtml);
+        g_webview->NavigateToString(LocalStartupHtml(kSplashHtml, false).c_str());
     }
 
     LaunchServerProcess();
@@ -446,7 +503,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                 if (g_retryCount >= MAX_HEALTH_RETRIES) {
                     KillTimer(hwnd, TIMER_HEALTH_ID);
                     if (g_webview) {
-                        g_webview->NavigateToString(kErrorHtml);
+                        g_webview->NavigateToString(LocalStartupHtml(kErrorHtml, true).c_str());
                     }
                 }
             }
@@ -471,6 +528,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     (void)hPrevInstance;
     (void)pCmdLine;
+
+    int argc = 0;
+    auto argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    const bool startMinimized = argv && swch_startup::HasMinimizedArgument(argc, argv);
+    if (argv) LocalFree(argv);
 
     // Normalize working directory to application directory
     WCHAR appExePath[MAX_PATH];
@@ -542,7 +604,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         0,
         CLASS_NAME,
         L"swch Hub",
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | (startMinimized ? WS_MINIMIZE : 0),
         posX, posY, width, height,
         NULL,
         NULL,
@@ -562,7 +624,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     BOOL darkMode = TRUE;
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
 
-    ShowWindow(hwnd, nCmdShow);
+    ShowWindow(hwnd, startMinimized ? SW_SHOWMINNOACTIVE : nCmdShow);
+    // The first ShowWindow can honor the parent's STARTUPINFO instead of our flag.
+    if (startMinimized && !IsIconic(hwnd)) ShowWindow(hwnd, SW_SHOWMINNOACTIVE);
     UpdateWindow(hwnd);
 
     // Locate WebView2Loader.dll
@@ -690,6 +754,26 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
                             g_controller->put_Bounds(bounds);
                             g_controller->put_IsVisible(TRUE);
 
+                            // External links belong in the user's default browser, which can
+                            // reuse its existing window and signed-in browser profile.
+                            EventRegistrationToken externalWindowToken;
+                            g_webview->add_NewWindowRequested(
+                                new CallbackImpl<
+                                    ICoreWebView2NewWindowRequestedEventHandler,
+                                    &IID_ICoreWebView2NewWindowRequestedEventHandler,
+                                    ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs*
+                                >([](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* args) -> HRESULT {
+                                    args->put_Handled(TRUE);
+                                    LPWSTR uri = nullptr;
+                                    if (SUCCEEDED(args->get_Uri(&uri)) && uri) {
+                                        if (_wcsnicmp(uri, L"https://", 8) == 0 || _wcsnicmp(uri, L"http://", 7) == 0) {
+                                            ShellExecuteW(nullptr, L"open", uri, nullptr, nullptr, SW_SHOWNORMAL);
+                                        }
+                                        CoTaskMemFree(uri);
+                                    }
+                                    return S_OK;
+                                }), &externalWindowToken);
+
                             // Handle WebMessage from webview (e.g. retry button in error screen)
                             EventRegistrationToken token;
                             g_webview->add_WebMessageReceived(
@@ -698,11 +782,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
                                     &IID_ICoreWebView2WebMessageReceivedEventHandler,
                                     ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*
                                 >(
-                                    [](ICoreWebView2* /*sender*/, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                    [](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
                                         LPWSTR msg = nullptr;
                                         if (SUCCEEDED(args->TryGetWebMessageAsString(&msg)) && msg != nullptr) {
                                             if (wcscmp(msg, L"retry") == 0) {
                                                 RetryLaunch();
+                                            } else if (wcscmp(msg, L"startup:get") == 0 ||
+                                                       wcsncmp(msg, L"startup:set:", 12) == 0) {
+                                                // Only our local UI can change Windows startup settings.
+                                                LPWSTR source = nullptr;
+                                                if (SUCCEEDED(args->get_Source(&source)) && source) {
+                                                    if (wcsncmp(source, L"http://127.0.0.1:4242/", 22) == 0) {
+                                                        HandleStartupMessage(sender, msg);
+                                                    }
+                                                    CoTaskMemFree(source);
+                                                }
                                             }
                                             CoTaskMemFree(msg);
                                         }

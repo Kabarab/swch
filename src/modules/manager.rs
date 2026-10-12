@@ -97,6 +97,8 @@ impl ModuleManager {
     /// Performs the initial scan and configuration on server startup.
     pub async fn init(&self) -> Result<(), ModuleError> {
         info!("Initializing SWCH Modular Engine...");
+        let gog_online = self.db.get_accounts().await.map_err(|e| ModuleError::Database(e.to_string()))?
+            .iter().any(|a| a.launcher == "gog");
         let mut states_lock = self.states.write().await;
 
         for &id in ModuleId::all() {
@@ -127,6 +129,8 @@ impl ModuleManager {
                     let mut ep = self.epic_store.write().await;
                     *ep = Some(store);
                     15_200_000 // Measured ~15MB RAM
+                } else if matches!(id, ModuleId::Ubisoft | ModuleId::Gog | ModuleId::Hoyoverse) {
+                    0 // No persistent launcher runtime is allocated.
                 } else if id == ModuleId::Steam {
                     18_400_000 // Measured ~18MB RAM
                 } else if id == ModuleId::Roblox {
@@ -146,6 +150,9 @@ impl ModuleManager {
                         ram_bytes: ram,
                     },
                 );
+            } else if id == ModuleId::Gog && gog_online {
+                self.downloader.install_module(id, None).await?;
+                states_lock.insert(id, ModuleRuntimeState { id, status: ModuleStatus::Active, launcher_path: None, ram_bytes: 0 });
             } else {
                 info!(
                     "Launcher {} not detected on system. Module will NOT be loaded (0 MB RAM overhead).",
@@ -190,6 +197,8 @@ impl ModuleManager {
         let mut newly_installed = Vec::new();
         let mut deactivated = Vec::new();
         let mut active_list = Vec::new();
+        let gog_online = self.db.get_accounts().await.map_err(|e| ModuleError::Database(e.to_string()))?
+            .iter().any(|a| a.launcher == "gog");
 
         for &id in ModuleId::all() {
             let detected_path = self.detector.read().await.detect_path(id);
@@ -199,6 +208,15 @@ impl ModuleManager {
             };
 
             match (detected_path, current_status) {
+                (None, Some((status, _))) if id == ModuleId::Gog && gog_online => {
+                    if matches!(status, ModuleStatus::Disabled) { continue; }
+                    if !status.is_active() {
+                        self.downloader.install_module(id, None).await?;
+                        self.states.write().await.insert(id, ModuleRuntimeState { id, status: ModuleStatus::Active, launcher_path: None, ram_bytes: 0 });
+                        newly_installed.push(id.as_str().to_string());
+                    }
+                    active_list.push(id.as_str().to_string());
+                }
                 // Case 1: Launcher was NOT detected before, but was now installed/downloaded!
                 (Some(path), Some((status, _))) if !status.is_active() => {
                     info!(
@@ -217,6 +235,8 @@ impl ModuleManager {
                         let mut ep = self.epic_store.write().await;
                         *ep = Some(store);
                         15_200_000
+                    } else if matches!(id, ModuleId::Ubisoft | ModuleId::Gog | ModuleId::Hoyoverse) {
+                        0 // No persistent launcher runtime is allocated.
                     } else if id == ModuleId::Steam {
                         18_400_000
                     } else if id == ModuleId::Roblox {
@@ -313,6 +333,8 @@ impl ModuleManager {
             let mut ep = self.epic_store.write().await;
             *ep = Some(store);
             15_200_000
+        } else if matches!(id, ModuleId::Ubisoft | ModuleId::Gog | ModuleId::Hoyoverse) {
+            0 // No persistent launcher runtime is allocated.
         } else if id == ModuleId::Steam {
             18_400_000
         } else if id == ModuleId::Roblox {

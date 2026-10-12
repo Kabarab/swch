@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "SWCH — вход в Epic Games",
+  "version": "1.0.0",
+  "description": "Передаёт результат выбранного входа Epic в локальный SWCH. Использует обычное окно и профиль браузера.",
+  "minimum_chrome_version": "112",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1/epic/connect*", "http://localhost/epic/connect*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.epicgames.com/id/api/redirect*", "https://epicgames.com/id/api/redirect*"],
+      "js": ["epic.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

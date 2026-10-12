@@ -1,0 +1,68 @@
+const {emptyApi,launchOptions}=require('./harness.cjs');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const http=require('node:http');
+(async()=>{
+ const root=path.resolve(__dirname,'../..');
+ const server=http.createServer((req,res)=>{
+  const file=path.join(root,req.url.split('?')[0]==='/'?'index.html':req.url.split('?')[0]);
+  res.setHeader('Content-Type',/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.jpg')?'image/jpeg':'text/html');
+  fs.createReadStream(file).on('error',()=>res.end()).pipe(res);
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ let browser;
+ try{
+  browser=await chromium.launch(launchOptions);
+  const page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  const tag=(category,value,name=value)=>({category,value,name});
+  const item=(id,name,details)=>({asset_id:id,name,market_hash_name:name,amount:1,tradable:true,marketable:true,icon_url:'/ui/artwork/valorant-keyart.jpg',tags:details.map(t=>t.name),tag_details:details});
+  const cs=[item('1','AK-47 | Redline',[tag('Type','Rifle','Винтовка'),tag('Rarity','Rarity_Legendary_Weapon','Засекреченное')]),item('2','AWP | Asiimov',[tag('Type','SniperRifle','Снайперская винтовка')]),item('3','Dreams & Nightmares Case',[tag('Type','Case','Контейнер')])];
+  const dota=[item('4','Dragon Sword',[tag('Hero','npc_dota_hero_dragon_knight','Dragon Knight'),tag('Slot','weapon','Оружие'),tag('Rarity','Rare')]),item('5','Pudge Hook',[tag('Hero','npc_dota_hero_pudge','Pudge'),tag('Slot','weapon','Оружие'),tag('Rarity','Immortal')]),item('6','Pudge Mask',[tag('Hero','npc_dota_hero_pudge','Pudge'),tag('Slot','head','Голова'),tag('Rarity','Mythical')])];
+  await page.route('**/api/**',async route=>{
+   const url=new URL(route.request().url());let data=emptyApi(url.pathname);
+   if(url.pathname==='/api/steam/library')data={games:[{id:'cs',app_id:'730',name:'Counter-Strike 2',launcher:'steam',is_installed:true},{id:'dota',app_id:'570',name:'Dota 2',launcher:'steam',is_installed:true}],accounts:[{id:'s1',username:'Player',display_name:'Player',launcher:'steam',is_active:true}],warnings:[]};
+   if(url.pathname==='/api/steam/inventory-cache')data={pages:[['730',cs],['570',dota]].map(([app_id,items])=>({account_id:'s1',app_id,context_id:'2',page:{items,total_count:items.length,cached:true,updated_at:'2026-10-05T12:00:00Z'}})),contexts:[{account_id:'s1',data:{contexts:[{app_id:'730',context_id:'2',name:'Counter-Strike 2'},{app_id:'570',context_id:'2',name:'Dota 2'}]}}]};
+   if(url.pathname==='/api/riot/accounts')data={profiles:[]};
+   if(url.pathname==='/api/riot/library')data={games:[]};
+   if(url.pathname==='/api/epic/accounts')data={accounts:[]};
+   if(url.pathname==='/api/accounts/restrictions')data={restrictions:[]};
+   await route.fulfill({json:data});
+  });
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.locator('#steam-count').filter({hasText:'2'}).waitFor();
+  await page.locator('[data-page="inventory"]').click();
+  await page.locator('#inventory-app').selectOption('730');
+  await page.locator('.cs-inventory-item').first().waitFor();
+  assert.equal(await page.locator('.cs-inventory-item').count(),3);
+  assert.equal(await page.locator('.cs-advanced-filters').getAttribute('open'),null);
+  await page.locator('[data-action="cs-inventory-category"][data-value="Rifle"]').click();
+  assert.equal(await page.locator('.cs-inventory-item').count(),1);
+  await page.locator('[data-action="cs-inventory-category"][data-value=""]').click();
+  await page.locator('#cs-inventory-search').fill('AWP');
+  assert.equal(await page.locator('.cs-inventory-item').count(),1);
+  await page.locator('#cs-inventory-search').fill('');
+  await page.locator('.cs-inventory-browser').evaluate(el=>el.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(root,'output/inventory-layout-cs.png')});
+  await page.locator('[data-action="cs-inventory-view"][data-view="details"]').click();
+  assert.notEqual(await page.locator('.cs-advanced-filters').getAttribute('open'),null);
+  assert.equal(await page.locator('.cs-inventory-item').count(),0);
+  assert.match(await page.locator('#inventory-items').innerText(),/AK-47/);
+  await page.locator('#inventory-app').selectOption('570');
+  await page.locator('[data-action="select-hero-facet"][data-hero="npc_dota_hero_dragon_knight"]').click();
+  assert.equal(await page.locator('[data-inventory-tag="Immortal"]').count(),0);
+  await page.locator('[data-inventory-tag="Rare"]').click();
+  await page.locator('[data-action="select-hero-facet"][data-hero="npc_dota_hero_pudge"]').click();
+  assert.equal(await page.locator('[data-inventory-tag="Rare"]').count(),0);
+  assert.equal(await page.locator('[data-inventory-tag="Immortal"]').count(),1);
+  assert.match(await page.locator('#inventory-items').innerText(),/Pudge Hook/);
+  assert.match(await page.locator('#inventory-items').innerText(),/Pudge Mask/);
+  assert.doesNotMatch(await page.locator('#inventory-items').innerText(),/Dragon Sword/);
+  await page.locator('.hero-filter-box').evaluate(el=>el.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(root,'output/inventory-layout-dota.png')});
+  assert.deepEqual(errors,[]);
+  console.log('CS visual/details/category/search and Dota hero-dependent filter checks passed.');
+ }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

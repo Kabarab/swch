@@ -1,8 +1,26 @@
 /target/
 /target_build/
 /target_challenger/
+/target_verify/
+/target_epic_check/
 .DS_Store
 *.log
 *.tmp
 *.zip
 /output/
+/scripts/__pycache__/
+/.agents/teamwork/
+/.agent/
+/.codex/
+.env
+.env.*
+*.pem
+*.key
+*.db
+*.sqlite
+*.sqlite3
+swch_steam_key
+
+# Local Graphify runtime and generated knowledge graph
+/.graphify-tools/
+/graphify-out/

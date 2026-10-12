@@ -20,11 +20,15 @@
       location.replace('http://127.0.0.1:4242/');
     } else {
       document.documentElement.classList.add('server-entry');
+      document.documentElement.classList.add('i18n-loading');
     }
   </script>
-  <link rel="stylesheet" href="/ui/launcher.css?v=game-stats-6">
+  <link rel="stylesheet" href="/ui/launcher.css?v=ux-20261011-5">
   <link rel="stylesheet" href="/ui/style.css">
-  <script type="module" src="/ui/launcher.js?v=steam-bans-7"></script>
+  <link rel="stylesheet" href="/ui/ux.css?v=ux-20261011-5">
+  <link rel="stylesheet" href="/ui/mods.css?v=mods-1">
+  <link rel="stylesheet" href="/ui/i18n.css?v=1">
+  <script type="module" src="/ui/launcher.js?v=mods-1"></script>
 </head>
 <body>
 <div id="file-open-message">
@@ -41,8 +45,9 @@
     <nav>
       <button class="nav-item active" data-page="library" aria-label="Библиотека"><i data-icon="library"></i>Библиотека<span class="nav-count" id="library-count">0</span></button>
       <button class="nav-item" data-page="favorites" aria-label="Избранное"><i data-icon="heart"></i>Избранное</button>
+      <button class="nav-item" data-page="mods" aria-label="Моды"><span aria-hidden="true">◈</span>Моды</button>
       <button class="nav-item" data-page="inventory" aria-label="Инвентарь"><i data-icon="diamond"></i>Инвентарь</button>
-      <button class="nav-item" data-page="accounts" aria-label="Аккаунты"><i data-icon="users"></i>Аккаунты</button>
+      <button class="nav-item" data-page="accounts" aria-label="Аккаунты"><i data-icon="users"></i>Аккаунты<span class="nav-count" id="accounts-count">0</span></button>
     </nav>
     <div class="sidebar-rule"></div><div class="section-label">ПЛАТФОРМЫ</div>
     <button class="platform-item selected" data-platform="all"><span class="platform-mark">◈</span>Все платформы</button>
@@ -51,10 +56,13 @@
     <button class="platform-item" data-platform="riot"><span class="platform-mark">R</span>Riot Games<span id="riot-count">0</span></button>
     <button class="platform-item" data-platform="roblox"><span class="platform-mark roblox-mark">R</span>Roblox<span id="roblox-count">0</span></button>
     <button class="platform-item" data-platform="minecraft"><span class="platform-mark minecraft-mark">MC</span>Minecraft<span id="minecraft-count">0</span></button>
+    <button class="platform-item" data-platform="ubisoft"><span class="platform-mark ubisoft-mark">U</span>Ubisoft Connect<span id="ubisoft-count">0</span></button>
+    <button class="platform-item" data-platform="gog"><span class="platform-mark gog-mark">G</span>GOG GALAXY<span id="gog-count">0</span></button>
+    <button class="platform-item" data-platform="hoyoverse"><span class="platform-mark hoyo-mark">H</span>HoYoverse<span id="hoyoverse-count">0</span></button>
     <button class="connect-link" data-action="connect"><i data-icon="plus"></i>Подключить аккаунт</button>
     <div class="sidebar-bottom">
       <button class="nav-item" data-action="settings" aria-label="Настройки"><i data-icon="palette"></i>Настройки<span id="update-indicator-pill" class="update-pill" hidden>NEW</span></button>
-      <div class="profile"><span class="avatar">SW</span><div><strong>Моё пространство</strong><small id="connection-state">Подключение…</small></div><button class="icon-button mini-refresh" data-action="refresh" aria-label="Обновить библиотеку" title="Обновить"><i data-icon="refresh"></i></button><span class="status-dot"></span></div>
+      <div class="profile"><span class="avatar">SW</span><div><strong>Моё пространство</strong><small id="connection-state">Подключение…</small></div><span class="status-dot"></span></div>
     </div>
   </aside>
   <div class="main-shell">
@@ -67,20 +75,25 @@
         </div>
         <div class="page-heading-actions">
           <button class="secondary" data-action="refresh" aria-label="Обновить библиотеку" title="Обновить"><i data-icon="refresh"></i></button>
-          <button class="secondary" data-action="settings"><i data-icon="palette"></i><span id="style-label">Настройки</span><i data-icon="chevron"></i></button>
         </div>
       </div>
+      <label class="mobile-platform-control">Платформа<select id="mobile-platform" aria-label="Выбрать платформу"><option value="all">Все платформы</option></select></label>
       <div id="notice" role="status" hidden></div>
       <section id="library-view" aria-label="Библиотека игр">
         <div class="library-toolbar">
           <div class="filter-tabs"><button class="active" data-filter="all">Все игры <span id="all-count">0</span></button><button data-filter="installed">Установлены <span id="installed-count">0</span></button></div>
-          <div class="library-controls"><label class="search"><i data-icon="search"></i><input id="search-input" type="search" placeholder="Найти игру" aria-label="Найти игру"><kbd>/</kbd></label><select id="sort-select" aria-label="Сортировка игр"><option value="name">По названию</option><option value="recent">Недавно открытые</option><option value="hours">По времени в игре</option></select><div class="view-switch"><button class="active" data-layout="cards" aria-label="Карточки игр"><i data-icon="grid"></i></button><button data-layout="detail" aria-label="Список игр"><i data-icon="list"></i></button></div></div>
+          <div class="library-controls"><label class="search"><i data-icon="search"></i><input id="search-input" type="search" placeholder="Найти игру" aria-label="Найти игру"><kbd>/</kbd></label><select id="sort-select" aria-label="Сортировка игр"><option value="default" title="Избранные, установленные, время в игре, название">По умолчанию</option><option value="name">По названию</option><option value="recent">Недавно открытые</option><option value="hours">По времени в игре</option></select><div class="view-switch"><button class="active" data-layout="cards" aria-label="Карточки игр"><i data-icon="grid"></i></button><button data-layout="detail" aria-label="Список игр"><i data-icon="list"></i></button></div></div>
         </div>
+        <details id="library-advanced" class="ux-disclosure library-advanced"><summary>Аккаунты и дополнительные фильтры</summary>
         <div class="steam-filters" id="steam-filters"><label>Аккаунт Steam<select id="steam-account-filter"><option value="all">Все аккаунты</option></select></label><label>Доступ к игре<select id="steam-access-filter"><option value="all">Все игры</option><option value="owned">Свои игры</option><option value="family">Семейный доступ</option><option value="local">Локальная история</option><option value="history">Доступ не подтверждён</option></select></label><button class="secondary" data-action="steam-connect">Обновить Steam онлайн</button></div>
+        <div class="steam-filters" id="gog-filters" hidden><label>Аккаунт GOG<select id="gog-account-filter"><option value="all">Все аккаунты</option></select></label><button class="secondary" data-action="sync-gog">Синхронизировать GOG</button><button class="secondary" data-action="open-gog">Открыть GALAXY</button><span class="muted small-text">SWCH переключает аккаунт в GALAXY перед запуском. Перед переключением заверши игру.</span></div>
+        <div class="steam-filters" id="hoyoverse-filters" hidden><button class="secondary" data-action="open-hoyoverse">Открыть HoYoPlay</button><button class="secondary" data-action="connect-hoyoverse">Управление аккаунтами</button><span class="muted small-text">Быстрое переключение аккаунтов Genshin Impact, Star Rail, ZZZ, Honkai 3rd и HoYoPlay без ввода паролей.</span></div>
+        </details>
         <div id="library-content"></div>
       </section>
       <section id="accounts-view" aria-label="Аккаунты" hidden></section>
       <section id="inventory-view" aria-label="Инвентарь" hidden></section>
+      <section id="mods-view" aria-label="Моды" hidden></section>
     </main>
     <footer class="statusbar"><span><i id="footer-dot" class="status-dot"></i><span id="footer-status">Подключаем библиотеку…</span></span><span>Все твои игры. Одно место. &nbsp; SWCH / 01</span></footer>
   </div>
@@ -89,11 +102,23 @@
   <div class="dialog-header">
     <div>
       <h2 id="styles-title">Настройки</h2>
-      <p class="muted">Режим отображения, цвет интерфейса и валюта</p>
+      <p class="muted">Оформление, магазины и получение раздач</p>
     </div>
     <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
   </div>
-  <div class="settings-body">
+  <nav class="settings-tabs" role="tablist" aria-label="Настройки"><button type="button" id="settings-tab-general" data-settings-tab="general" role="tab" aria-controls="settings-general-panel" aria-selected="true">Общие</button><button type="button" id="settings-tab-giveaways" data-settings-tab="giveaways" role="tab" aria-controls="auto-claim-settings" aria-selected="false">Раздачи игр <span id="settings-claims-attention" hidden></span></button></nav>
+  <div class="settings-body"><div id="settings-general-panel" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-general">
+    <section class="settings-group" id="language-settings">
+      <h4>Язык интерфейса <span id="language-machine" hidden>Машинный перевод</span></h4>
+      <input id="language-search" class="language-search" type="search" placeholder="Найти язык" aria-label="Найти язык">
+      <div class="language-row">
+        <label>Выберите язык интерфейса<select id="language-select" aria-label="Выберите язык интерфейса"><option value="ru" translate="no">Русский</option></select></label>
+        <button id="language-apply" type="button" class="secondary">Скачать и применить</button>
+      </div>
+      <p class="muted">Для первой загрузки нужен интернет. Затем перевод работает без интернета.</p>
+      <p class="muted">Перевод подготовлен автоматически. Возможны неточности.</p>
+      <p id="language-status" class="muted" role="status" aria-live="polite"></p>
+    </section>
     <section class="settings-group">
       <h4>Режим отображения</h4>
       <div class="mode-options-grid">
@@ -153,6 +178,19 @@
       </label>
       <small class="muted small-text" style="display:block; margin-top:4px;">Если отключено, перед запуском нового аккаунта предыдущие процессы Roblox будут закрываться.</small>
     </section>
+    <section class="settings-group" id="settings-startup-group">
+      <h4>Автозапуск Windows</h4>
+      <div class="settings-currency-row">
+        <label for="startup-mode">При включении компьютера
+          <select id="startup-mode" aria-describedby="startup-note" disabled>
+            <option value="off">Выключен</option>
+            <option value="open">Открытым окном</option>
+            <option value="minimized">Свёрнутым на панель задач</option>
+          </select>
+        </label>
+      </div>
+      <small id="startup-note" class="muted settings-currency-note" role="status">Доступно в приложении SWCH для Windows.</small>
+    </section>
     <section class="settings-group" id="settings-updates-group">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <h4 style="margin:0;">Обновление SWCH</h4>
@@ -195,46 +233,347 @@
         </div>
       </div>
     </section>
+    </div>
+    <section id="auto-claim-settings" class="settings-panel claim-workspace" role="tabpanel" aria-labelledby="settings-tab-giveaways" hidden>
+      <div class="claim-heading"><div><span class="claim-eyebrow">ИГРЫ В ПОДАРОК</span><h3>Раздачи игр</h3><p class="muted">Временные раздачи платных игр. Без демоверсий, бесплатных выходных и постоянных free-to-play.</p></div><span id="claim-automation-badge" class="claim-pill"></span></div>
+      <div class="claim-summary" id="claim-summary"></div>
+      <div class="claim-run-box"><div><p id="auto-claim-status" role="status">Загрузка состояния…</p><p id="claim-run-detail" class="muted"></p></div><div class="claim-run-actions"><button type="button" class="primary" id="auto-claim-check">Проверить и забрать сейчас</button><button type="button" class="secondary" id="auto-claim-stop" hidden>Остановить</button></div></div>
+      <div id="claim-next-steps" class="claim-next-steps" hidden></div>
+      <nav class="claim-tabs" role="tablist" aria-label="Раздачи"><button type="button" id="claim-tab-games" data-claim-view="games" role="tab" aria-controls="claim-panel-games" aria-selected="true">Раздачи</button><button type="button" id="claim-tab-accounts" data-claim-view="accounts" role="tab" aria-controls="claim-panel-accounts" aria-selected="false">Аккаунты <span id="claim-accounts-count"></span></button><button type="button" id="claim-tab-history" data-claim-view="history" role="tab" aria-controls="claim-panel-history" aria-selected="false">История и ключи</button><button type="button" id="claim-tab-options" data-claim-view="options" role="tab" aria-controls="claim-panel-options" aria-selected="false">Автоматизация</button></nav>
+      <div id="claim-panel-games" role="tabpanel" aria-labelledby="claim-tab-games" class="claim-view"><div class="claim-section-heading"><h4>Результаты проверки</h4><button type="button" class="text-button" data-claim-show="accounts">Посмотреть аккаунты →</button></div><div id="auto-claim-results" class="auto-claim-results"></div>      <details><summary>Дополнительный каталог раздач</summary><p class="muted small-text">Показывает кандидатов для всех магазинов, включая магазины без подключённого аккаунта. Цена и выдача лицензии проверяются при получении. Alienware требует ручного получения ключа.</p><button type="button" class="text-button" id="auto-claim-catalog-refresh">Обновить каталог</button><div id="auto-claim-catalog"></div></details>
+</div>
+      <div id="claim-panel-accounts" role="tabpanel" aria-labelledby="claim-tab-accounts" class="claim-view" hidden><div class="claim-section-heading"><div><h4>Аккаунты магазинов</h4><p class="muted">Сохранённый вход и готовность к получению показаны отдельно.</p></div><input type="search" id="claim-account-search" placeholder="Найти аккаунт или магазин" aria-label="Найти аккаунт"></div><div id="claim-manual-status" class="claim-manual-status" role="status" hidden></div><div id="auto-claim-accounts" class="auto-claim-accounts"></div>      <details><summary>Подключить другой магазин</summary>
+        <p class="muted small-text">Укажи логин или email аккаунта магазина и регион. В отдельном окне SWCH выполни официальный вход и открой профиль с этим логином. Пароль остаётся в магазине. Для Prime нужна действующая подписка. Alienware отображает раздачи для ручного получения.</p>
+        <div class="auto-claim-controls"><select id="auto-claim-add-platform"></select><input id="auto-claim-add-identity" placeholder="Логин или email"><input id="auto-claim-add-country" placeholder="Регион, например BY" maxlength="2"><button type="button" class="secondary" id="auto-claim-add">Подключить магазин</button></div>
+      </details>
+</div>
+      <div id="claim-panel-history" role="tabpanel" aria-labelledby="claim-tab-history" class="claim-view" hidden>      <details class="auto-claim-history"><summary>История полученных игр</summary><div id="auto-claim-history"></div></details>
+      <details><summary>Полученные игровые ключи</summary><p class="muted small-text">Один ключ активируется на одном аккаунте. Ключ хранится в хранилище ОС и не входит в историю лицензий до подтверждения активации.</p><div id="auto-claim-keys"></div></details>
+<button type="button" class="text-button" id="auto-claim-export">Экспортировать результаты</button></div>
+      <div id="claim-panel-options" role="tabpanel" aria-labelledby="claim-tab-options" class="claim-view" hidden><h4>Магазины и расписание</h4><div class="claim-mode-switch"><label><input type="checkbox" id="auto-claim-dry_run"> Пробный запуск без получения</label><small class="muted">В пробном режиме игры не добавляются в библиотеку.</small></div>      <div class="auto-claim-controls">
+        <label><input type="checkbox" id="auto-claim-enabled"> Получать автоматически</label>
+        <label><input type="checkbox" id="auto-claim-steam"> Steam</label>
+        <label><input type="checkbox" id="auto-claim-epic"> Epic Games</label>
+        <label>Проверять каждые <select id="auto-claim-interval"><option value="15">15 минут</option><option value="30">30 минут</option><option value="60">1 час</option><option value="180">3 часа</option><option value="360">6 часов</option><option value="1440">24 часа</option></select></label>
+      </div>
+      <div id="auto-claim-platforms" class="auto-claim-controls"></div>
+      <div class="claim-browser-preferences">
+        <label>Браузер магазина <select id="auto-claim-browser_name"><option value="auto">Как в Windows · Chrome или Edge</option><option value="chrome">Google Chrome</option><option value="edge">Microsoft Edge</option></select></label>
+        <label><input type="checkbox" id="auto-claim-browser_visible"> Разрешить окна при автоматическом получении</label>
+        <p class="muted small-text">Когда выключено, обычные проверки и расписание работают в фоне через API и скрытый браузер: SWCH не запускает управление Epic Launcher. При необходимости входа или CAPTCHA появится причина остановки; окно открывается только по отдельной кнопке. Для каждого аккаунта сохраняется отдельный профиль. При смене Chrome на Edge потребуется новый вход.</p>
+      </div>
+      <div class="claim-browser-preferences">
+        <label><input type="checkbox" id="auto-claim-epic_launcher_claims"> Epic через официальный лаунчер · экспериментально</label>
+        <p class="muted small-text">При отказе API SWCH попробует получить игру в окне Epic Launcher по сохранённому входу, если окна разрешены. В фоновом режиме этот способ запускается только кнопкой «Получить через Epic Launcher» у аккаунта. Нужен Windows OCR en-US и английский интерфейс магазина. Оставь окно в фокусе и не пользуйся мышью и клавиатурой во время оформления. Аккаунты могут переключаться; при запущенной игре, проверке безопасности или неясной цене получение остановится. Успех подтверждается лицензией.</p>
+      </div>
+      <details><summary>Расписание и параметры</summary><div class="auto-claim-controls">
+        <label>Расписание <select id="auto-claim-schedule_mode"><option value="interval">Через интервал</option><option value="daily">Ежедневно</option><option value="combined">Интервал и ежедневно</option></select></label>
+        <label>Время через запятую <input id="auto-claim-daily_times" placeholder="10:00, 20:00"></label>
+        <label>Часовой пояс <input id="auto-claim-timezone" placeholder="local или Europe/Minsk"></label>
+        <label><input type="checkbox" id="auto-claim-run_on_startup"> Проверять при запуске SWCH</label>
+        <label><input type="checkbox" id="auto-claim-gamerpower"> Дополнительные раздачи GamerPower</label>
+        <label><input type="checkbox" id="auto-claim-epic_mobile"> Мобильные раздачи Epic</label>
+        <label><input type="checkbox" id="auto-claim-browser_enabled"> Оформлять через браузер при необходимости</label>
+        <label><input type="checkbox" id="auto-claim-notifications"> Уведомлять о новых результатах на этом устройстве</label>
+        <label><input type="checkbox" id="auto-claim-steamdb"> Дополнительный поиск SteamDB (при недоступности продолжать поиск Steam)</label>
+        <label><input type="checkbox" id="auto-claim-external_notifications"> Отправлять сводку в подключённые внешние каналы</label>
+        <label>Повторы при сбое сети <input type="number" id="auto-claim-retry_attempts" min="0" max="5"></label>
+        <label>Пауза между повторами, секунд <input type="number" id="auto-claim-retry_backoff_seconds" min="0" max="300"></label>
+        <label>Ожидание входа, секунд <input type="number" id="auto-claim-browser_login_timeout_seconds" min="15" max="600"></label>
+        <label>Ожидание оформления, секунд <input type="number" id="auto-claim-browser_operation_timeout_seconds" min="15" max="600"></label>
+      </div></details>
+      <details id="claim-notify-panel"><summary>Внешние уведомления</summary>
+        <p class="muted small-text">Сводка содержит число полученных игр, ключей и ошибок. Адреса и секреты сохраняются только в хранилище Windows. Пустые поля сохраняют предыдущие каналы.</p>
+        <p id="claim-notify-status" class="muted small-text"></p>
+        <label>Discord webhook <input id="claim-notify-discord" type="password" autocomplete="off"></label>
+        <label>Другой HTTPS webhook <input id="claim-notify-webhook" type="password" autocomplete="off"></label>
+        <label>Telegram bot token <input id="claim-notify-token" type="password" autocomplete="off"></label>
+        <label>Telegram chat ID <input id="claim-notify-chat" type="text" autocomplete="off"></label>
+        <label>SMTP сервер <input id="claim-notify-host" type="text" autocomplete="off"></label>
+        <label>SMTP порт <select id="claim-notify-port"><option value="465">465 · TLS</option><option value="587">587 · STARTTLS</option></select></label>
+        <label>SMTP логин <input id="claim-notify-user" type="text" autocomplete="off"></label>
+        <label>SMTP пароль <input id="claim-notify-pass" type="password" autocomplete="off"></label>
+        <label>Email отправителя <input id="claim-notify-from" type="email" autocomplete="off"></label>
+        <label>Email получателя <input id="claim-notify-to" type="email" autocomplete="off"></label>
+        <button type="button" class="text-button" id="claim-notify-save">Сохранить каналы</button>
+        <button type="button" class="text-button" id="claim-notify-clear">Удалить все каналы</button>
+      </details>
+<small class="muted">Автоматическая проверка работает, пока запущен сервер SWCH. Дополнительный каталог: <a href="https://www.gamerpower.com/api-read" target="_blank" rel="noopener noreferrer">GamerPower</a>.</small></div>
+    </section>
   </div>
   <p class="dialog-note"><i data-icon="check"></i>Все настройки сохраняются на этом устройстве.</p>
 </dialog>
 <dialog id="connect-dialog" aria-labelledby="connect-title">
-  <div class="dialog-header"><div><h2 id="connect-title">Подключить аккаунт</h2><p class="muted">Твои игры и профили в одном месте.</p></div><button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button></div>
-  <section class="steam-connect"><h3>Steam</h3><p class="muted">Профили из клиента Steam доступны автоматически. Обнови онлайн-данные для полной библиотеки и семейного доступа.</p>
-    <form id="steam-sync-form"><label>Аккаунт<select id="steam-sync-account" required></select></label><label>Steam Web API key<input id="steam-api-key" type="password" autocomplete="off" placeholder="Ключ для собственной библиотеки"></label><details><summary>Семейный доступ</summary><label>Токен веб-сессии Steam<input id="steam-access-token" type="password" autocomplete="off" placeholder="Токен для Steam Families"></label></details><p class="muted small-text">Ключ и токен не сохраняются. Закрытые данные могут быть недоступны.</p><p class="error-text" id="steam-sync-error" role="alert"></p><button class="primary" type="submit">Обновить игры и семейный доступ</button></form>
-  </section>
-  <section class="riot-connect"><h3>Riot Games</h3><p class="muted">Установленные игры определяются локально. Вход и смена аккаунта выполняются в Riot Client. TFT доступен через League of Legends.</p><button class="secondary" data-action="open-riot">Открыть Riot Client</button><div class="account-actions"><button class="secondary" data-action="sync-riot" data-app="league_of_legends">Обновить профиль LoL</button><button class="secondary" data-action="sync-riot" data-app="valorant">Обновить профиль VALORANT</button></div><p class="muted">Сохраняются скины, персонажи и время доступных матчей текущего аккаунта. Для другого профиля войди в него в клиенте и повтори обновление.</p></section>
-  <section class="epic-connect"><h3>Epic Games</h3><p class="muted"><a id="epic-auth-link" class="text-button" target="_blank" rel="noopener noreferrer">Войти в Epic Games ↗</a></p><form id="login-form"><label>Код авторизации<input id="oauth-code-input" autocomplete="off" required placeholder="Вставь код (authorizationCode) или весь JSON"></label><p id="login-error" class="error-text" role="alert"></p><button class="primary" type="submit">Подключить Epic Games</button></form></section>
-  <section class="roblox-connect">
-    <h3>Roblox</h3>
-    <p class="muted">Сессии не истекают и сохраняются локально. Профили из установленного клиента и браузеров (Chrome, Edge, Brave, Opera, Firefox) находятся автоматически.</p>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="primary" type="button" data-action="scan-roblox"><i data-icon="refresh"></i>Авто-поиск аккаунтов Roblox</button>
-      <button class="secondary" type="button" data-action="open-roblox-place-dialog"><i data-icon="plus"></i>Добавить плейс по Place ID</button>
+  <div class="dialog-header">
+    <div>
+      <h2 id="connect-title">Управление аккаунтами</h2>
+      <p class="muted">Единый хаб: переключение профилей, синхронизация и hot-swap сессий.</p>
     </div>
-    <p id="roblox-scan-status" class="small-text" style="margin-top:4px;"></p>
-    <details style="margin-top:12px;">
-      <summary style="cursor:pointer; color:var(--text-secondary, #a0a0a0); font-size:13px;">Добавить аккаунт вручную через .ROBLOSECURITY</summary>
-      <form id="roblox-manual-form" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
-        <label>Cookie .ROBLOSECURITY
-          <input id="roblox-cookie-input" type="password" autocomplete="off" placeholder="_|WARNING:-DO-NOT-SHARE-THIS... или чистое значение куки" required>
-        </label>
-        <p class="muted small-text">Куки шифруются и хранятся исключительно в твоей локальной базе данных.</p>
-        <p class="error-text" id="roblox-manual-error" role="alert"></p>
-        <button class="secondary" type="submit">Добавить в SWCH</button>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+
+  <nav class="connect-tabs-nav" aria-label="Лаунчеры">
+    <button type="button" class="connect-tab-btn active" data-tab="steam">
+      <span class="tab-label">Steam</span>
+      <span class="tab-badge" id="steam-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="epic">
+      <span class="tab-label">Epic Games</span>
+      <span class="tab-badge" id="epic-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="riot">
+      <span class="tab-label">Riot Games</span>
+      <span class="tab-badge" id="riot-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="roblox">
+      <span class="tab-label">Roblox</span>
+      <span class="tab-badge" id="roblox-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="minecraft">
+      <span class="tab-label">Minecraft</span>
+      <span class="tab-badge" id="minecraft-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="ubisoft">
+      <span class="tab-label">Ubisoft Connect</span>
+      <span class="tab-badge" id="ubisoft-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="gog">
+      <span class="tab-label">GOG GALAXY</span><span class="tab-badge" id="gog-tab-badge">0</span>
+    </button>
+    <button type="button" class="connect-tab-btn" data-tab="hoyoverse">
+      <span class="tab-label">HoYoverse</span><span class="tab-badge" id="hoyoverse-tab-badge">0</span>
+    </button>
+  </nav>
+
+  <div class="connect-tabs-content">
+    <div class="connect-tab-pane" data-pane="gog">
+      <div class="connect-status-card"><span class="status-indicator-dot" id="gog-status-dot"></span><div class="status-card-info"><strong>GOG GALAXY</strong><p class="muted small-text" id="gog-status-description">Подключи аккаунты GOG, чтобы увидеть купленные игры.</p></div></div>
+      <div class="connect-info-box"><p class="small-text">Открой вход GOG в браузере. После входа скопируй полный адрес страницы on_login_success и вставь ниже. Для другого аккаунта выйди из GOG в браузере и повтори вход.</p></div>
+      <div class="account-actions"><button class="primary" type="button" data-action="gog-auth">Войти в GOG в браузере</button><button class="secondary" type="button" data-action="open-gog">Открыть GOG GALAXY</button></div>
+      <form id="gog-login-form" class="gog-login-form">
+        <label>Адрес после входа или код авторизации<input id="gog-code" type="password" autocomplete="off" maxlength="8192" required placeholder="https://embed.gog.com/on_login_success?…"></label>
+        <button class="primary" type="submit">Подключить аккаунт GOG</button>
+        <p id="gog-login-error" class="error-text" role="alert"></p>
       </form>
-    </details>
-  </section>
-  <section class="minecraft-connect">
-    <h3>Minecraft</h3>
-    <p class="muted">Официальный лаунчер Minecraft (Java Edition). Профили, аккаунты Microsoft/Mojang и серверы находятся автоматически.</p>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="primary" type="button" data-action="scan-minecraft"><i data-icon="refresh"></i>Авто-поиск аккаунтов Minecraft</button>
-      <button class="secondary" type="button" data-action="open-minecraft-server-dialog"><i data-icon="plus"></i>Добавить сервер</button>
-      <button class="secondary" type="button" data-action="import-minecraft-servers"><i data-icon="download"></i>Импорт из servers.dat</button>
+      <p class="muted small-text">SWCH сохраняет доступ в системном хранилище и хранит библиотеку каждого аккаунта. Кнопка «Войти в GALAXY» переключает вход в официальном клиенте. Перед переключением заверши игру. Если GOG отозвал вход, подключи аккаунт заново. Переключение и запуск игр поддерживаются на Windows.</p>
     </div>
-    <p id="minecraft-scan-status" class="small-text" style="margin-top:4px;"></p>
-  </section>
+    <div class="connect-tab-pane" data-pane="ubisoft">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot" id="ubisoft-status-dot"></span>
+        <div class="status-card-info"><strong>Ubisoft Connect</strong>
+          <p class="muted small-text" id="ubisoft-status-description">Установленные игры и сохранённые аккаунты на Windows.</p>
+        </div>
+      </div>
+      <div class="connect-info-box"><p class="small-text">Нажми «Добавить аккаунт Ubisoft» и войди в открывшемся клиенте с «Запомнить меня». Имя и сессия сохранятся автоматически. Текущий аккаунт SWCH сохранит перед новым входом. Перед переключением заверши игру.</p></div>
+      <div class="account-actions"><button class="primary" type="button" data-action="prepare-ubisoft">Добавить аккаунт Ubisoft</button><button class="secondary" type="button" data-action="open-ubisoft">Открыть текущий аккаунт</button><button class="secondary" type="button" data-action="cancel-ubisoft-login" hidden>Отменить</button></div>
+      <p id="ubisoft-login-step" class="muted small-text" aria-live="polite">После входа аккаунт появится в SWCH автоматически.</p>
+      <p id="ubisoft-session-error" class="error-text" role="alert"></p>
+      <details class="account-management"><summary>Имя и ручное сохранение</summary>
+      <form id="ubisoft-session-form" class="ubisoft-session-form">
+        <label>Название аккаунта<input id="ubisoft-account-name" maxlength="100" placeholder="Определяется автоматически"></label>
+        <p id="ubisoft-name-status" class="muted small-text" aria-live="polite">Имя из Ubisoft Connect заполнится автоматически. Его можно изменить.</p>
+        <button class="primary" type="submit">Сохранить текущую сессию</button>
+      </form>
+      </details>
+      <p class="muted small-text">Библиотека показывает установленные на компьютере игры. Ubisoft Connect проверит доступ выбранного аккаунта. Если сохранённый вход истёк, войди снова и повтори сохранение сессии.</p>
+    </div>
+    <!-- HoYoverse Tab -->
+    <div class="connect-tab-pane" data-pane="hoyoverse">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot online" id="hoyoverse-status-dot"></span>
+        <div class="status-card-info">
+          <strong>HoYoverse / miHoYo</strong>
+          <p class="muted small-text" id="hoyoverse-status-description">Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Honkai Impact 3rd, HoYoPlay.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">💡 <strong>Быстрая смена аккаунтов (Hot-Swap):</strong><br>
+        1. Выберите игру и выполните вход в клиенте.<br>
+        2. Нажмите «Сохранить текущий аккаунт» — SWCH зафиксирует сессию.<br>
+        3. Для входа в другой аккаунт нажмите «Подготовить чистый вход», авторизуйтесь и сохраните его. Переключение происходит в 1 клик!</p>
+      </div>
+      <section class="hoyoverse-connect">
+        <label>Игра HoYoverse
+          <select id="hoyo-game-select">
+            <option value="genshin">Genshin Impact (原神)</option>
+            <option value="starrail">Honkai: Star Rail (崩坏：星穹铁道)</option>
+            <option value="zzz">Zenless Zone Zero (绝区零)</option>
+            <option value="honkai3rd">Honkai Impact 3rd (崩坏3)</option>
+            <option value="hoyoplay">HoYoPlay (Единый лаунчер)</option>
+          </select>
+        </label>
+        <div class="account-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="primary" type="button" data-action="save-hoyoverse-session">Сохранить текущий аккаунт</button>
+          <button class="secondary" type="button" data-action="prepare-hoyoverse-login">Подготовить чистый вход</button>
+          <button class="secondary" type="button" data-action="open-hoyoverse">Открыть HoYoPlay</button>
+        </div>
+        <form id="hoyoverse-session-form" style="margin-top:12px;">
+          <label>Имя профиля в SWCH (необязательно)
+            <input id="hoyoverse-account-name" maxlength="100" placeholder="Например: Основа Европа / Твинк 701234567">
+          </label>
+        </form>
+        <p id="hoyoverse-status-info" class="muted small-text" style="margin-top:8px;">Сессии шифруются и хранятся локально на вашем компьютере.</p>
+      </section>
+    </div>
+    <!-- Steam Tab -->
+    <div class="connect-tab-pane active" data-pane="steam">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot online"></span>
+        <div class="status-card-info">
+          <strong id="steam-status-title">Клиент Steam</strong>
+          <p class="muted small-text" id="steam-status-desc">Все найденные аккаунты сохраняются навсегда в базе данных swch.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">💡 <strong>Как это работает:</strong> swch читает сохраненные на компьютере профили Steam и sentry-файлы (ssfn), позволяя переключаться между ними в один клик без повторного ввода паролей и подтверждений.</p>
+      </div>
+      <section class="steam-connect">
+        <h4>Синхронизация и Семейный доступ</h4>
+        <form id="steam-sync-form">
+          <label>Аккаунт
+            <select id="steam-sync-account" required></select>
+          </label>
+          <label>Steam Web API key
+            <input id="steam-api-key" type="password" autocomplete="off" placeholder="Ключ для собственной библиотеки (необязательно)">
+          </label>
+          <details>
+            <summary>Семейный доступ (Steam Families)</summary>
+            <label>Токен веб-сессии Steam
+              <input id="steam-access-token" type="password" autocomplete="off" placeholder="Токен доступа">
+            </label>
+          </details>
+          <p class="muted small-text">Ключ и токен не сохраняются на сервере. Закрытые данные профиля могут быть недоступны без ключа.</p>
+          <p class="error-text" id="steam-sync-error" role="alert"></p>
+          <button class="primary" type="submit">Обновить игры и семейный доступ</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- Epic Games Tab -->
+    <div class="connect-tab-pane" data-pane="epic">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot" id="epic-status-dot"></span>
+        <div class="status-card-info">
+          <strong id="epic-status-title">Epic Games Store</strong>
+          <p class="muted small-text" id="epic-connect-status-desc">Вход в обычном браузере с твоими аккаунтами и автозаполнением.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">Войди в Epic Games в отдельном окне браузера по умолчанию. Расширение SWCH добавит аккаунт автоматически. При первом входе откроется инструкция установки расширения.</p>
+      </div>
+      <section class="epic-connect">
+        <div class="epic-auth-action-row" style="margin-bottom: 16px;">
+          <button type="button" class="primary" id="open-epic-browser-btn" style="width: 100%;">
+            Войти в Epic Games ↗
+          </button>
+          <a id="epic-auth-link" class="text-button small-text" target="_blank" rel="noopener noreferrer" style="display:none;">Альтернативная ссылка</a>
+        </div>
+        <div id="epic-browser-progress" hidden style="margin-bottom:16px;">
+          <p id="epic-browser-status" class="muted" role="status" aria-live="polite"></p>
+          <button type="button" id="cancel-epic-browser-btn" class="text-button small-text">Отменить вход</button>
+          <a id="epic-browser-return" class="text-button small-text" target="_blank" rel="noopener noreferrer" hidden>Открыть страницу входа</a>
+        </div>
+        <details id="epic-manual-login">
+          <summary class="text-button small-text">Подключить по коду без расширения</summary>
+          <p class="muted small-text" style="margin-top:12px;">Открой страницу Epic, войди и вставь полученный код или весь JSON-ответ.</p>
+          <button type="button" id="epic-manual-browser-btn" class="secondary" style="margin-top:12px;">Открыть страницу Epic</button>
+        <form id="login-form">
+          <label>Код авторизации
+            <input id="oauth-code-input" autocomplete="off" required placeholder="Вставь authorizationCode или весь JSON ответ">
+          </label>
+          <button class="primary" type="submit">Подключить Epic Games</button>
+        </form>
+        </details>
+        <p id="login-error" class="error-text" role="alert" style="margin-top:12px;"></p>
+      </section>
+    </div>
+
+    <!-- Riot Games Tab -->
+    <div class="connect-tab-pane" data-pane="riot">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot" id="riot-status-dot"></span>
+        <div class="status-card-info">
+          <strong id="riot-status-title">Riot Client</strong>
+          <p class="muted small-text" id="riot-connect-status-desc">Определяется локальная сессия из конфигураций клиента.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">💡 <strong>Как подключить и сменить аккаунт:</strong><br>
+        1. Нажми «Открыть Riot Client» и выполни вход в нужный аккаунт.<br>
+        2. Вернись в swch и нажми «Сохранить текущую сессию» — профиль будет сохранен для быстрого переключения в 1 клик!</p>
+      </div>
+      <section class="riot-connect">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+          <button class="secondary" type="button" data-action="open-riot">
+            1. Открыть Riot Client
+          </button>
+          <button class="primary" type="button" data-action="save-riot-session">
+            2. Сохранить текущую сессию
+          </button>
+        </div>
+        <h4>Синхронизация коллекций</h4>
+        <div class="account-actions">
+          <button class="secondary" type="button" data-action="sync-riot" data-app="league_of_legends">Обновить профиль LoL</button>
+          <button class="secondary" type="button" data-action="sync-riot" data-app="valorant">Обновить профиль VALORANT</button>
+        </div>
+        <p class="muted small-text" style="margin-top: 10px;">Синхронизируются скины, персонажи и история матчей. Для добавления другого аккаунта войди в него в Riot Client и повтори сохранение сессии.</p>
+      </section>
+    </div>
+
+    <!-- Roblox Tab -->
+    <div class="connect-tab-pane" data-pane="roblox">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot online"></span>
+        <div class="status-card-info">
+          <strong>Roblox</strong>
+          <p class="muted small-text">Сессии из браузеров и клиента находятся автоматически.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">💡 <strong>Безопасность:</strong> Сессии шифруются и хранятся локально в базе данных твоего устройства и никогда не передаются третьим лицам.</p>
+      </div>
+      <section class="roblox-connect">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+          <button class="primary" type="button" data-action="scan-roblox"><i data-icon="refresh"></i>Авто-поиск аккаунтов Roblox</button>
+          <button class="secondary" type="button" data-action="open-roblox-place-dialog"><i data-icon="plus"></i>Добавить плейс по Place ID</button>
+        </div>
+        <p id="roblox-scan-status" class="small-text" style="margin-top:4px;"></p>
+        <details style="margin-top:12px;">
+          <summary style="cursor:pointer; color:var(--text-secondary, #a0a0a0); font-size:13px;">Добавить аккаунт вручную через .ROBLOSECURITY</summary>
+          <form id="roblox-manual-form" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+            <label>Cookie .ROBLOSECURITY
+              <input id="roblox-cookie-input" type="password" autocomplete="off" placeholder="_|WARNING:-DO-NOT-SHARE-THIS... или чистое значение куки" required>
+            </label>
+            <p class="error-text" id="roblox-manual-error" role="alert"></p>
+            <button class="secondary" type="submit">Добавить в SWCH</button>
+          </form>
+        </details>
+      </section>
+    </div>
+
+    <!-- Minecraft Tab -->
+    <div class="connect-tab-pane" data-pane="minecraft">
+      <div class="connect-status-card">
+        <span class="status-indicator-dot online"></span>
+        <div class="status-card-info">
+          <strong>Minecraft (Java Edition)</strong>
+          <p class="muted small-text">Официальный лаунчер, T-Launcher, аккаунты Microsoft/Mojang/Офлайн и серверы.</p>
+        </div>
+      </div>
+      <div class="connect-info-box">
+        <p class="small-text">💡 <strong>Подключение:</strong> swch обнаруживает установленные версии, профили, миры и сервера из <code>.minecraft</code> и <code>.tlauncher</code>, а также поддерживает добавление никнеймов без паролей.</p>
+      </div>
+      <section class="minecraft-connect">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+          <button class="primary" type="button" data-action="scan-minecraft"><i data-icon="refresh"></i>Авто-поиск Minecraft / T-Launcher</button>
+          <button class="secondary" type="button" data-action="open-minecraft-account-dialog"><i data-icon="plus"></i>Добавить T-Launcher / Никнейм</button>
+          <button class="secondary" type="button" data-action="open-minecraft-server-dialog"><i data-icon="plus"></i>Добавить сервер</button>
+          <button class="secondary" type="button" data-action="import-minecraft-servers"><i data-icon="download"></i>Импорт из servers.dat</button>
+        </div>
+        <p id="minecraft-scan-status" class="small-text" style="margin-top:4px;"></p>
+      </section>
+    </div>
+  </div>
 </dialog>
 <dialog id="roblox-place-dialog" aria-labelledby="roblox-place-title">
   <div class="dialog-header">
@@ -307,7 +646,8 @@
         <button type="button" class="secondary" id="restr-add-game-btn">+ Добавить игру</button>
       </div>
       <div class="custom-game-ban-row">
-        <input type="text" id="restr-custom-name" placeholder="Или введи название вручную">
+        <input type="text" id="restr-custom-name" list="restr-account-games" autocomplete="off" placeholder="Начни вводить название игры">
+        <datalist id="restr-account-games"></datalist>
         <input type="text" id="restr-custom-appid" placeholder="AppID (напр. 730)" style="max-width:130px">
         <button type="button" class="secondary" id="restr-add-custom-btn">Добавить</button>
       </div>
@@ -389,12 +729,19 @@
   <div class="dialog-header">
     <div>
       <h2 id="minecraft-launch-title">Запуск Minecraft: Java Edition</h2>
-      <p class="muted" id="minecraft-launch-subtitle">Выбор профиля, аккаунта и режима запуска</p>
+      <p class="muted" id="minecraft-launch-subtitle">Выбор профиля, аккаунта и лаунчера</p>
     </div>
     <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
   </div>
   <form id="minecraft-launch-form" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
     <input type="hidden" id="minecraft-launch-server-ip" name="quick_play_server">
+    <label>Клиент лаунчера
+      <select id="minecraft-launch-launcher-select" name="launcher_client">
+        <option value="auto">Автовыбор (по типу аккаунта)</option>
+        <option value="official">Официальный Minecraft Launcher</option>
+        <option value="tlauncher">T-Launcher</option>
+      </select>
+    </label>
     <label>Аккаунт
       <select id="minecraft-launch-account-select" name="account_id" required>
         <option value="">Загрузка аккаунтов…</option>
@@ -407,7 +754,7 @@
     </label>
     <label>Режим запуска
       <select id="minecraft-launch-mode-select" name="mode">
-        <option value="official">Официальный лаунчер (с активированным профилем)</option>
+        <option value="official">Лаунчер с активированным профилем</option>
         <option value="direct">Прямой запуск (Direct)</option>
       </select>
     </label>
@@ -445,6 +792,32 @@
     <div class="dialog-actions" style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
       <button class="secondary" type="button" data-close>Отмена</button>
       <button class="primary" type="submit">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="minecraft-account-dialog" aria-labelledby="minecraft-account-title" style="max-width: 480px; width: 100%;">
+  <div class="dialog-header">
+    <div>
+      <h2 id="minecraft-account-title">Добавить аккаунт Minecraft</h2>
+      <p class="muted">T-Launcher / Офлайн никнейм без пароля или Ely.by</p>
+    </div>
+    <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
+  </div>
+  <form id="minecraft-account-form" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+    <label>Никнейм игрока
+      <input id="minecraft-account-username-input" name="username" type="text" placeholder="например, Steve_Pro" required minlength="2" maxlength="24">
+    </label>
+    <label>Тип аккаунта
+      <select id="minecraft-account-type-select" name="account_type">
+        <option value="tlauncher_free">T-Launcher (Бесплатный / Офлайн)</option>
+        <option value="tlauncher_elyby">Ely.by (T-Launcher скины)</option>
+        <option value="tlauncher">T-Launcher</option>
+      </select>
+    </label>
+    <p class="error-text" id="minecraft-account-error" role="alert"></p>
+    <div class="dialog-actions" style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
+      <button class="secondary" type="button" data-close>Отмена</button>
+      <button class="primary" type="submit"><i data-icon="plus"></i> Добавить и переключить</button>
     </div>
   </form>
 </dialog>

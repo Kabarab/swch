@@ -1,6 +1,7 @@
 pub mod profile;
 pub mod valorant;
 pub mod local;
+pub mod session;
 // Local Riot Client integration. Authentication stays in the official client.
 use crate::storage::Game;
 use serde::Serialize;
@@ -141,6 +142,12 @@ pub fn library() -> Library {
         .filter(|id| supported_product(id, std::env::consts::OS))
         .map(|id| {
             let path = game_path(id);
+            let banner = match id {
+                "league_of_legends" => Some("/ui/artwork/league_of_legends.jpg".to_string()),
+                "valorant" => Some("/ui/artwork/valorant-keyart.jpg".to_string()),
+                "bacon" => Some("/ui/artwork/bacon.jpg".to_string()),
+                _ => None,
+            };
             Game {
                 id: format!("riot_{id}"),
                 launcher: "riot".into(),
@@ -150,7 +157,7 @@ pub fn library() -> Library {
                 install_path: path.map(|p| p.to_string_lossy().into_owned()),
                 executable_path: None,
                 size_bytes: 0,
-                banner_url: None,
+                banner_url: banner,
                 launch_uri: None,
                 namespace: None,
             }
@@ -162,7 +169,7 @@ pub fn library() -> Library {
         supported,
         capabilities: Capabilities {
             launch: client_installed,
-            account_switch: false,
+            account_switch: supported,
             cloud_library: false,
             inventory: true,
             profile_sync: supported,
@@ -172,7 +179,7 @@ pub fn library() -> Library {
         } else if !client_installed {
             "Riot Client не найден. Установи официальный клиент или укажи SWCH_RIOT_CLIENT."
         } else {
-            "Вход и выбор аккаунта — в Riot Client. Коллекции и историю матчей обновляй из вошедшего клиента игры. TFT открывается через League of Legends."
+            "Сохранённые аккаунты переключаются автоматически. Для VALORANT Riot Client запускается при обновлении профиля. TFT открывается через League of Legends."
         },
     }
 }

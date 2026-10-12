@@ -1,0 +1,25 @@
+# Build output, bundled application, local tooling and agent metadata
+.graphify-tools/
+graphify-out/
+target/
+target_build/
+target_challenger/
+target_verify/
+target_epic_check/
+output/
+swch.app/
+.git/
+.agent/
+.agents/
+.codex/
+ui/artwork/
+src/webview2/
+# Local credentials and databases are not project source
+.env
+.env.*
+*.pem
+*.key
+*.db
+*.sqlite
+*.sqlite3
+swch_steam_key

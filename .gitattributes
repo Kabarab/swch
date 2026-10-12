@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Language digests must be identical in Windows and macOS/Linux checkouts.
+ui/lang/** text eol=lf

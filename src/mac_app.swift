@@ -34,6 +34,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         checkAndStartBackend()
     }
 
+    // Read the fixed, escaped template persisted by the local backend.
+    func localizedStartupHTML(_ fallback: String, error: Bool) -> String {
+        let directory: URL
+        if let custom = ProcessInfo.processInfo.environment["SWCH_I18N_DIR"] {
+            directory = URL(fileURLWithPath: custom)
+        } else if let config = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            directory = config.appendingPathComponent("swch/i18n")
+        } else { return fallback }
+        guard let active = try? String(contentsOf: directory.appendingPathComponent("active.txt"), encoding: .utf8),
+              active.count == 64,
+              active.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else { return fallback }
+        let selected = directory.appendingPathComponent("versions").appendingPathComponent(active)
+        let file = selected.appendingPathComponent(error ? "error-macos.html" : "loading-macos.html")
+        guard let data = try? Data(contentsOf: file), data.count <= 131072,
+              let html = String(data: data, encoding: .utf8) else { return fallback }
+        return html
+    }
+
     func showLoadingScreen() {
         let html = """
         <!DOCTYPE html>
@@ -58,7 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         </body>
         </html>
         """
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.loadHTMLString(localizedStartupHTML(html, error: false), baseURL: nil)
     }
 
     func checkAndStartBackend() {
@@ -180,7 +198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         </body>
         </html>
         """
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.loadHTMLString(localizedStartupHTML(html, error: true), baseURL: nil)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

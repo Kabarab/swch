@@ -3,6 +3,7 @@ pub mod library;
 pub mod client_launch;
 pub mod remote;
 pub mod game_stats;
+pub mod deadlock_stats;
 pub mod session;
 
 pub use session::{

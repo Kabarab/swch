@@ -61,7 +61,7 @@ async fn snapshot(db: &Database) -> Result<SteamLibrary, ApiError> {
         }
     };
     for account in result.accounts.clone() {
-        for source in ["family", "owned"] {
+        for source in ["family", "owned", "giveaways"] {
             if let Some((json, _)) = db
                 .steam_cache_get(&format!("{source}:{}", account.id))
                 .await
@@ -392,6 +392,42 @@ pub async fn price(
 pub struct GameQuery {
     pub app_id: String,
 }
+#[derive(Deserialize)]
+pub struct ArtworkQuery {
+    pub app_id: String,
+    pub kind: String,
+}
+pub async fn artwork(State(db): State<Database>, Query(query): Query<ArtworkQuery>) -> Result<axum::response::Response, ApiError> {
+    use axum::response::{IntoResponse, Redirect};
+    use crate::launchers::steam::remote::SteamArtwork;
+    if !library::valid_app_id(&query.app_id) || !matches!(query.kind.as_str(), "poster" | "hero") { return Err(invalid()); }
+    let key = format!("artwork:v1:{}", query.app_id);
+    let cached = db.steam_cache_get(&key).await.map_err(internal)?;
+    let read = |cached: &Option<(String, i64)>| cached.as_ref()
+        .and_then(|(json, _)| serde_json::from_str::<SteamArtwork>(json).ok());
+    let mut art = cached.as_ref().filter(|(_, time)| chrono::Utc::now().timestamp() - time < 86400 * 7)
+        .and_then(|_| read(&cached));
+    if art.is_none() {
+        // Coalesce simultaneous poster/hero cache misses and pace public Store requests.
+        static ARTWORK_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        let _guard = ARTWORK_LOCK.lock().await;
+        let newer = db.steam_cache_get(&key).await.map_err(internal)?;
+        art = newer.as_ref().filter(|(_, time)| chrono::Utc::now().timestamp() - time < 86400 * 7)
+            .and_then(|_| read(&newer));
+        if art.is_none() {
+            if let Ok(fresh) = SteamClient::default().artwork(&query.app_id).await {
+                db.steam_cache_put(&key, &serde_json::to_string(&fresh).map_err(internal)?).await.map_err(internal)?;
+                art = Some(fresh);
+            } else { art = read(&cached); }
+        }
+    }
+    let url = art.and_then(|art| if query.kind == "hero" { art.hero.or(art.poster) } else { art.poster.or(art.hero) })
+        .unwrap_or_else(|| format!("https://cdn.akamai.steamstatic.com/steam/apps/{}/{}.jpg", query.app_id,
+            if query.kind == "hero" { "header" } else { "library_600x900" }));
+    let mut response = Redirect::temporary(&url).into_response();
+    response.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static("public, max-age=3600"));
+    Ok(response)
+}
 pub async fn game_details(
     State(db): State<Database>,
     Query(query): Query<GameQuery>,
@@ -538,17 +574,18 @@ pub async fn launch(
             serde_json::json!({"status":"dry_run","account_id":account.id,"switch_required":!account.is_active,"command":command,"update":game.update}),
         ));
     }
-    if !account.is_active {
-        crate::launchers::steam::SteamSessionManager::new()
-            .switch_account(&account.id, Some(&db))
-            .await
-            .map_err(|e| {
-                error(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Не удалось переключить Steam: {e}"),
-                )
-            })?;
-    }
+    // MostRecent identifies the last selected profile, not a logged-in client.
+    // Prepare it even when the library marks it active; the manager can reuse
+    // an authenticated running session without restarting Steam.
+    crate::launchers::steam::SteamSessionManager::new()
+        .switch_account(&account.id, Some(&db))
+        .await
+        .map_err(|e| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Не удалось переключить Steam: {e}"),
+            )
+        })?;
     let skip = std::env::var("SWCH_SKIP_PROCESS_TERMINATION")
         .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     if !skip {
@@ -559,7 +596,7 @@ pub async fn launch(
     }
     Ok(Json(
         serde_json::json!({"status":"requested","account_id":account.id,"update_only":query.update_only,
-        "message":if query.update_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Аккаунт выбран, запуск передан Steam. Если требуется обновление, Steam выполнит его перед запуском. При истёкшей сессии подтверди вход."}}),
+        "message":if query.update_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Запрос на запуск передан Steam для выбранного аккаунта. Steam выполнит обновление перед запуском, если оно требуется. Если Steam запросит вход, подтверди его."}}),
     ))
 }
 
@@ -859,7 +896,7 @@ async fn load_game_stats(
     if !library::valid_steam_id(&q.account_id) || !game_stats::supported(&q.app_id) {
         return Err(invalid());
     }
-    let version = if q.app_id == "1422450" { "v2" } else { "v1" };
+    let version = if q.app_id == "1422450" { "v3" } else { "v1" };
     let cache_key = format!("game-stats:{version}:{}:{}", q.account_id, q.app_id);
     // Serialize fetches and recheck the cache so repeated renders do not amplify requests.
     static STATS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -926,7 +963,7 @@ pub async fn open_api_key() -> Result<Json<serde_json::Value>, ApiError> {
 
 /// User-triggered interactive login; the helper key stays server-side and is used once.
 pub async fn automatic_key_stats(
-    State(db): State<Database>, Query(mut q): Query<GameStatsQuery>,
+    State(db): State<Database>, #[allow(unused_mut)] Query(mut q): Query<GameStatsQuery>,
 ) -> Result<Json<crate::launchers::steam::game_stats::GameStats>, ApiError> {
     if q.app_id != "730" || !library::valid_steam_id(&q.account_id) { return Err(invalid()); }
     #[cfg(not(target_os = "macos"))]

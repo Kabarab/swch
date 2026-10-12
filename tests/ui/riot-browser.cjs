@@ -1,3 +1,4 @@
+const {emptyApi,launchOptions}=require('./harness.cjs');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -9,58 +10,123 @@ const http=require('node:http');
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  let browser;
  try {
- browser=await chromium.launch({channel:'chrome',headless:true});
+ browser=await chromium.launch(launchOptions);
  const page=await browser.newPage();let installed=true;const writes=[],errors=[];
  const section=value=>({value,updated_at:'2026-09-21T12:00:00Z',error:null});
  const profiles=[
  {account_id:'riot_one',app_id:'league_of_legends',display_name:'One#EU',level:10,has_play_history:true,synced_at:'2026-09-21T12:00:00Z',skins:section([{id:'1001',name:'One skin'}]),champions:section([{id:'1',name:'Annie'}]),playtime:section({seconds:3600,matches:2})},
- {account_id:'riot_two',app_id:'league_of_legends',display_name:'Two#EU',level:1,has_play_history:false,synced_at:'2026-09-21T12:00:00Z',skins:section([{id:'2001',name:'Two skin'}]),champions:section([]),playtime:section({seconds:0,matches:0})}
+ {account_id:'riot_two',app_id:'league_of_legends',display_name:'Two#EU',level:1,has_play_history:false,synced_at:'2026-09-21T12:00:00Z',skins:section([{id:'2001',name:'Two skin'}]),champions:section([]),playtime:section({seconds:0,matches:0})},
+ {account_id:'riot_one',app_id:'valorant',display_name:'One#EU',level:163,has_play_history:true,synced_at:'2026-10-04T12:00:00Z',skins:section([{id:'v1',name:'Valorant skin'}]),champions:section([{id:'jett',name:'Jett',image_url:'/ui/artwork/valorant-keyart.jpg'},{id:'sage',name:'Sage',image_url:'/ui/artwork/valorant-keyart.jpg'}]),buddies:section([{id:'buddy1',name:'Gun buddy',image_url:'/ui/artwork/valorant-keyart.jpg'}]),playtime:section({seconds:100,matches:1}),ranked:section({rank:'Diamond 1',rating:42,eligibility:true,note:'Доступ по уровню'})}
  ];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/api/**',async route=>{
-  const req=route.request(),url=new URL(req.url());let data={};
+  const req=route.request(),url=new URL(req.url());let data=emptyApi(url.pathname);
   if(url.pathname==='/api/riot/accounts')data={profiles};
-  else if(req.method()==='POST'){writes.push([url.pathname,req.postDataJSON()]);data=url.pathname==='/api/riot/accounts/sync'?{profiles}:{message:'Запрос передан Riot Client.'};}
-  else if(url.pathname==='/api/riot/library')data={games:[{id:'riot_league_of_legends',app_id:'league_of_legends',name:'League of Legends',launcher:'riot',is_installed:false}],client_installed:installed,capabilities:{launch:installed},message:installed?'Вход в Riot Client':'Riot Client не найден'};
+  else if(req.method()==='POST'){
+   const body=req.postDataJSON();writes.push([url.pathname,body]);
+   if(url.pathname==='/api/riot/accounts/remove'){
+    for(let index=profiles.length-1;index>=0;index--)if(profiles[index].account_id===body.account_id)profiles.splice(index,1);
+   }
+   data=url.pathname==='/api/riot/accounts/sync'?{profiles}:{message:'Запрос передан Riot Client.'};
+  }
+  else if(url.pathname==='/api/riot/library')data={games:[{id:'riot_league_of_legends',app_id:'league_of_legends',name:'League of Legends',launcher:'riot',is_installed:false},{id:'riot_valorant',app_id:'valorant',name:'VALORANT',launcher:'riot',is_installed:true,banner_url:'/ui/artwork/valorant-keyart.jpg'}],client_installed:installed,capabilities:{launch:installed},message:installed?'Вход в Riot Client':'Riot Client не найден'};
   else if(url.pathname==='/api/steam/library')data={games:[],accounts:[],warnings:[]};
   else if(url.pathname==='/api/epic/accounts')data={accounts:[]};
   else if(url.pathname==='/api/accounts/restrictions')data={restrictions:[]};
   await route.fulfill({json:data});
  });
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
- await page.locator('#riot-count').filter({hasText:'1'}).waitFor();
+ await page.locator('#riot-count').filter({hasText:'2'}).waitFor();
  await page.locator('[data-platform="riot"]').click();
+ await page.locator('[data-layout="detail"]').click();
+ await page.locator('[data-action="select-game"][data-game="riot:league_of_legends"]').click();
+ const launchResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/riot/launch');
  await page.getByRole('button',{name:'Установить / открыть',exact:true}).click();
+ await launchResponse;
  await page.waitForFunction(()=>!document.querySelector('.hero button').disabled);
- assert.deepEqual(writes,[['/api/riot/launch',{app_id:'league_of_legends'}]]);
+ assert.deepEqual(writes,[['/api/riot/switch-account',{account_id:'riot_one',display_name:'One#EU',launch:false}],['/api/riot/launch',{app_id:'league_of_legends'}]]);
  await page.getByRole('button',{name:'Открыть Riot Client',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('.hero button').disabled);
- assert.equal(writes[1][0],'/api/riot/open-launcher');
+ assert.equal(writes[2][0],'/api/riot/open-launcher');
  installed=false;
  await page.locator('.page-heading-actions [data-action="refresh"]').click();
  await page.getByRole('button',{name:'Нужен Riot Client',exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Нужен Riot Client',exact:true}).isDisabled(),true);
  assert.deepEqual(errors,[]);
- // A positive history associates only the correct account with the game.
  assert.equal(await page.locator('.riot-profile').count(),1);
- assert.match(await page.locator('.riot-profile').innerText(),/One#EU/);
- assert.ok(!(await page.locator('.riot-profile').innerText()).includes('Two#EU'));
+ assert.equal(await page.locator('.riot-profile').filter({hasText:'One#EU'}).count(),1);
+ assert.equal(await page.locator('.riot-profile').filter({hasText:'Two#EU'}).count(),0);
+ await page.locator('[data-action="select-riot-game-account"][data-account="riot_two"]').click();
+ assert.equal(await page.locator('.riot-profile').filter({hasText:'Two#EU'}).count(),1);
+ assert.equal(await page.locator('.riot-profile').filter({hasText:'One#EU'}).count(),0);
+ await page.locator('[data-action="select-game"][data-game="riot:valorant"]').click();
+ assert.match(await page.locator('.riot-profile').innerText(),/Diamond 1 · 42 RR/);
+ await page.locator('.riot-agent-list summary').click();
+ assert.match(await page.locator('.riot-agent-list').innerText(),/Jett/);
+  assert.equal(await page.locator('.riot-agent-list .riot-character img').count(),2,'Agents must have portraits');
+ assert.equal(await page.locator('.game-accounts [data-action="riot-collection"]').count(),0);
+ await page.waitForFunction(()=>[...document.querySelectorAll('.game-list img')].some(img=>img.src.includes('valorant-keyart')&&img.naturalWidth>0));
  await page.locator('[data-page="accounts"]').click();
  assert.equal(await page.locator('.riot-account').count(),2);
- await page.locator('#accounts-view > .riot-profile [data-app="league_of_legends"]').click();
- await page.waitForFunction(()=>!document.querySelector('#accounts-view > .riot-profile [data-app="league_of_legends"]').disabled);
+ await page.locator('.accounts-service').filter({hasText:'Сессия и обновление'}).locator(':scope > summary').click();
+ await page.locator('.accounts-service .riot-profile [data-app="league_of_legends"]').click();
+ await page.waitForFunction(()=>!document.querySelector('.accounts-service .riot-profile [data-app="league_of_legends"]').disabled);
  assert.deepEqual(writes.at(-1),['/api/riot/accounts/sync',{app_id:'league_of_legends'}]);
  assert.equal(await page.locator('.riot-account').count(),2);
- await page.locator('.riot-account').filter({hasText:'One#EU'}).getByRole('button',{name:'Скины и персонажи'}).click();
- assert.match(await page.locator('#riot-collection-dialog').innerText(),/One skin/);
- assert.ok(!(await page.locator('#riot-collection-dialog').innerText()).includes('Two skin'));
- await page.locator('#riot-collection-dialog [data-close]').click();
- await page.locator('.riot-account').filter({hasText:'Two#EU'}).getByRole('button',{name:'Скины и персонажи'}).click();
- assert.match(await page.locator('#riot-collection-dialog').innerText(),/Two skin/);
+ await page.locator('.riot-account').filter({hasText:'One#EU'}).locator('.account-management > summary').click();
+ await page.locator('.riot-account').filter({hasText:'One#EU'}).getByRole('button',{name:'Скины в инвентаре · League of Legends',exact:true}).click();
+ assert.equal(await page.locator('#riot-inventory-kind').inputValue(),'all');
+ await page.locator('#riot-inventory-kind').selectOption('skins');
+ assert.match(await page.locator('#riot-inventory-content').innerText(),/One skin/);
+ assert.ok(!(await page.locator('#riot-inventory-content').innerText()).includes('Two skin'));
+ await page.locator('#riot-inventory-account').selectOption('riot_two');
+ assert.match(await page.locator('#riot-inventory-content').innerText(),/Two skin/);
+ assert.ok(!(await page.locator('#riot-inventory-content').innerText()).includes('One skin'));
+ await page.locator('#riot-inventory-account').selectOption('all');
+ assert.equal(await page.locator('[data-riot-owner]').count(),2);
+ await page.locator('#riot-inventory-search').fill('One');
+ assert.equal(await page.locator('[data-riot-owner]').count(),1);
+ await page.locator('#riot-inventory-game').selectOption('valorant');
+ await page.locator('[data-disclosure="riot-inventory-accounts"] > summary').click();
+  assert.equal(await page.locator('[data-riot-inventory-account]').count(),2,'All connected accounts must be visible even without a game profile');
+  assert.match(await page.locator('[data-riot-inventory-account="riot_two"]').innerText(),/Данные ещё не загружены/);
+  assert.equal(await page.getByRole('button',{name:'Обновить все аккаунты',exact:true}).count(),1);
+  assert.match(await page.locator('#inventory-view').innerText(),/Устанавливать и запускать VALORANT не нужно/);
+ assert.equal(await page.locator('#riot-inventory-kind').inputValue(),'all');
+ assert.equal(await page.locator('[data-riot-owner]').count(),4);
+ await page.locator('#riot-inventory-kind').selectOption('skins');
+ assert.equal(await page.locator('[data-riot-owner]').count(),1);
+ assert.match(await page.locator('#riot-inventory-content').innerText(),/Valorant skin/);
+ assert.ok(!(await page.locator('#riot-inventory-content').innerText()).includes('One skin'));
+  await page.locator('#riot-inventory-kind').selectOption('buddies');
+  assert.match(await page.locator('#riot-inventory-content').innerText(),/Gun buddy/);
+  assert.equal(await page.locator('#riot-inventory-content img').count(),1);
+  assert.ok(!(await page.locator('#riot-inventory-content').innerText()).includes('Valorant skin'));
+  await page.locator('#riot-inventory-kind').selectOption('champions');
+  assert.equal(await page.locator('#riot-inventory-content img').count(),2);
+  assert.match(await page.locator('#riot-inventory-content').innerText(),/Sage/);
+  await page.locator('#riot-inventory-kind').selectOption('buddies');
+ await page.locator('#riot-inventory-game').selectOption('league_of_legends');
+  assert.equal(await page.locator('#riot-inventory-kind').inputValue(),'all','Changing game resets to the full collection');
+ await page.locator('#riot-inventory-kind').selectOption('skins');
+ assert.equal(await page.locator('[data-riot-owner]').count(),2);
+ assert.equal(await page.locator('.riot-inventory-profile[open]').count(),0,'Account statistics should start collapsed');
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('[data-disclosure="riot-inventory-accounts"] > summary').click();
+ await page.locator('.riot-inventory-accounts').scrollIntoViewIfNeeded();
+ await page.screenshot({path:path.join(root,'output/inventory-layout-riot.png')});
  await page.setViewportSize({width:390,height:844});
- assert.ok(await page.evaluate(()=>document.querySelector('#riot-collection-dialog').getBoundingClientRect().width<=innerWidth));
- await page.screenshot({path:'/tmp/swch-riot-collection.png',fullPage:true});
+  assert.ok(await page.evaluate(()=>document.querySelector('#inventory-view').getBoundingClientRect().width<=innerWidth));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Account summaries must fit a narrow window');
+ await page.screenshot({path:path.join(root,'output/swch-riot-collection.png'),fullPage:true});
+ await page.locator('[data-page="accounts"]').click();
+ await page.locator('.riot-account').filter({hasText:'One#EU'}).locator('.account-management > summary').click();
+ page.once('dialog',dialog=>dialog.accept());
+ await page.locator('.riot-account').filter({hasText:'One#EU'}).getByRole('button',{name:'Удалить из SWCH',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.riot-account').length===1);
+ assert.deepEqual(writes.at(-1),['/api/riot/accounts/remove',{account_id:'riot_one'}]);
+ assert.match(await page.locator('.riot-account').innerText(),/Two#EU/);
  assert.deepEqual(errors,[]);
- console.log('Riot UI: launch, missing client, positive-playtime association and isolated account collections passed');
+ console.log('Riot UI: launch, missing client, collections and account removal passed');
  } finally {if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,6 @@
+{
+  "name": "swch-ui-regressions",
+  "private": true,
+  "scripts": {"test": "node run-regressions.cjs"},
+  "devDependencies": {"playwright": "1.63.0"}
+}

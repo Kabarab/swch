@@ -45,6 +45,20 @@ pub struct AddServerRequest {
     pub is_favorite: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AddMinecraftAccountRequest {
+    pub username: String,
+    pub account_type: Option<String>,
+    pub uuid: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct OpenLauncherRequest {
+    pub account_id: Option<String>,
+    #[serde(default, alias = "client", alias = "launcher")]
+    pub launcher_client: Option<String>,
+}
+
 /// GET /api/minecraft/library
 pub async fn library(
     State(mc): State<Arc<MinecraftManager>>,
@@ -115,6 +129,53 @@ pub async fn remove_account(
         }))),
         Err(e) => Err(err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
     }
+}
+
+/// POST /api/minecraft/accounts/add
+pub async fn add_account(
+    State(mc): State<Arc<MinecraftManager>>,
+    Json(payload): Json<AddMinecraftAccountRequest>,
+) -> Result<Json<MinecraftAccount>, Error> {
+    let username = payload.username.trim();
+    if username.is_empty() {
+        return Err(err(StatusCode::BAD_REQUEST, "Имя пользователя не может быть пустым"));
+    }
+
+    let uuid = payload
+        .uuid
+        .filter(|u| !u.trim().is_empty())
+        .unwrap_or_else(|| crate::launchers::minecraft::scanner::generate_offline_uuid(username));
+
+    let raw_type = payload.account_type.as_deref().unwrap_or("tlauncher_free");
+    let account_type = if raw_type.is_empty() {
+        "tlauncher_free"
+    } else {
+        raw_type
+    };
+    let account_id = format!("tl_{}", &uuid);
+
+    let account = MinecraftAccount {
+        account_id: account_id.clone(),
+        username: username.to_string(),
+        account_type: account_type.to_string(),
+        uuid: uuid.clone(),
+        avatar_url: Some(format!("https://mc-heads.net/avatar/{}/100", username)),
+        skin_url: Some(format!("https://mc-heads.net/skin/{}", username)),
+        is_active: true,
+        access_token: None,
+        raw_json: None,
+        last_used: Some(chrono::Utc::now().to_rfc3339()),
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    mc.db().save_minecraft_account(&account).await.map_err(|e| {
+        err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())
+    })?;
+
+    // Perform hot-swap to write to TlauncherProfiles.json and make it active
+    let _ = mc.hot_swap().switch_account(&account_id).await;
+
+    Ok(Json(account))
 }
 
 /// GET /api/minecraft/profiles
@@ -245,11 +306,18 @@ pub async fn launch(
 /// POST /api/minecraft/open-launcher
 pub async fn open_launcher(
     State(mc): State<Arc<MinecraftManager>>,
+    payload: Option<Json<OpenLauncherRequest>>,
 ) -> Result<Json<LaunchMinecraftResponse>, Error> {
+    let (account_id, launcher_client) = match payload {
+        Some(Json(p)) => (p.account_id, p.launcher_client),
+        None => (None, None),
+    };
+
     let req = LaunchMinecraftRequest {
-        account_id: None,
+        account_id,
         profile_id: None,
         mode: Some("official".to_string()),
+        launcher_client,
         server_ip: None,
         world_folder: None,
     };

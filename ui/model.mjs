@@ -1,4 +1,7 @@
+import {getLocale} from './i18n.js';
 export const STYLES = {
+  gog: { name: 'GOG GALAXY', layout: 'cards', color: '#c68eff', description: 'Библиотека GOG и аккаунты' },
+  ubisoft: { name: 'Ubisoft Connect', layout: 'cards', color: '#65b7ff', description: 'Установленные игры и сохранённые сессии Ubisoft Connect' },
   epic: { name: 'Epic Games', layout: 'cards', color: '#ff784f', description: 'Крупные обложки и витрина игр' },
   xbox: { name: 'Xbox', layout: 'cards', color: '#9ada70', description: 'Компактные плитки, зелёный акцент' },
   playstation: { name: 'PlayStation', layout: 'cards', color: '#74acff', description: 'Высокие карточки, синий акцент' },
@@ -7,7 +10,7 @@ export const STYLES = {
   roblox: { name: 'Roblox', layout: 'cards', color: '#e2231a', description: 'Мульти-аккаунты, скины и плейсы' },
   minecraft: { name: 'Minecraft', layout: 'cards', color: '#2e7d32', description: 'Официальный лаунчер, аккаунты, профили и сервера' },
 };
-export const gameKey = game => `${game.launcher}:${game.app_id}`;
+export const gameKey = game => game.launcher?.startsWith('mod:') ? game.id : `${game.launcher}:${game.app_id}`;
 export const metricKey = (game, account) => JSON.stringify([game.launcher, String(game.app_id), String(account.id)]);
 export const IGNORED_STEAM_APP_IDS = new Set(['7', '760', '2371090']);
 export const IGNORED_STEAM_APP_NAMES = new Set([
@@ -29,13 +32,19 @@ export function isIgnoredSteamApp(g) {
   if (IGNORED_STEAM_APP_NAMES.has(name)) return true;
   return false;
 }
-export function filterGames(games, {platform = 'all', installed = 'all', query = '', favorites = null, sort = 'name', recent = {}, favoriteKeys = [], playtime = {}} = {}) {
+export function filterGames(games, {platform = 'all', installed = 'all', query = '', favorites = null, sort = 'default', recent = {}, favoriteKeys = [], playtime = {}} = {}) {
   const q = query.trim().toLocaleLowerCase('ru');
   return games.filter(g => !isIgnoredSteamApp(g) && (platform === 'all' || g.launcher === platform) && (installed !== 'installed' || g.is_installed) && (!favorites || favorites.includes(gameKey(g))) && (!q || `${g.name} ${g.app_id}`.toLocaleLowerCase('ru').includes(q)))
-    .sort((a,b) => Number(favoriteKeys.includes(gameKey(b))) - Number(favoriteKeys.includes(gameKey(a))) || (sort === 'hours' ? (playtime[gameKey(b)] ?? -1) - (playtime[gameKey(a)] ?? -1) : 0) || (sort === 'recent' ? (recent[gameKey(b)] || 0) - (recent[gameKey(a)] || 0) : 0) || a.name.localeCompare(b.name, 'ru'));
+    .sort((a,b) => {
+      const minutes = g => Math.max(0, Number(playtime[gameKey(g)]) || 0);
+      const favoriteOrder = Number(favoriteKeys.includes(gameKey(b))) - Number(favoriteKeys.includes(gameKey(a)));
+      if (favoriteOrder) return favoriteOrder;
+      if (sort === 'default') return Number(Boolean(b.is_installed)) - Number(Boolean(a.is_installed)) || minutes(b) - minutes(a) || a.name.localeCompare(b.name, getLocale());
+      return (sort === 'hours' ? minutes(b) - minutes(a) : 0) || (sort === 'recent' ? (recent[gameKey(b)] || 0) - (recent[gameKey(a)] || 0) : 0) || a.name.localeCompare(b.name, getLocale());
+    });
 }
 export function normalizeEpic(games, accountId) {
-  return games.map(g => ({...g, launcher: 'epic', app_id: g.app_name, name: g.title, owner_id: accountId}));
+  return games.map(g => ({...g, launcher: 'epic', app_id: g.namespace==='fn'&&g.title?.trim().toLowerCase()==='fortnite'?'Fortnite':g.app_name, name: g.title, owner_id: accountId}));
 }
 export function normalizeMetrics(values) {
   return Object.fromEntries(['skins','value','hours'].map(key => {
@@ -46,7 +55,11 @@ export function normalizeMetrics(values) {
   }));
 }
 export function safeImage(url) {
-  if (typeof url === 'string' && (url.startsWith('data:image/png;base64,') || url.startsWith('data:image/jpeg;base64,') || url.startsWith('data:image/webp;base64,'))) {
+  if (typeof url !== 'string' || !url.trim()) return '';
+  if (url.startsWith('data:image/png;base64,') || url.startsWith('data:image/jpeg;base64,') || url.startsWith('data:image/webp;base64,')) {
+    return url;
+  }
+  if (url.startsWith('/') || url.startsWith('./') || url.startsWith('ui/')) {
     return url;
   }
   try { const parsed = new URL(url); return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : ''; } catch { return ''; }
@@ -58,7 +71,11 @@ export function mergeLibraries(libraries) {
     const key = gameKey(game), existing = merged.get(key);
     if (existing) {
       if (!existing.owner_ids.includes(game.owner_id)) existing.owner_ids.push(game.owner_id);
+      const banner = game.banner_url || existing.banner_url;
+      const hero = game.hero_url || existing.hero_url;
       if (game.is_installed) Object.assign(existing, {...game, owner_ids: existing.owner_ids});
+      if (banner) existing.banner_url = banner;
+      if (hero) existing.hero_url = hero;
     } else merged.set(key, {...game, owner_ids: [game.owner_id]});
   }
   return [...merged.values()];
@@ -121,6 +138,33 @@ export function aggregateSteamStats(rows, accountIds, appId = null) {
   return {minutes:total('playtime_minutes'),recent:total('playtime_2weeks'),known_accounts:new Set(values.filter(r=>r.playtime_minutes!=null).map(r=>r.account_id)).size,total_accounts:accountIds.length};
 }
 export function inventoryIdentity(item) { return JSON.stringify([item.account_id || '',item.app_id || '',item.context_id || '',item.asset_id]); }
+export function inventoryHeroItems(items, facets = {}) {
+  const heroes = Object.fromEntries(Object.entries(facets).filter(([key]) => key.toLowerCase() === '570:hero'));
+  return filterInventory(items, {facets: heroes});
+}
+export function inventoryTagCounts(items) {
+  const heroNames = new Set(items.flatMap(i => (i.tag_details || []).filter(t => t.category?.toLowerCase() === 'hero').map(t => t.name)));
+  const counts = new Map();
+  for (const item of items) for (const tag of new Set(item.tags || [])) {
+    if (!heroNames.has(tag)) counts.set(tag, (counts.get(tag) || 0) + (item.amount || 1));
+  }
+  return counts;
+}
+export function csInventoryCategories(items) {
+  const groups = new Map();
+  for (const item of items) for (const tag of item.tag_details || []) {
+    if (String(item.app_id) !== '730' || tag.category?.toLowerCase() !== 'type') continue;
+    const key = `${item.app_id}:${tag.category}`;
+    const id = JSON.stringify([key, tag.value]);
+    const group = groups.get(id) || {key, value: tag.value, name: tag.name, count: 0, image: ''};
+    group.count += item.amount || 1;
+    group.image ||= safeImage(item.icon_url);
+    groups.set(id, group);
+  }
+  const weaponTypes = new Set(['rifle','sniperrifle','pistol','smg','shotgun','machinegun','knife','knifegg','weapon','grenade','taser']);
+  const isWeapon = category => weaponTypes.has(String(category.value).toLowerCase().replace(/^csgo_type_/, ''));
+  return [...groups.values()].sort((a,b) => Number(isWeapon(b)) - Number(isWeapon(a)) || a.name.localeCompare(b.name, getLocale()));
+}
 export function filterInventory(items, {query='',tag='',availability='all',market='all',facets={},sort='original',quotes=new Map(),minPrice='',maxPrice='',exchangeRate=1,restrictionsMap=null}={}) {
   const q=query.trim().toLocaleLowerCase('ru');
   const price=i=>{const v=quotes.get(priceKey(i.app_id,i.market_hash_name));return v?.currency==='USD'&&v.unit_price_cents!=null?v.unit_price_cents:null;};
@@ -131,7 +175,7 @@ export function filterInventory(items, {query='',tag='',availability='all',marke
     && Object.entries(facets).every(([key,values])=>!values.length||(i.tag_details||[]).some(t=>`${i.app_id}:${t.category}`===key&&values.includes(t.value)))
     && (minPrice===''||(price(i)!=null&&Number.isFinite(exchangeRate)&&exchangeRate>0&&price(i)*exchangeRate>=Number(minPrice)*100))
     && (maxPrice===''||(price(i)!=null&&Number.isFinite(exchangeRate)&&exchangeRate>0&&price(i)*exchangeRate<=Number(maxPrice)*100)));
-  const compare=(a,b)=>a.name.localeCompare(b.name,'ru');
+  const compare=(a,b)=>a.name.localeCompare(b.name,getLocale());
   if(sort==='name')result.sort(compare);
   if(sort==='amount')result.sort((a,b)=>b.amount-a.amount||compare(a,b));
   if(sort==='newest')result.sort((a,b)=>{try {const x=BigInt(a.asset_id),y=BigInt(b.asset_id);return x===y?0:x>y?-1:1;}catch{return 0;}});
@@ -500,7 +544,7 @@ export function getInventoryGamesWithItems({
     if (pA !== -1) return -1;
     if (pB !== -1) return 1;
     if (b.count !== a.count) return b.count - a.count;
-    return a.name.localeCompare(b.name, 'ru');
+    return a.name.localeCompare(b.name, getLocale());
   });
 
   return result;

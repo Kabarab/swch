@@ -69,7 +69,10 @@ impl LauncherDetector {
             ModuleId::Epic => self.detect_epic(),
             ModuleId::Riot => self.detect_riot(),
             ModuleId::Roblox => self.detect_roblox(),
-            ModuleId::Minecraft => self.detect_minecraft(),
+            ModuleId::Minecraft => self.detect_minecraft().or_else(|| self.detect_tlauncher()),
+            ModuleId::Ubisoft => crate::launchers::ubisoft::launcher_dir(),
+            ModuleId::Gog => crate::launchers::gog::local::launcher_dir(),
+            ModuleId::Hoyoverse => crate::launchers::hoyoverse::launcher_dir(),
         }
     }
 
@@ -214,7 +217,20 @@ impl LauncherDetector {
             }
         }
 
-        // 2. macOS standard locations
+        // 2. Discover via official Riot client detection logic (handles manifests & paths)
+        if let Some(client_path) = crate::launchers::riot::client() {
+            return Some(client_path);
+        }
+
+        // 3. Check if saved Riot sessions exist
+        let session_mgr = crate::launchers::riot::session::RiotSessionManager::new();
+        if !session_mgr.list_sessions().is_empty() {
+            if let Ok(dir) = session_mgr.sessions_dir() {
+                return Some(dir);
+            }
+        }
+
+        // 4. macOS standard locations
         #[cfg(target_os = "macos")]
         {
             let sys_riot = PathBuf::from("/Applications/Riot Games");
@@ -490,5 +506,164 @@ impl LauncherDetector {
 
         None
     }
-}
 
+    /// Detects T-Launcher executable or application bundle installation.
+    pub fn detect_tlauncher(&self) -> Option<PathBuf> {
+        // 1. Explicit env overrides
+        if let Ok(p) = std::env::var("SWCH_TLAUNCHER_APP")
+            .or_else(|_| std::env::var("SWCH_TLAUNCHER_EXE"))
+            .or_else(|_| std::env::var("SWCH_TLAUNCHER_PATH"))
+            .or_else(|_| std::env::var("TLAUNCHER_EXE"))
+            .or_else(|_| std::env::var("TLAUNCHER_APP"))
+        {
+            let path = PathBuf::from(p);
+            if path.exists() {
+                debug!("TLauncher detected via env override: {}", path.display());
+                return Some(path);
+            }
+        }
+
+        // 2. Windows standard locations
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(config_dir) = dirs::config_dir() {
+                let candidates = [
+                    config_dir.join(".tlauncher\\tlauncher.exe"),
+                    config_dir.join(".tlauncher\\TLauncher.exe"),
+                    config_dir.join(".tlauncher\\legacy\\TLauncher.exe"),
+                    config_dir.join(".tlauncher\\legacy\\TL.exe"),
+                    config_dir.join(".tlauncher\\TL.exe"),
+                    config_dir.join(".minecraft\\TLauncher.exe"),
+                    config_dir.join(".tlauncher\\TLauncher.jar"),
+                ];
+                for c in candidates {
+                    if c.exists() {
+                        return Some(c);
+                    }
+                }
+            }
+
+            if let Some(local_app) = dirs::data_local_dir() {
+                let candidates = [
+                    local_app.join("Programs\\TLauncher\\TLauncher.exe"),
+                    local_app.join("Programs\\TLauncher\\tlauncher.exe"),
+                    local_app.join("TLauncher\\TLauncher.exe"),
+                    local_app.join("Programs\\TLauncher\\TL.exe"),
+                ];
+                for c in candidates {
+                    if c.exists() {
+                        return Some(c);
+                    }
+                }
+            }
+
+            let prog = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".into());
+            let tl_prog = PathBuf::from(&prog).join("TLauncher\\TLauncher.exe");
+            if tl_prog.exists() {
+                return Some(tl_prog);
+            }
+
+            let prog_x86 = std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| "C:\\Program Files (x86)".into());
+            let tl_x86 = PathBuf::from(&prog_x86).join("TLauncher\\TLauncher.exe");
+            if tl_x86.exists() {
+                return Some(tl_x86);
+            }
+
+            if let Some(home) = dirs::home_dir() {
+                let desktop_tl = home.join("Desktop\\TLauncher.exe");
+                if desktop_tl.exists() {
+                    return Some(desktop_tl);
+                }
+                let desktop_tl_lnk = home.join("Desktop\\TLauncher.lnk");
+                if desktop_tl_lnk.exists() {
+                    return Some(desktop_tl_lnk);
+                }
+            }
+        }
+
+        // 3. macOS standard locations
+        #[cfg(target_os = "macos")]
+        {
+            let sys_app = PathBuf::from("/Applications/TLauncher.app");
+            if sys_app.exists() {
+                return Some(sys_app);
+            }
+
+            if let Some(home) = dirs::home_dir() {
+                let user_app = home.join("Applications/TLauncher.app");
+                if user_app.exists() {
+                    return Some(user_app);
+                }
+                let jar_path = home.join("Library/Application Support/tlauncher/TLauncher.jar");
+                if jar_path.exists() {
+                    return Some(jar_path);
+                }
+            }
+        }
+
+        // 4. Linux standard locations
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        {
+            let candidates = [
+                PathBuf::from("/usr/bin/tlauncher"),
+                PathBuf::from("/usr/local/bin/tlauncher"),
+                PathBuf::from("/opt/tlauncher/TLauncher.jar"),
+            ];
+            for c in candidates {
+                if c.exists() {
+                    return Some(c);
+                }
+            }
+            if let Some(home) = dirs::home_dir() {
+                let jar_home = home.join(".tlauncher/TLauncher.jar");
+                if jar_home.exists() {
+                    return Some(jar_home);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Resolves the .tlauncher data directory.
+    pub fn detect_tlauncher_dir(&self) -> Option<PathBuf> {
+        if let Ok(p) = std::env::var("SWCH_TLAUNCHER_DIR").or_else(|_| std::env::var("TLAUNCHER_DIR")) {
+            let path = PathBuf::from(p);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(config_dir) = dirs::config_dir() {
+                let path = config_dir.join(".tlauncher");
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(home) = dirs::home_dir() {
+                let path = home.join("Library/Application Support/tlauncher");
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        {
+            if let Some(home) = dirs::home_dir() {
+                let path = home.join(".tlauncher");
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+
+        None
+    }
+}

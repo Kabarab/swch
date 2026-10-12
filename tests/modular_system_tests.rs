@@ -31,7 +31,7 @@ async fn test_modules_initial_detection_and_zero_ram_for_missing() {
     module_manager.init().await.unwrap();
 
     let status = module_manager.get_status_all().await;
-    assert_eq!(status.len(), 5);
+    assert_eq!(status.len(), ModuleId::all().len());
 
     for m in &status {
         assert_eq!(m.status, "not_detected");
@@ -132,7 +132,7 @@ async fn test_api_modules_endpoints() {
     let json: Value = serde_json::from_slice(&bytes).unwrap();
     assert!(json["modules"].is_array());
     let modules = json["modules"].as_array().unwrap();
-    assert_eq!(modules.len(), 5);
+    assert_eq!(modules.len(), ModuleId::all().len());
 
     // 2. POST /api/modules/scan
     let res_scan = app

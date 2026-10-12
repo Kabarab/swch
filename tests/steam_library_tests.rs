@@ -420,6 +420,24 @@ fn parse_app_details_extracts_name_and_is_free() {
 }
 
 #[test]
+fn artwork_uses_current_store_hashes_with_safe_fallbacks() {
+    use swch::launchers::steam::remote::parse_artwork;
+    let mut data = json!({"response":{"store_items":[{"id":3478870,"assets":{
+        "asset_url_format":"steam/apps/3478870/${FILENAME}?t=123",
+        "library_capsule_2x":"abc123/library_capsule_2x.jpg",
+        "library_hero":"def456/library_hero.jpg","header":"abc/header.jpg"
+    }}]}});
+    let art=parse_artwork(&data,"3478870").unwrap();
+    assert_eq!(art.poster.as_deref(),Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3478870/abc123/library_capsule_2x.jpg?t=123"));
+    assert!(art.hero.unwrap().ends_with("def456/library_hero.jpg?t=123"));
+    data["response"]["store_items"][0]["assets"]["library_capsule_2x"]=json!("../../other.png");
+    assert!(parse_artwork(&data,"3478870").unwrap().poster.unwrap().ends_with("abc/header.jpg?t=123"));
+    assert!(parse_artwork(&data,"570").is_err());
+    data["response"]["store_items"][0]["assets"]["asset_url_format"]=json!("https://elsewhere.test/${FILENAME}");
+    assert!(parse_artwork(&data,"3478870").is_err());
+}
+
+#[test]
 fn local_scan_correctly_identifies_last_owner_and_family_sharing() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();

@@ -208,17 +208,11 @@ pub fn parse_manifest_file<P: AsRef<Path>>(path: P) -> Result<EpicManifestItem, 
 
 /// Scans a directory for all `.item` files and parses them.
 ///
-/// Skips corrupt files with warnings rather than failing the entire directory scan.
-/// Missing directories return an empty `Vec`.
-pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifestItem>, ManifestError> {
-    let path = dir.as_ref();
-    if !path.is_dir() {
-        return Ok(Vec::new());
+fn scan_items_in_directory(dir: &Path, items: &mut Vec<EpicManifestItem>) -> Result<(), ManifestError> {
+    if !dir.is_dir() {
+        return Ok(());
     }
-
-    let mut items = Vec::new();
-    let entries = fs::read_dir(path)?;
-
+    let entries = fs::read_dir(dir)?;
     for entry in entries.flatten() {
         let file_path = entry.path();
         if file_path.is_file() {
@@ -232,6 +226,33 @@ pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifes
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// Scans a directory for `.item` manifest files and parses them.
+///
+/// Scans both the root directory and the `Pending` subfolder (e.g. `Data\Manifests\Pending`).
+/// Skips corrupt files with warnings rather than failing the entire directory scan.
+/// Missing directories return an empty `Vec`.
+pub fn scan_manifest_directory<P: AsRef<Path>>(dir: P) -> Result<Vec<EpicManifestItem>, ManifestError> {
+    let path = dir.as_ref();
+    if !path.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut items = Vec::new();
+    scan_items_in_directory(path, &mut items)?;
+
+    // Scan Pending subfolder for updating / downloading items (e.g. Fortnite)
+    let pending_dir = path.join("Pending");
+    if pending_dir.is_dir() {
+        scan_items_in_directory(&pending_dir, &mut items)?;
+    } else {
+        let pending_lower = path.join("pending");
+        if pending_lower.is_dir() && pending_lower != pending_dir {
+            scan_items_in_directory(&pending_lower, &mut items)?;
         }
     }
 
@@ -276,7 +297,7 @@ pub fn resolve_default_manifest_dirs() -> Vec<PathBuf> {
     if let Ok(override_dir) = std::env::var("SWCH_EPIC_MANIFESTS_DIR") {
         let trimmed = override_dir.trim();
         if !trimmed.is_empty() {
-            dirs.push(PathBuf::from(trimmed));
+            return vec![PathBuf::from(trimmed)];
         }
     }
 
@@ -491,5 +512,50 @@ mod tests {
 
         let linux_dirs = resolve_platform_manifest_dirs("linux");
         assert!(!linux_dirs.is_empty());
+    }
+
+    #[test]
+    fn test_scan_manifest_directory_includes_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Base game in root
+        let root_game = r#"{
+            "FormatVersion": 0,
+            "AppName": "BaseGame",
+            "CatalogItemId": "cat_base",
+            "CatalogNamespace": "ns_base",
+            "DisplayName": "Base Game",
+            "InstallationGuid": "guid_base",
+            "InstallLocation": "/Games/BaseGame",
+            "bIsIncompleteInstall": false
+        }"#;
+        fs::write(tmp.path().join("base.item"), root_game).unwrap();
+
+        // Updating game in Pending subdirectory (e.g. Fortnite)
+        let pending_dir = tmp.path().join("Pending");
+        fs::create_dir_all(&pending_dir).unwrap();
+
+        let pending_game = r#"{
+            "FormatVersion": 0,
+            "AppName": "Fortnite",
+            "CatalogItemId": "4fe75bbc5a674f4f9b356b5c90567da5",
+            "CatalogNamespace": "fn",
+            "DisplayName": "Fortnite",
+            "InstallationGuid": "guid_fortnite",
+            "InstallLocation": "C:\\Games\\Fortnite",
+            "bIsIncompleteInstall": true
+        }"#;
+        fs::write(pending_dir.join("fortnite.item"), pending_game).unwrap();
+
+        let items = scan_manifest_directory(tmp.path()).unwrap();
+        assert_eq!(items.len(), 2);
+
+        let fortnite = items.iter().find(|i| i.app_name == "Fortnite").expect("Fortnite in Pending must be scanned");
+        assert_eq!(fortnite.is_incomplete_install, Some(true));
+        assert!(!fortnite.is_valid_installation());
+
+        let base = items.iter().find(|i| i.app_name == "BaseGame").expect("BaseGame in root must be scanned");
+        assert_eq!(base.is_incomplete_install, Some(false));
+        assert!(base.is_valid_installation());
     }
 }

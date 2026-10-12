@@ -11,6 +11,9 @@ pub enum ModuleId {
     Riot,
     Roblox,
     Minecraft,
+    Ubisoft,
+    Gog,
+    Hoyoverse,
 }
 
 impl ModuleId {
@@ -21,6 +24,9 @@ impl ModuleId {
             Self::Riot => "riot",
             Self::Roblox => "roblox",
             Self::Minecraft => "minecraft",
+            Self::Ubisoft => "ubisoft",
+            Self::Gog => "gog",
+            Self::Hoyoverse => "hoyoverse",
         }
     }
 
@@ -31,6 +37,9 @@ impl ModuleId {
             Self::Riot => "Riot Games",
             Self::Roblox => "Roblox",
             Self::Minecraft => "Minecraft",
+            Self::Ubisoft => "Ubisoft Connect",
+            Self::Gog => "GOG GALAXY",
+            Self::Hoyoverse => "HoYoverse",
         }
     }
 
@@ -41,11 +50,14 @@ impl ModuleId {
             Self::Riot => "Интеграция с профилями Riot Games (League of Legends, VALORANT)",
             Self::Roblox => "Интеграция с клиентом, мульти-аккаунтами и плейсами Roblox",
             Self::Minecraft => "Интеграция с официальным лаунчером Minecraft, профилями, мирами и серверами",
+            Self::Ubisoft => "Установленные игры и переключение сохранённых сессий Ubisoft Connect",
+            Self::Gog => "Онлайн-библиотека, аккаунты GOG и запуск установленных игр через GALAXY",
+            Self::Hoyoverse => "Быстрая смена аккаунтов и библиотека игр miHoYo / HoYoverse (Genshin Impact, Honkai: Star Rail, ZZZ, Honkai Impact 3rd)",
         }
     }
 
     pub fn all() -> &'static [ModuleId] {
-        &[Self::Steam, Self::Epic, Self::Riot, Self::Roblox, Self::Minecraft]
+        &[Self::Steam, Self::Epic, Self::Riot, Self::Roblox, Self::Minecraft, Self::Ubisoft, Self::Gog, Self::Hoyoverse]
     }
 }
 
@@ -65,6 +77,9 @@ impl std::str::FromStr for ModuleId {
             "riot" | "riotgames" | "riot_games" => Ok(Self::Riot),
             "roblox" | "rbx" => Ok(Self::Roblox),
             "minecraft" | "mc" => Ok(Self::Minecraft),
+            "ubisoft" | "ubi" | "uplay" | "ubisoft_connect" => Ok(Self::Ubisoft),
+            "gog" | "galaxy" | "gog_galaxy" => Ok(Self::Gog),
+            "hoyoverse" | "mihoyo" | "hoyo" | "hoyoplay" => Ok(Self::Hoyoverse),
             _ => Err(format!("Unknown module id: {}", s)),
         }
     }

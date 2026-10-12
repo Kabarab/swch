@@ -16,6 +16,14 @@ impl Default for SteamClient {
     }
 }
 impl SteamClient {
+    pub async fn artwork(&self, appid: &str) -> Result<SteamArtwork, String> {
+        let value = self.get(format!("{}/IStoreBrowseService/GetItems/v1/", self.api), &[("input_json", json!({
+            "ids":[{"appid":appid.parse::<u32>().map_err(|_| "Некорректный AppID.")?}],
+            "context":{"language":"english","country_code":"US"},
+            "data_request":{"include_assets":true}
+        }).to_string())]).await?;
+        parse_artwork(&value, appid)
+    }
     pub fn new(api: &str, community: &str) -> Self {
         Self {
             client: reqwest::Client::builder()
@@ -105,6 +113,34 @@ impl SteamClient {
             .await?;
         parse_inventory(&value)
     }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamArtwork {
+    pub poster: Option<String>,
+    pub hero: Option<String>,
+}
+pub fn parse_artwork(value: &Value, appid: &str) -> Result<SteamArtwork, String> {
+    let item = value["response"]["store_items"].as_array()
+        .and_then(|items| items.iter().find(|item| item["appid"].as_u64().map(|id| id.to_string()).as_deref() == Some(appid)
+            || item["id"].as_u64().map(|id| id.to_string()).as_deref() == Some(appid)))
+        .ok_or("Steam не предоставил обложку игры.")?;
+    let assets = &item["assets"];
+    let template = assets["asset_url_format"].as_str().unwrap_or("");
+    let url = |names: &[&str]| names.iter().find_map(|name| {
+        let file = assets[*name].as_str().filter(|file| !file.is_empty()
+            && file.bytes().all(|c| c.is_ascii_alphanumeric() || b"/_-.".contains(&c))
+            && !file.contains("..") && !file.starts_with('/'))?;
+        if !template.starts_with(&format!("steam/apps/{appid}/")) || !template.contains("${FILENAME}") { return None; }
+        let path = template.replace("${FILENAME}", file);
+        if path.contains("..") || !path.bytes().all(|c| c.is_ascii_alphanumeric() || b"/_-.?=&".contains(&c)) { return None; }
+        Some(format!("https://shared.akamai.steamstatic.com/store_item_assets/{path}"))
+    });
+    let art = SteamArtwork {
+        poster: url(&["library_capsule_2x", "library_capsule", "hero_capsule_2x", "hero_capsule", "header_2x", "header"]),
+        hero: url(&["library_hero_2x", "library_hero", "header_2x", "header", "main_capsule_2x", "main_capsule"]),
+    };
+    if art.poster.is_none() && art.hero.is_none() { return Err("Steam не предоставил обложку игры.".into()); }
+    Ok(art)
 }
 fn string_id(v: &Value) -> Option<String> {
     v.as_str()

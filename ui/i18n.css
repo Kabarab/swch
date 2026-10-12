@@ -1,0 +1,27 @@
+.language-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.language-row label{min-width:0;display:grid;gap:8px}
+.language-row select,.language-search{width:100%;min-width:0;box-sizing:border-box}
+.language-search{margin-block:8px 12px;padding:10px 12px;border:1px solid var(--border,#36373d);border-radius:8px;background:var(--surface,#1b1c20);color:inherit}
+#language-machine{display:inline-block;padding:3px 8px;border-radius:6px;background:#a8792526;color:#dfb66f;font-size:12px;margin-inline:8px}
+#language-machine[hidden]{display:none}
+html[lang] :is(button,label,summary,legend,h1,h2,h3,h4,p,.nav-item,.platform-item){overflow-wrap:anywhere}
+html[lang] :is(.dialog-header,.page-heading,.settings-currency-row,.steam-filters,.mod-actions,.filter-tabs,.settings-tabs){flex-wrap:wrap}
+html[lang] :is(.settings-tabs button,.filter-tabs button,.mode-option-btn,.text-button,.secondary,.primary){height:auto;min-height:36px;white-space:normal;line-height:1.4}
+html[lang] :is(.library-controls,.page-heading>div,.account-card,.game-info,.main-shell,.settings-panel,.settings-body){min-width:0}
+html[lang] dialog{max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box}
+html[lang] :is(.nav-item,.platform-item){text-align:start;white-space:normal;min-height:40px;height:auto;gap:8px}
+html[lang] :is(.nav-count,.platform-item>span:last-child,.status-dot,.nav-item>i,.platform-logo){flex-shrink:0}
+html[lang] .statusbar{height:auto;min-height:32px;flex-wrap:wrap;gap:8px}
+html[dir=rtl] .sidebar{inset:0 0 0 auto;border-right:0;border-left:1px solid var(--border,#36373d)}
+html[dir=rtl] .main-shell{margin-left:0;margin-right:224px}
+html[dir=rtl] .library-controls{margin-left:0;margin-right:auto}
+html[dir=rtl] :is(input[type=email],input[type=url],input[type=password],input[data-id],code,pre){direction:ltr;text-align:start}
+html[dir=rtl] .chevron{transform:scaleX(-1)}
+html[dir=rtl] :is(.account-name,.game-name,.poster-name){unicode-bidi:plaintext}
+@media(max-width:600px){.language-row{grid-template-columns:minmax(0,1fr)}.language-row button{width:100%}html[lang] .library-controls{flex-wrap:wrap}html[lang] .settings-tabs{overflow:visible}}
+@media(max-width:1180px){html[dir=rtl] .main-shell{margin-right:194px}}
+@media(max-width:900px){html[dir=rtl] .main-shell{margin-right:74px}}
+@media(max-width:650px){html[dir=rtl] .main-shell{margin-right:58px}}
+.i18n-loading .app-shell,.i18n-loading dialog{visibility:hidden}
+.i18n-loading:after{content:'SWCH';position:fixed;inset:0;display:grid;place-items:center;background:#111214;color:#f2f2f4;font:600 24px system-ui;z-index:10000}
+html[lang] .sidebar{overflow-y:auto;overscroll-behavior:contain}

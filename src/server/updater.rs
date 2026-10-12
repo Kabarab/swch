@@ -566,6 +566,17 @@ impl UpdateManager {
                 if new_ui.is_dir() {
                     let _ = copy_dir_all(&new_ui, &exe_dir.join("ui"));
                 }
+                // An upgrade from a pre-mod release must also install the bundled runtime.
+                let new_runtime = extract_dir.join("runtime");
+                if new_runtime.is_dir() {
+                    let runtime_dir=exe_dir.join("runtime");
+                    std::fs::create_dir_all(&runtime_dir).map_err(|e|e.to_string())?;
+                    let node_name=if cfg!(windows){"node.exe"}else{"node"};
+                    let source=new_runtime.join(node_name);let destination=runtime_dir.join(node_name);
+                    if source.is_file() {
+                        if destination.exists(){replace_executable(&destination,&source)?;}else{std::fs::copy(&source,&destination).map_err(|e|e.to_string())?;}
+                    }
+                }
 
                 // Update companion GUI launcher if present
                 let gui_name = if cfg!(windows) { "swch.exe" } else { "swch" };
@@ -677,11 +688,19 @@ pub fn find_app_in_dir(dir: &Path) -> Option<PathBuf> {
 }
 
 pub fn find_binary_in_dir(dir: &Path, name: &str) -> Option<PathBuf> {
-    let exe_name = if cfg!(windows) { format!("{}.exe", name) } else { name.to_string() };
+    let exe_name = if cfg!(windows) {
+        if name.ends_with(".exe") {
+            name.to_string()
+        } else {
+            format!("{}.exe", name)
+        }
+    } else {
+        name.to_string()
+    };
     for entry in walkdir::WalkDir::new(dir).max_depth(4).into_iter().filter_map(|e| e.ok()) {
         if entry.file_type().is_file() {
             if let Some(file_name) = entry.path().file_name().and_then(|f| f.to_str()) {
-                if file_name == exe_name {
+                if file_name == exe_name || file_name == name {
                     return Some(entry.path().to_path_buf());
                 }
             }

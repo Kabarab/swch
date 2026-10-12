@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>SWCH — подключение магазина Steam</title><link rel="stylesheet" href="/ui/launcher.css"><link rel="stylesheet" href="/ui/i18n.css"><script type="module">import {initI18n} from "/ui/i18n.js"; await initI18n();</script></head>
+<body><main style="max-width:640px;margin:60px auto;padding:24px">
+<h1>Подключение магазина Steam</h1>
+<p>Войди в выбранный аккаунт Steam в этом браузере с включённым «Запомнить меня». Затем вернись сюда и подключи его к автоклеймеру SWCH.</p>
+<p id="steam-claim-account"></p>
+<p><a href="https://store.steampowered.com/account/" target="_blank" rel="noopener noreferrer">Открыть аккаунт Steam ↗</a></p>
+<p><a href="/api/free-games/steam/extension" download>Скачать расширение SWCH для Chrome / Edge</a>. Распакуй архив и загрузи папку через «Загрузить распакованное расширение» в режиме разработчика на странице расширений браузера.</p>
+<button id="steam-claim-connect" class="primary" disabled>Подключить текущий вход Steam</button>
+<p id="steam-claim-status" role="status">Ожидаем расширение. После установки обнови эту страницу.</p>
+<p class="muted">SWCH проверит аккаунт и сохранит сессию в хранилище учётных данных ОС. Доступ можно отключить в настройках автоклеймера.</p>
+<script src="/ui/steam-claim-bridge.js"></script></main></body></html>

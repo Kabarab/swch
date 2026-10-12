@@ -1,0 +1,5 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><style>body{font:16px system-ui;background:#17243b;color:#edf2ff;padding:28px}button{padding:12px;border:0;border-radius:8px}li{margin:8px 0}</style><h1>Моя библиотека</h1><p id="count"></p><button id="increment">Увеличить счётчик</button><ul id="games"></ul><p id="error" role="alert"></p><script>
+async function load(){const games=await swch.call('library.list');const root=document.getElementById('games');root.replaceChildren(...games.map(g=>{const li=document.createElement('li');li.textContent=g.name;return li;}));document.getElementById('count').textContent='Счётчик: '+(await swch.call('storage.get',{key:'count'})||0);}
+document.getElementById('increment').onclick=async()=>{try{await swch.call('action',{id:'count'});await load();}catch(e){document.getElementById('error').textContent=e.message;}};
+swch.on('count.changed',()=>load());load().catch(e=>document.getElementById('error').textContent=e.message);
+</script></html>
