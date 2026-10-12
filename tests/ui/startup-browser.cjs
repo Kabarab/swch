@@ -11,6 +11,7 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
    let mode='off',listener;
    window.startupWrites=[];
    window.startupFail=false;
+   window.chrome ??= {};
    window.chrome.webview={
     addEventListener(type,callback){if(type==='message')listener=callback;},
     postMessage(message){
