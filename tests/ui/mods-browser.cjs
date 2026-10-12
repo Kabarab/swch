@@ -40,7 +40,7 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
     fs.mkdirSync(path.join(server.root,'output/mods'),{recursive:true});await page.screenshot({path:path.join(server.root,'output/mods/catalog.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(server.root,'output/mods/mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
     await page.getByRole('button',{name:'Демо-вкладка',exact:true}).click();const frame=page.frameLocator('.mod-frame');await frame.getByRole('heading',{name:'SDK iframe'}).waitFor();await frame.getByRole('button',{name:'Count'}).click();await frame.locator('#value').getByText('1',{exact:true}).waitFor();
-    await page.getByRole('button',{name:'Моды',exact:true}).click();await page.getByRole('button',{name:'Выключить',exact:true}).click();await page.getByRole('button',{name:'Включить',exact:true}).waitFor();assert.equal(await page.locator('[data-mod-platform-nav]').count(),0);
+    await page.getByRole('button',{name:'Моды',exact:true}).click();await page.getByRole('button',{name:'Выключить',exact:true}).click();await page.getByRole('button',{name:'Включить',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('[data-mod-platform-nav]').length===0);assert.equal(await page.locator('[data-mod-platform-nav]').count(),0);
     assert.deepEqual(errors,[]);console.log('Mods UI, launch, accounts, theme, settings and iframe SDK passed.');
   }finally{await browser.close();await server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
