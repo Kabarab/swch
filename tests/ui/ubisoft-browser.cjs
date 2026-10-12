@@ -99,6 +99,7 @@ const path=require('node:path');
   await page.locator('[data-action="cancel-ubisoft-login"]').waitFor({state:'visible'});
   assert.deepEqual(writes.at(-1),['/api/ubisoft/accounts/prepare',{automatic:true}]);
   assert.equal(await page.locator('#ubisoft-account-name').inputValue(),'');
+  await page.waitForFunction(()=>document.querySelectorAll('.ubisoft-account .is-active').length===0);
   assert.equal(await page.locator('.ubisoft-account .is-active').count(),0);
   failStatusOnce=true;
   await page.waitForFunction(()=>document.querySelector('#ubisoft-session-error').textContent.includes('Повторяем проверку автоматически'));
