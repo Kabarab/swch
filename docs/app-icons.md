@@ -6,6 +6,7 @@ approved rounded-square tile. Both have transparent outer backgrounds.
 The masters were created with the built-in Imagegen tool.
 
 - Windows master: `src/assets/swch-minimal.png`.
+- Windows optical variant for 16–64px: `src/assets/swch-windows-small.png`.
 - macOS master: `src/assets/swch-macos-minimal.png`.
 - Windows resource: `src/assets/swch.ico`, embedded by `src/windows_app.rc`.
 - macOS resource: `swch.app/Contents/Resources/iconfile.icns`, selected by `CFBundleIconFile`.
@@ -13,6 +14,22 @@ The masters were created with the built-in Imagegen tool.
 On Windows, run `./scripts/build-app-icons.ps1` after replacing a master to
 regenerate the ICO and ICNS sizes. This only packages the finished artwork and
 preserves transparency; it does not generate or redesign the logo.
+
+Windows uses an optical variant at 16–64px with larger arrowheads and wider
+breaks: simply shrinking the large logo makes the two arrows look like a plain
+ring in the taskbar. The original approved artwork is retained at 128/256px.
+Check the actual 16/20/24/32px ICO frames when changing either Windows master.
+
+## Small Windows variant prompt
+
+Created with the built-in Imagegen tool, using the approved Windows master as
+the edit target. Preserve the orange circle, separate near-black S and exactly
+two clockwise perimeter arrows. Enlarge each triangular arrowhead to about 22%
+of the disk diameter, widen both breaks to about 32 degrees, use a roughly 6%
+shaft stroke, and slightly reduce the S for clearance. Use flat orange
+`#FF641E`, near-black `#191919`, transparent margins of about 5%, and no shadows
+or effects. Keep the circular silhouette and opposed arrowheads at 2/8 o'clock;
+the two arcs must remain distinguishable at 16–32px.
 
 ## Final Windows prompt
 

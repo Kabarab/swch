@@ -6,7 +6,7 @@ on:
       release_tag:
         description: Tag whose binaries already passed Release Build checks
         required: true
-        default: v1.3.1
+        default: v1.3.2
         type: string
       build_run_id:
         description: Release Build run containing the tested artifacts

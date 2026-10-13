@@ -187,7 +187,7 @@ static std::wstring LocalStartupHtml(const wchar_t* fallback, bool error) {
 
 // Check health of Axum backend at http://127.0.0.1:4242/api/health
 bool CheckBackendHealth() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.1",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.2",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -236,7 +236,7 @@ bool CheckBackendHealth() {
 
 // Sends graceful shutdown request to Axum backend at http://127.0.0.1:4242/api/system/shutdown
 void RequestBackendShutdown() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.1",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.2",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
