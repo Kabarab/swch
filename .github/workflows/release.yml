@@ -254,7 +254,7 @@ jobs:
           files: |
             release-assets/*.zip
             release-assets/*.exe
-            release-assets/*.pkg
+            release-assets/**/*.pkg
           fail_on_unmatched_files: true
           draft: false
           prerelease: false

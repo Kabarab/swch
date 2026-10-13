@@ -1,0 +1,103 @@
+name: Publish tested release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Tag whose binaries already passed Release Build checks
+        required: true
+        default: v1.3.1
+        type: string
+      build_run_id:
+        description: Release Build run containing the tested artifacts
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    steps:
+      - name: Verify source tag and successful build checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const id = process.env.BUILD_RUN_ID;
+            if (!/^v\d+\.\d+\.\d+$/.test(tag) || !/^\d+$/.test(id)) {
+              throw new Error('Invalid release tag or build run ID');
+            }
+            const run = (await github.rest.actions.getWorkflowRun({...context.repo, run_id: Number(id)})).data;
+            if (run.name !== 'Release Build' || run.status !== 'completed' || run.head_branch !== tag) {
+              throw new Error('The selected run is not a completed build of this release tag');
+            }
+            const ref = (await github.rest.git.getRef({...context.repo, ref: `tags/${tag}`})).data;
+            const sha = ref.object.type === 'tag'
+              ? (await github.rest.git.getTag({...context.repo, tag_sha: ref.object.sha})).data.object.sha
+              : ref.object.sha;
+            if (sha !== run.head_sha) throw new Error('Artifacts do not belong to the current tag');
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {...context.repo, run_id: Number(id)});
+            for (const name of ['Verify interface before packaging', 'Verify playtime and character statistics',
+              'mod-regressions / mods (windows-latest)', 'mod-regressions / mods (macos-latest)',
+              'Build Windows Application', 'Build macOS Application']) {
+              if (!jobs.some(job => job.name === name && job.conclusion === 'success')) {
+                throw new Error(`Required check did not succeed: ${name}`);
+              }
+            }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify complete release file set
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const version = process.env.RELEASE_TAG.slice(1);
+            const expected = ['swch-macos-arm64.zip', 'swch-windows-x86_64.zip', 'swch-windows-amd64.zip',
+              `SWCH-Setup-${version}.exe`, `SWCH-Setup-${version}-arm64.pkg`];
+            function files(folder) {
+              return fs.readdirSync(folder, {withFileTypes: true}).flatMap(item => {
+                const file = path.join(folder, item.name);
+                return item.isDirectory() ? files(file) : [file];
+              });
+            }
+            const payload = files('release-assets');
+            if (payload.length !== expected.length) throw new Error('Unexpected release asset count');
+            for (const name of expected) {
+              const matches = payload.filter(file => path.basename(file) === name);
+              if (matches.length !== 1 || fs.statSync(matches[0]).size < 1000000) {
+                throw new Error(`Missing or invalid release asset: ${name}`);
+              }
+            }
+            const notes = `docs/releases/${process.env.RELEASE_TAG}.md`;
+            if (!fs.existsSync(notes)) throw new Error('Release notes are missing');
+            core.exportVariable('RELEASE_NOTES', notes);
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: SWCH ${{ inputs.release_tag }}
+          body_path: ${{ env.RELEASE_NOTES }}
+          files: |
+            release-assets/**/*.zip
+            release-assets/**/*.exe
+            release-assets/**/*.pkg
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
