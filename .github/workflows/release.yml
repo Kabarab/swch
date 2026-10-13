@@ -182,6 +182,18 @@ jobs:
           Compress-Archive -Path package/* -DestinationPath swch-windows-x86_64.zip -Force
           Copy-Item swch-windows-x86_64.zip swch-windows-amd64.zip -Force
 
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          ./scripts/build-windows-installer.ps1
+          Copy-Item output/installers/*.exe .
+
+      - name: Test Windows installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          ./scripts/test-windows-installer.ps1 -Installer "output/installers/SWCH-Setup-$version.exe" -PackageDirectory package
+
       - name: Save Windows release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -189,6 +201,7 @@ jobs:
           path: |
             swch-windows-x86_64.zip
             swch-windows-amd64.zip
+            SWCH-Setup-*.exe
           if-no-files-found: error
 
   publish:
@@ -216,7 +229,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: SWCH ${{ github.ref_name }}
           body_path: ${{ steps.notes.outputs.path }}
-          files: release-assets/*.zip
+          files: |
+            release-assets/*.zip
+            release-assets/*.exe
           fail_on_unmatched_files: true
           draft: false
           prerelease: false

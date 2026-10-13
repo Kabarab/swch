@@ -1,0 +1,57 @@
+name: Add Windows installer to release
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag
+        required: true
+        default: v1.3.0
+        type: string
+permissions:
+  contents: write
+jobs:
+  installer:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify released Windows package
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid release tag' }
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern swch-windows-x86_64.zip --dir output/installer-download
+          if ($LASTEXITCODE -ne 0) { throw 'Release package download failed' }
+          $releaseJson = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Release metadata request failed' }
+          $release = $releaseJson | ConvertFrom-Json
+          $asset = $release.assets | Where-Object name -eq 'swch-windows-x86_64.zip'
+          $digest = 'sha256:' + (Get-FileHash output/installer-download/swch-windows-x86_64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not $asset -or $asset.digest -ne $digest) { throw 'Release archive checksum mismatch' }
+          Expand-Archive output/installer-download/swch-windows-x86_64.zip output/installer-package
+      - name: Build Windows installer
+        shell: pwsh
+        run: ./scripts/build-windows-installer.ps1 -PackageDirectory output/installer-package -Version $env:RELEASE_TAG.Substring(1)
+      - name: Test installation and removal
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1 -Installer "output/installers/SWCH-Setup-$($env:RELEASE_TAG.Substring(1)).exe" -PackageDirectory output/installer-package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: output/installers/*.exe
+          if-no-files-found: error
+      - name: Publish installer to existing release
+        shell: pwsh
+        run: |
+          gh release upload $env:RELEASE_TAG "output/installers/SWCH-Setup-$($env:RELEASE_TAG.Substring(1)).exe" --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Installer publication failed' }
+          $metadata = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes request failed' }
+          $release = $metadata | ConvertFrom-Json
+          $name = "SWCH-Setup-$($env:RELEASE_TAG.Substring(1)).exe"
+          $link = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$name"
+          $notes = "Windows: скачайте [$name]($link) и запустите установщик. ZIP доступен для запуска без установки и встроенного обновления.`n`n" + $release.body
+          Set-Content output/installers/release-notes.md -Value $notes -Encoding utf8
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --notes-file output/installers/release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes update failed' }
