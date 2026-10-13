@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+volume="${3:-/}"
+app="${volume%/}/Applications/SWCH.app"
+register="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
+# Register for the desktop user, even when Installer is authorised by an admin.
+if [ -d "$app" ] && [ -x "$register" ] && [ "$volume" = "/" ]; then
+    desktop_user=$(/usr/bin/stat -f '%Su' /dev/console)
+    case "$desktop_user" in
+        root|loginwindow|_mbsetupuser|'') ;;
+        *)
+            desktop_uid=$(/usr/bin/id -u "$desktop_user")
+            /bin/launchctl asuser "$desktop_uid" /usr/bin/sudo -u "$desktop_user" \
+                "$register" -f "$app" || true
+            ;;
+    esac
+fi
+exit 0

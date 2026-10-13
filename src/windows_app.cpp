@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 #include <shlwapi.h>
 #include <winhttp.h>
 #include <dwmapi.h>
@@ -10,6 +11,7 @@
 #include "webview2/WebView2.h"
 #include "embedded_loader.h"
 #include "windows_startup.h"
+#include "windows_resources.h"
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -185,7 +187,7 @@ static std::wstring LocalStartupHtml(const wchar_t* fallback, bool error) {
 
 // Check health of Axum backend at http://127.0.0.1:4242/api/health
 bool CheckBackendHealth() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.0",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.1",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -234,7 +236,7 @@ bool CheckBackendHealth() {
 
 // Sends graceful shutdown request to Axum backend at http://127.0.0.1:4242/api/system/shutdown
 void RequestBackendShutdown() {
-    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.0",
+    HINTERNET hSession = WinHttpOpen(L"swch-launcher/1.3.1",
                                      WINHTTP_ACCESS_TYPE_NO_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);
@@ -528,6 +530,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     (void)hPrevInstance;
     (void)pCmdLine;
+    SetCurrentProcessExplicitAppUserModelID(L"com.kabarab.swch");
 
     int argc = 0;
     auto argv = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -572,7 +575,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hIcon = static_cast<HICON>(LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_SWCH),
+        IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
+    wc.hIconSm = static_cast<HICON>(LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_SWCH),
+        IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = hDarkBrush;
     wc.lpszClassName = CLASS_NAME;
@@ -619,6 +625,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
     g_hWnd = hwnd;
+    SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(wc.hIcon));
+    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(wc.hIconSm));
 
     // Apply immersive dark mode for window titlebar
     BOOL darkMode = TRUE;

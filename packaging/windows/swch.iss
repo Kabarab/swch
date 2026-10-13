@@ -31,6 +31,7 @@ OutputBaseFilename=SWCH-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\..\src\assets\swch.ico
 UninstallDisplayIcon={app}\swch.exe
 CloseApplications=yes
 CloseApplicationsFilter=swch.exe,swch-server.exe,node.exe
@@ -47,8 +48,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#PackageDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\SWCH"; Filename: "{app}\swch.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\SWCH"; Filename: "{app}\swch.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\SWCH"; Filename: "{app}\swch.exe"; WorkingDir: "{app}"; AppUserModelID: "com.kabarab.swch"
+Name: "{autodesktop}\SWCH"; Filename: "{app}\swch.exe"; WorkingDir: "{app}"; AppUserModelID: "com.kabarab.swch"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\swch.exe"; Description: "{cm:LaunchProgram,SWCH}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent

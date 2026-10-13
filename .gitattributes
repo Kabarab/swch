@@ -3,3 +3,4 @@
 
 # Language digests must be identical in Windows and macOS/Linux checkouts.
 ui/lang/** text eol=lf
+packaging/macos/** text eol=lf

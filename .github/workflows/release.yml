@@ -65,6 +65,8 @@ jobs:
     needs: [ui-regressions, game-stats-regressions, mod-regressions]
     name: Build macOS Application
     runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.5'
 
     steps:
       - name: Checkout Code
@@ -79,11 +81,15 @@ jobs:
         with:
           node-version: '24'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Build Backend (Rust Release)
         run: cargo build --release
 
       - name: Build Native GUI Launcher (Swift)
-        run: swiftc -O src/mac_app.swift -o swch_gui
+        run: swiftc -O -target arm64-apple-macosx13.5 src/mac_app.swift -o swch_gui
 
       - name: Assemble swch.app Bundle
         run: |
@@ -103,13 +109,25 @@ jobs:
           node scripts/language-packs.mjs --bundle swch.app/Contents/Resources/web/ui/lang
           cp -r browser-extension swch.app/Contents/Resources/web/
           node scripts/bundle-mod-runtime.mjs macos-arm64 swch.app/Contents/Resources/runtime
+          codesign --force --sign - swch.app
+          codesign --verify --deep --strict swch.app
           zip -r -q swch-macos-arm64.zip swch.app
+
+      - name: Build native macOS installer
+        run: python scripts/build-macos-installer.py
+
+      - name: Test macOS application installation
+        run: |
+          version=$(python -c 'import plistlib; print(plistlib.load(open("swch.app/Contents/Info.plist", "rb"))["CFBundleShortVersionString"])')
+          python scripts/test-macos-installer.py --installer "output/installers/SWCH-Setup-$version-arm64.pkg" --bundle swch.app
 
       - name: Save macOS release artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-macos
-          path: swch-macos-arm64.zip
+          path: |
+            swch-macos-arm64.zip
+            output/installers/*.pkg
           if-no-files-found: error
 
   build-windows:
@@ -143,10 +161,14 @@ jobs:
         run: |
           if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
             Write-Host "Compiling Windows GUI launcher using MSVC cl.exe..."
-            cl.exe /O2 /MT /EHsc /utf-8 /std:c++17 /Isrc src/windows_app.cpp /Fe:swch_gui.exe /link /SUBSYSTEM:WINDOWS winhttp.lib dwmapi.lib shlwapi.lib ole32.lib oleaut32.lib user32.lib gdi32.lib shell32.lib advapi32.lib uuid.lib
+            rc.exe /nologo /Isrc /foswch_resources.res src/windows_app.rc
+            if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource build failed' }
+            cl.exe /O2 /MT /EHsc /utf-8 /std:c++17 /Isrc src/windows_app.cpp swch_resources.res /Fe:swch_gui.exe /link /SUBSYSTEM:WINDOWS winhttp.lib dwmapi.lib shlwapi.lib ole32.lib oleaut32.lib user32.lib gdi32.lib shell32.lib advapi32.lib uuid.lib
           } elseif (Get-Command g++ -ErrorAction SilentlyContinue) {
             Write-Host "Compiling Windows GUI launcher using g++..."
-            g++ -O2 -Isrc src/windows_app.cpp -o swch_gui.exe -mwindows -municode -lwinhttp -ldwmapi -lshlwapi -lole32 -loleaut32 -lshell32 -ladvapi32 -luuid
+            windres -I src src/windows_app.rc -O coff -o swch_resources.o
+            if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource build failed' }
+            g++ -O2 -Isrc src/windows_app.cpp swch_resources.o -o swch_gui.exe -mwindows -municode -lwinhttp -ldwmapi -lshlwapi -lole32 -loleaut32 -lshell32 -ladvapi32 -luuid
           } else {
             throw "No suitable C++ compiler (cl.exe or g++) found for building Windows GUI launcher"
           }
@@ -232,6 +254,7 @@ jobs:
           files: |
             release-assets/*.zip
             release-assets/*.exe
+            release-assets/*.pkg
           fail_on_unmatched_files: true
           draft: false
           prerelease: false
