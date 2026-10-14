@@ -2,6 +2,7 @@ const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../..');
 const jobs=[
+ ['tests/ui/steam-download-cover.cjs'],
  ['--test','tests/ui/i18n.test.mjs'],
  ['tests/ui/i18n-browser.cjs'],
  ['--test','tests/mod-sdk.test.mjs'],

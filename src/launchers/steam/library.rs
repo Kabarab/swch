@@ -90,19 +90,25 @@ pub struct UpdateState {
     pub download_total: u64,
     pub staged: u64,
     pub stage_total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telemetry: Option<super::downloads::DownloadTelemetry>,
 }
 impl UpdateState {
-    fn from_manifest(state: &VdfTable) -> Self {
+    pub(super) fn from_manifest(state: &VdfTable) -> Self {
         let flags = number(state, "StateFlags").unwrap_or(0);
-        let required = flags & 2 != 0;
+        let required = flags & (2 | 32 | 128) != 0;
         let phase = if flags & 512 != 0 {
             "paused"
-        } else if flags & 1024 != 0 {
+        } else if flags & 1048576 != 0 {
             "downloading"
-        } else if flags & (131072 | 262144) != 0 {
+        } else if flags & (2097152 | 4194304 | 262144) != 0 {
             "installing"
-        } else if flags & 128 != 0 {
+        } else if flags & 131072 != 0 {
             "verifying"
+        } else if flags & (65536 | 524288 | 256) != 0 {
+            "preparing"
+        } else if flags & (8 | 1024) != 0 && required {
+            "queued"
         } else if required {
             "required"
         } else if flags & 4 != 0 {
@@ -117,8 +123,29 @@ impl UpdateState {
             download_total: number(state, "BytesToDownload").unwrap_or(0),
             staged: number(state, "BytesStaged").unwrap_or(0),
             stage_total: number(state, "BytesToStage").unwrap_or(0),
+            telemetry: None,
         }
     }
+}
+
+pub(super) fn library_roots(paths: &SteamPaths) -> Vec<std::path::PathBuf> {
+    let mut roots = vec![paths.steam_dir.clone()];
+    for path in [paths.steam_dir.join("steamapps/libraryfolders.vdf"), paths.config_dir().join("libraryfolders.vdf")] {
+        if let Ok(doc) = VdfDocument::from_file(path) {
+            if let Some(libraries) = doc.get_obj("libraryfolders") {
+                for (key, value) in libraries.iter() {
+                    if key.parse::<u32>().is_ok() {
+                        if let Some(path) = value.as_str().or_else(|| value.as_obj()?.get_str("path")) {
+                            roots.push(path.into());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    roots
 }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SteamLibrary {
@@ -323,26 +350,7 @@ pub fn scan(paths: &SteamPaths) -> Result<SteamLibrary, SteamError> {
             }
         }
     }
-    let mut roots = vec![paths.steam_dir.clone()];
-    for path in [
-        paths.steam_dir.join("steamapps/libraryfolders.vdf"),
-        paths.config_dir().join("libraryfolders.vdf"),
-    ] {
-        if let Ok(doc) = VdfDocument::from_file(path) {
-            if let Some(libraries) = doc.get_obj("libraryfolders") {
-                for (key, value) in libraries.iter() {
-                    if key.parse::<u32>().is_err() {
-                        continue;
-                    }
-                    if let Some(path) = value.as_str().or_else(|| value.as_obj()?.get_str("path")) {
-                        roots.push(path.into());
-                    }
-                }
-            }
-        }
-    }
-    roots.sort();
-    roots.dedup();
+    let roots = library_roots(paths);
     let mut installed = BTreeMap::new();
     for root in roots {
         let Ok(entries) = fs::read_dir(root.join("steamapps")) else {

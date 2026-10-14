@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "sourceLocale": "ru",
-  "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+  "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
   "messages": {
     "(активен)": "(активен)",
     "(код Windows: {0})": "(код Windows: {0})",
@@ -503,7 +503,6 @@
     "node mod-sdk/cli.mjs init my-mod --template tab --id username.my-mod node mod-sdk/cli.mjs check my-mod node mod-sdk/cli.mjs pack my-mod dist/mod.zip": "node mod-sdk/cli.mjs init my-mod --template tab --id username.my-mod node mod-sdk/cli.mjs check my-mod node mod-sdk/cli.mjs pack my-mod dist/mod.zip",
     "owner/repository": "owner/repository",
     "run_swch_desktop.command": "run_swch_desktop.command",
-    "s": "s",
     "steam не ответил": "steam не ответил",
     "swch обнаруживает установленные версии, профили, миры и сервера из": "swch обнаруживает установленные версии, профили, миры и сервера из",
     "swch читает сохраненные на компьютере профили Steam и sentry-файлы (ssfn), позволяя переключаться между ними в один клик без повторного ввода паролей и подтверждений.": "swch читает сохраненные на компьютере профили Steam и sentry-файлы (ssfn), позволяя переключаться между ними в один клик без повторного ввода паролей и подтверждений.",
@@ -4219,9 +4218,6 @@
       "ui/mod-guide.js"
     ],
     "run_swch_desktop.command": [
-      "index.html"
-    ],
-    "s": [
       "index.html"
     ],
     "steam не ответил": [

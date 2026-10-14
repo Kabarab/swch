@@ -53,10 +53,26 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
    assert.ok(await page.evaluate(()=>document.querySelector('.main-shell').getBoundingClientRect().right<=document.querySelector('.sidebar').getBoundingClientRect().left+1),'Sidebar overlaps RTL content '+width);
   }
   offline=true;await page.reload();await page.waitForFunction(()=>document.documentElement.dir==='rtl'); // IndexedDB cache survives reload.
-  await page.locator('[data-page="mods"]').click();await page.locator('#mod-author-guide summary').click();
+  await page.locator('[data-page="mods"]').click();
+  await page.locator('#mod-copy-prompt').waitFor({state:'visible'});
+  assert.equal(await page.locator('#mod-author-guide').getAttribute('open'),null,'Copy is available with the guide closed');
   const prompt=await page.locator('#mod-ai-prompt').inputValue();assert.match(prompt,/Build a complete, working mod for SWCH/);assert.doesNotMatch(prompt,/[А-Яа-яЁё]/);
   await page.locator('#mod-copy-prompt').click();assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n'),prompt);
-  const untranslatedGuide=await page.locator('#mod-author-guide').evaluate(el=>{
+  await page.evaluate(()=>{navigator.clipboard.writeText=()=>Promise.reject(new Error('Clipboard permission denied'));});
+  await page.locator('#mod-copy-prompt').click();
+  assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n'),prompt,'Fallback copies the entire prompt');
+  assert.equal(await page.locator('#mod-prompt-preview').getAttribute('open'),null,'Successful copy does not expand the long prompt');
+  await page.evaluate(()=>{document.execCommand=()=>false;});
+  await page.locator('#mod-copy-prompt').click();
+  assert.equal(await page.locator('#mod-ai-prompt').evaluate(el=>el.selectionEnd-el.selectionStart),prompt.length,'Manual fallback selects all text');
+  assert.equal(await page.locator('#mod-prompt-preview').getAttribute('open'),'','Manual fallback makes selected text visible');
+  for(const width of [390,768,1280]){
+   await page.setViewportSize({width,height:850});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'RTL prompt overflow '+width);
+   assert.ok(await page.locator('.mod-prompt-card').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Prompt card overflow '+width);
+  }
+  await page.locator('#mod-author-guide summary').click();
+  const untranslatedGuide=await page.locator('#mods-view').evaluate(el=>{
    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT),texts=[];
    while(walker.nextNode()){const n=walker.currentNode;if(!n.parentElement.closest('[translate=no],code,pre,textarea')&&/[А-Яа-яЁё]/.test(n.nodeValue))texts.push(n.nodeValue.trim());}
    return texts.filter(Boolean);

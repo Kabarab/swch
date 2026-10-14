@@ -1,0 +1,67 @@
+<span id="settings-claims-attention" hidden></span>
+    <section id="auto-claim-settings" class="settings-panel claim-workspace" role="region" aria-label="Автоклеймер">
+      <div class="claim-heading"><div><span class="claim-eyebrow">ИГРЫ В ПОДАРОК</span><h2>Автоклеймер</h2><p class="muted">Временные раздачи платных игр. Без демоверсий, бесплатных выходных и постоянных free-to-play.</p></div><span id="claim-automation-badge" class="claim-pill"></span></div>
+      <div class="claim-summary" id="claim-summary"></div>
+      <div class="claim-run-box"><div><p id="auto-claim-status" role="status">Загрузка состояния…</p><p id="claim-run-detail" class="muted"></p></div><div class="claim-run-actions"><button type="button" class="primary" id="auto-claim-check">Проверить и забрать сейчас</button><button type="button" class="secondary" id="auto-claim-stop" hidden>Остановить</button></div></div>
+      <div id="claim-next-steps" class="claim-next-steps" hidden></div>
+      <nav class="claim-tabs" role="tablist" aria-label="Раздачи"><button type="button" id="claim-tab-games" data-claim-view="games" role="tab" aria-controls="claim-panel-games" aria-selected="true">Раздачи</button><button type="button" id="claim-tab-accounts" data-claim-view="accounts" role="tab" aria-controls="claim-panel-accounts" aria-selected="false">Аккаунты <span id="claim-accounts-count"></span></button><button type="button" id="claim-tab-history" data-claim-view="history" role="tab" aria-controls="claim-panel-history" aria-selected="false">История и ключи</button><button type="button" id="claim-tab-options" data-claim-view="options" role="tab" aria-controls="claim-panel-options" aria-selected="false">Автоматизация</button></nav>
+      <div id="claim-panel-games" role="tabpanel" aria-labelledby="claim-tab-games" class="claim-view"><div class="claim-section-heading"><h4>Результаты проверки</h4><button type="button" class="text-button" data-claim-show="accounts">Посмотреть аккаунты →</button></div><div id="auto-claim-results" class="auto-claim-results"></div>      <details><summary>Дополнительный каталог раздач</summary><p class="muted small-text">Показывает кандидатов для всех магазинов, включая магазины без подключённого аккаунта. Цена и выдача лицензии проверяются при получении. Alienware требует ручного получения ключа.</p><button type="button" class="text-button" id="auto-claim-catalog-refresh">Обновить каталог</button><div id="auto-claim-catalog"></div></details>
+</div>
+      <div id="claim-panel-accounts" role="tabpanel" aria-labelledby="claim-tab-accounts" class="claim-view" hidden><div class="claim-section-heading"><div><h4>Аккаунты магазинов</h4><p class="muted">Сохранённый вход и готовность к получению показаны отдельно.</p></div><input type="search" id="claim-account-search" placeholder="Найти аккаунт или магазин" aria-label="Найти аккаунт"></div><div id="claim-manual-status" class="claim-manual-status" role="status" hidden></div><div id="auto-claim-accounts" class="auto-claim-accounts"></div>      <details><summary>Подключить другой магазин</summary>
+        <p class="muted small-text">Укажи логин или email аккаунта магазина и регион. В отдельном окне SWCH выполни официальный вход и открой профиль с этим логином. Пароль остаётся в магазине. Для Prime нужна действующая подписка. Alienware отображает раздачи для ручного получения.</p>
+        <div class="auto-claim-controls"><select id="auto-claim-add-platform"></select><input id="auto-claim-add-identity" placeholder="Логин или email"><input id="auto-claim-add-country" placeholder="Регион, например BY" maxlength="2"><button type="button" class="secondary" id="auto-claim-add">Подключить магазин</button></div>
+      </details>
+</div>
+      <div id="claim-panel-history" role="tabpanel" aria-labelledby="claim-tab-history" class="claim-view" hidden>      <details class="auto-claim-history"><summary>История полученных игр</summary><div id="auto-claim-history"></div></details>
+      <details><summary>Полученные игровые ключи</summary><p class="muted small-text">Один ключ активируется на одном аккаунте. Ключ хранится в хранилище ОС и не входит в историю лицензий до подтверждения активации.</p><div id="auto-claim-keys"></div></details>
+<button type="button" class="text-button" id="auto-claim-export">Экспортировать результаты</button></div>
+      <div id="claim-panel-options" role="tabpanel" aria-labelledby="claim-tab-options" class="claim-view" hidden><h4>Магазины и расписание</h4><div class="claim-mode-switch"><label><input type="checkbox" id="auto-claim-dry_run"> Пробный запуск без получения</label><small class="muted">В пробном режиме игры не добавляются в библиотеку.</small></div>      <div class="auto-claim-controls">
+        <label><input type="checkbox" id="auto-claim-enabled"> Получать автоматически</label>
+        <label><input type="checkbox" id="auto-claim-steam"> Steam</label>
+        <label><input type="checkbox" id="auto-claim-epic"> Epic Games</label>
+        <label>Проверять каждые <select id="auto-claim-interval"><option value="15">15 минут</option><option value="30">30 минут</option><option value="60">1 час</option><option value="180">3 часа</option><option value="360">6 часов</option><option value="1440">24 часа</option></select></label>
+      </div>
+      <div id="auto-claim-platforms" class="auto-claim-controls"></div>
+      <div class="claim-browser-preferences">
+        <label>Браузер магазина <select id="auto-claim-browser_name"><option value="auto">Как в Windows · Chrome или Edge</option><option value="chrome">Google Chrome</option><option value="edge">Microsoft Edge</option></select></label>
+        <label><input type="checkbox" id="auto-claim-browser_visible"> Разрешить окна при автоматическом получении</label>
+        <p class="muted small-text">Когда выключено, обычные проверки и расписание работают в фоне через API и скрытый браузер: SWCH не запускает управление Epic Launcher. При необходимости входа или CAPTCHA появится причина остановки; окно открывается только по отдельной кнопке. Для каждого аккаунта сохраняется отдельный профиль. При смене Chrome на Edge потребуется новый вход.</p>
+      </div>
+      <div class="claim-browser-preferences">
+        <label><input type="checkbox" id="auto-claim-epic_launcher_claims"> Epic через официальный лаунчер · экспериментально</label>
+        <p class="muted small-text">При отказе API SWCH попробует получить игру в окне Epic Launcher по сохранённому входу, если окна разрешены. В фоновом режиме этот способ запускается только кнопкой «Получить через Epic Launcher» у аккаунта. Нужен Windows OCR en-US и английский интерфейс магазина. Оставь окно в фокусе и не пользуйся мышью и клавиатурой во время оформления. Аккаунты могут переключаться; при запущенной игре, проверке безопасности или неясной цене получение остановится. Успех подтверждается лицензией.</p>
+      </div>
+      <details><summary>Расписание и параметры</summary><div class="auto-claim-controls">
+        <label>Расписание <select id="auto-claim-schedule_mode"><option value="interval">Через интервал</option><option value="daily">Ежедневно</option><option value="combined">Интервал и ежедневно</option></select></label>
+        <label>Время через запятую <input id="auto-claim-daily_times" placeholder="10:00, 20:00"></label>
+        <label>Часовой пояс <input id="auto-claim-timezone" placeholder="local или Europe/Minsk"></label>
+        <label><input type="checkbox" id="auto-claim-run_on_startup"> Проверять при запуске SWCH</label>
+        <label><input type="checkbox" id="auto-claim-gamerpower"> Дополнительные раздачи GamerPower</label>
+        <label><input type="checkbox" id="auto-claim-epic_mobile"> Мобильные раздачи Epic</label>
+        <label><input type="checkbox" id="auto-claim-browser_enabled"> Оформлять через браузер при необходимости</label>
+        <label><input type="checkbox" id="auto-claim-notifications"> Уведомлять о новых результатах на этом устройстве</label>
+        <label><input type="checkbox" id="auto-claim-steamdb"> Дополнительный поиск SteamDB (при недоступности продолжать поиск Steam)</label>
+        <label><input type="checkbox" id="auto-claim-external_notifications"> Отправлять сводку в подключённые внешние каналы</label>
+        <label>Повторы при сбое сети <input type="number" id="auto-claim-retry_attempts" min="0" max="5"></label>
+        <label>Пауза между повторами, секунд <input type="number" id="auto-claim-retry_backoff_seconds" min="0" max="300"></label>
+        <label>Ожидание входа, секунд <input type="number" id="auto-claim-browser_login_timeout_seconds" min="15" max="600"></label>
+        <label>Ожидание оформления, секунд <input type="number" id="auto-claim-browser_operation_timeout_seconds" min="15" max="600"></label>
+      </div></details>
+      <details id="claim-notify-panel"><summary>Внешние уведомления</summary>
+        <p class="muted small-text">Сводка содержит число полученных игр, ключей и ошибок. Адреса и секреты сохраняются только в хранилище Windows. Пустые поля сохраняют предыдущие каналы.</p>
+        <p id="claim-notify-status" class="muted small-text"></p>
+        <label>Discord webhook <input id="claim-notify-discord" type="password" autocomplete="off"></label>
+        <label>Другой HTTPS webhook <input id="claim-notify-webhook" type="password" autocomplete="off"></label>
+        <label>Telegram bot token <input id="claim-notify-token" type="password" autocomplete="off"></label>
+        <label>Telegram chat ID <input id="claim-notify-chat" type="text" autocomplete="off"></label>
+        <label>SMTP сервер <input id="claim-notify-host" type="text" autocomplete="off"></label>
+        <label>SMTP порт <select id="claim-notify-port"><option value="465">465 · TLS</option><option value="587">587 · STARTTLS</option></select></label>
+        <label>SMTP логин <input id="claim-notify-user" type="text" autocomplete="off"></label>
+        <label>SMTP пароль <input id="claim-notify-pass" type="password" autocomplete="off"></label>
+        <label>Email отправителя <input id="claim-notify-from" type="email" autocomplete="off"></label>
+        <label>Email получателя <input id="claim-notify-to" type="email" autocomplete="off"></label>
+        <button type="button" class="text-button" id="claim-notify-save">Сохранить каналы</button>
+        <button type="button" class="text-button" id="claim-notify-clear">Удалить все каналы</button>
+      </details>
+<small class="muted">Автоматическая проверка работает, пока включён мод «Автоклеймер» и запущен SWCH. Дополнительный каталог: <a href="https://www.gamerpower.com/api-read" target="_blank" rel="noopener noreferrer">GamerPower</a>.</small></div>
+    </section>

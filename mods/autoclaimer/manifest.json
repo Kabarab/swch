@@ -1,0 +1,13 @@
+{
+  "id": "swch.autoclaimer",
+  "name": "Автоклеймер",
+  "version": "1.0.0",
+  "api": "^1.0.0",
+  "platforms": [
+    "windows-x64",
+    "macos-arm64"
+  ],
+  "description": "Получение временных раздач игр для подключённых аккаунтов. Отдельный процесс, расписание, история и входы магазинов.",
+  "backend": "backend.mjs",
+  "ui": "index.html"
+}

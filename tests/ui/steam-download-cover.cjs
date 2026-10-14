@@ -1,0 +1,69 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
+(async()=>{
+ const server=await staticServer(),browser=await chromium.launch(launchOptions);
+ try{
+  const page=await browser.newPage({viewport:{width:1260,height:960}}),errors=[],writes=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  const account={id:'76561197960265729',username:'player',display_name:'Player',launcher:'steam',is_active:true};
+  let update={required:true,phase:'required',downloaded:0,download_total:1024**3,staged:0,stage_total:2*1024**3};
+  let installed=true,fail=false;
+  const row=()=>({id:'steam_730',app_id:'730',name:'Counter-Strike 2',launcher:'steam',account_id:account.id,access:'owned',is_installed:installed,is_free:false,has_inventory:false,update});
+  const telemetry={download_bps:10*1024**2,stage_bps:20*1024**2,eta_seconds:60,steam_read_bps:40*1024**2,steam_write_bps:25*1024**2};
+  await page.route('**/ui/launcher.js*',route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync(path.join(server.root,'ui/launcher.js'),'utf8')+'\nwindow.downloadTest={poll:pollDownloads,pending:pendingDownloads,busy:()=>downloadPolling};'}));
+  await page.route('**/api/**',route=>{
+   const request=route.request(),endpoint=new URL(request.url()).pathname;
+   if(endpoint==='/api/steam/artwork')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="#f55117"/><circle cx="200" cy="200" r="100" fill="#2d97ec"/></svg>'});
+   if(request.method()==='POST'){writes.push([endpoint,request.postDataJSON()]);return route.fulfill({json:{status:'requested',message:'Steam запущен'}});}
+   if(endpoint==='/api/steam/library')return route.fulfill({json:{accounts:[account],games:[row()],warnings:[]}});
+   if(endpoint==='/api/steam/downloads')return route.fulfill(fail?{status:503,json:{error:'Steam unavailable'}}:{json:{games:{730:{update,is_installed:installed}}}});
+   return route.fulfill({json:emptyApi(endpoint)});
+  });
+  await page.goto(server.origin);
+  const card=page.locator('[data-download-game="steam:730"]'),cover=card.locator('[data-download-cover]');
+  await card.waitFor();
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'100%');
+  await card.locator('.card-play').click();
+  await page.waitForFunction(()=>window.downloadTest.pending.size===1);
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'0%');
+  assert(writes.some(([endpoint,payload])=>endpoint==='/api/steam/launch'&&payload.update_only===false));
+  const poll=async()=>{await page.waitForFunction(()=>!window.downloadTest.busy());await page.evaluate(()=>window.downloadTest.poll());};
+  update={...update,phase:'downloading',downloaded:256*1024**2,telemetry};await poll();
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'25%');
+  assert.equal(await cover.locator('.download-cover-base').evaluate(e=>getComputedStyle(e).filter),'grayscale(1)');
+  await cover.locator('.download-cover-color').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
+  assert.equal(await cover.locator('.download-cover-color').evaluate(e=>getComputedStyle(e).clipPath),'inset(75% 0px 0px)');
+  assert.match(await card.innerText(),/10 МБ\/с/);assert.match(await card.innerText(),/40 МБ\/с/);assert.match(await card.innerText(),/25 МБ\/с/);assert.match(await card.innerText(),/≈ 1 мин/);
+  await card.locator('.poster-button').click();
+  const modal=page.locator('#game-modal');await modal.waitFor({state:'visible'});
+  await modal.evaluate(e=>e.scrollTop=100);const scroll=await modal.evaluate(e=>e.scrollTop);
+  const original=await cover.elementHandle();
+  update={...update,downloaded:768*1024**2};await poll();
+  assert.equal(await original.evaluate(e=>e.isConnected),true,'Polling preserves cover node and its transition');
+  assert.equal(await modal.evaluate(e=>e.scrollTop),scroll);
+  assert.equal(await modal.locator('[data-download-cover]').evaluate(e=>e.style.getPropertyValue('--download-fill')),'75%');
+  update={...update,phase:'paused'};await poll();assert.match(await modal.innerText(),/На паузе/);
+  fail=true;await poll();assert.match(await modal.innerText(),/Не удалось получить свежий прогресс/);fail=false;
+  update={...update,phase:'installing',downloaded:1024**3,staged:1024**3};await poll();
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'99%','Disk work must not drain the download fill');
+  update={...update,phase:'verifying',staged:2*1024**3};await poll();
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'99%');
+  update={...update,phase:'ready',required:false};await poll();
+  assert.equal(await cover.evaluate(e=>e.style.getPropertyValue('--download-fill')),'100%');
+  assert.equal(await card.locator('.card-play').innerText(),'Играть');assert.equal(await card.locator('.card-download').count(),0);
+  await modal.evaluate(e=>e.close());
+  update={...update,required:true,phase:'downloading',downloaded:680*1024**2,staged:0};await poll();
+  for(const width of [1260,800,390]){
+   await page.setViewportSize({width,height:960});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`overflow at ${width}`);
+  }
+  await page.setViewportSize({width:1260,height:960});
+  await cover.locator('.download-cover-color').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
+  fs.mkdirSync(path.join(server.root,'target_build'),{recursive:true});
+  await page.screenshot({path:path.join(server.root,'target_build/ui-download-preview.png'),fullPage:true});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: download cover, request, metrics, stable DOM, modal, pause, stale data, disk stages, completion and responsive layouts');
+ }finally{await browser.close();await server.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -188,8 +188,8 @@ pub fn create_app(db: Database) -> Router {
 
 /// Constructs the router with custom AppState (useful for tests with mock client or in-memory keyring).
 pub fn create_app_with_state(state: AppState) -> Router {
-    let claimer = crate::auto_claim::AutoClaimer::new(state.db.clone(), state.epic_store.clone());
-    create_app_with_auto_claim(state, claimer)
+    let manager = Arc::new(crate::mods::ModManager::new(state.db.clone()));
+    create_app_with_mods(state, manager)
 }
 
 pub fn create_app_with_auto_claim(state: AppState, claimer: Arc<crate::auto_claim::AutoClaimer>) -> Router {
@@ -198,6 +198,15 @@ pub fn create_app_with_auto_claim(state: AppState, claimer: Arc<crate::auto_clai
 }
 
 pub fn create_app_with_auto_claim_and_mods(state: AppState, claimer: Arc<crate::auto_claim::AutoClaimer>, manager: Arc<crate::mods::ModManager>) -> Router {
+    build_app(state, Some(claimer), manager)
+}
+
+/// The application starts mods; auto-claiming belongs to the optional mod process.
+pub fn create_app_with_mods(state: AppState, manager: Arc<crate::mods::ModManager>) -> Router {
+    build_app(state, None, manager)
+}
+
+fn build_app(state: AppState, claimer: Option<Arc<crate::auto_claim::AutoClaimer>>, manager: Arc<crate::mods::ModManager>) -> Router {
     let index_path = resolve_index_path();
     let static_dir = index_path
         .parent()
@@ -205,10 +214,14 @@ pub fn create_app_with_auto_claim_and_mods(state: AppState, claimer: Arc<crate::
 
     let cors = CorsLayer::permissive();
 
-    Router::new()
+    let claims = match &claimer {
+        Some(claimer) => auto_claim::router(claimer.clone(), state.epic_store.clone()).with_state::<AppState>(()),
+        None => Router::new(),
+    };
+    let app = Router::new()
         .merge(mods::router())
         .merge(i18n::router())
-        .merge(auto_claim::router(claimer.clone(), state.epic_store.clone()).with_state::<AppState>(()))
+        .merge(claims)
         // Core & System routes
         .route("/api/health", get(handlers::health))
         .route("/api/playtime", get(playtime::get))
@@ -378,9 +391,9 @@ pub fn create_app_with_auto_claim_and_mods(state: AppState, claimer: Arc<crate::
         .fallback_service(ServeDir::new(static_dir).fallback(ServeFile::new(&index_path)))
         .layer(cors)
         .layer(axum::Extension(crate::launchers::gog::auth::GogStore::shared()))
-        .layer(axum::Extension(claimer))
         .layer(axum::middleware::from_fn(mods::notify_changes))
         .layer(axum::Extension(manager))
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(state);
+    if let Some(claimer) = claimer { app.layer(axum::Extension(claimer)) } else { app }
 }

@@ -115,6 +115,9 @@ impl Runtime {
             .kill_on_drop(true);
         #[cfg(windows)]
         command.creation_flags(0x08000000);
+        if let Some(path) = services.db.path() {
+            command.env("SWCH_DB_PATH", path.canonicalize().map_err(|e| e.to_string())?);
+        }
         let mut child = command.spawn().map_err(|e| e.to_string())?;
         let input = Arc::new(Mutex::new(child.stdin.take().ok_or("Missing mod stdin")?));
         let mut output = BufReader::new(child.stdout.take().ok_or("Missing mod stdout")?);
@@ -213,7 +216,11 @@ impl Runtime {
         self.tasks[0].is_finished() || !matches!(self.child.try_wait(), Ok(None))
     }
     pub async fn stop(&mut self) {
-        let _ = self.child.kill().await;
+        // Give mods a chance to release native workers and package file handles.
+        let _ = write(&self.input, json!({"jsonrpc":"2.0","method":"shutdown"})).await;
+        if tokio::time::timeout(Duration::from_secs(10), self.child.wait()).await.is_err() {
+            let _ = self.child.kill().await;
+        }
         for task in &self.tasks {
             task.abort();
         }

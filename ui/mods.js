@@ -1,6 +1,6 @@
 import {PLATFORMS,registerModPlatforms} from './platforms.mjs?v=mods-1';
 import {localizedConfirm as confirm,getLocale} from './i18n.js';
-import {modGuideHTML,setupModGuide} from './mod-guide.js';
+import {modGuideHTML,setupModGuide} from './mod-guide.js?v=copy-prompt-2';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let host,mods=[],theme={},catalog=[],compatibility={},catalogWarning='',target='',events,timer,frameKey='',renderGeneration=0;
 const enc=encodeURIComponent;
@@ -35,7 +35,7 @@ export function renderModPage(page) {
   const [,id,tab]=page.split(':');view.textContent='Загружаем мод…';
   void host.api(`/api/mods/${enc(id)}/ui`).then(({html})=>{
     if(generation!==renderGeneration||frameKey!==page)return;
-    const frame=document.createElement('iframe');frame.className='mod-frame';frame.title=modPageTitle(page)[0];frame.sandbox='allow-scripts allow-forms';
+    const frame=document.createElement('iframe');frame.className='mod-frame';frame.title=modPageTitle(page)[0];frame.sandbox='allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads';
     const bootstrap=`<script>const pending=new Map(),listeners=new Map();let sequence=0;window.swch={call:(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('SWCH request timed out'));},35000);pending.set(id,{resolve,reject,timer});parent.postMessage({swch:1,id,method,params},'*');}),on:(event,fn)=>{if(!listeners.has(event))listeners.set(event,new Set());listeners.get(event).add(fn);return ()=>listeners.get(event)?.delete(fn);},tab:${JSON.stringify(tab)}};addEventListener('message',e=>{if(e.source!==parent||e.data?.swch!==1)return;const d=e.data;if(d.event){for(const fn of listeners.get(d.event)||[])fn(d.data);return;}const p=pending.get(d.id);if(p){clearTimeout(p.timer);pending.delete(d.id);d.error?p.reject(new Error(d.error)):p.resolve(d.result);}});<\/script>`;
     frame.srcdoc=bootstrap+html;view.replaceChildren(frame);
     frame.dataset.modId=id;
@@ -57,7 +57,7 @@ async function renderCatalogPage(view) {
   if(!view.querySelector('#mod-search')){
     view.innerHTML=`<div class="mods-toolbar"><label class="search"><input id="mod-search" placeholder="Найти мод" aria-label="Найти мод"></label>${button('catalog','Обновить каталог','')}${button('reset-theme','Стандартная тема','')}</div><p class="muted">Моды имеют права пользователя на компьютере. Автоматическая проверка каталога проверяет пакет и автора, но не безопасность кода.</p><p id="mod-warning" role="status"></p><h2>Установленные</h2><div id="installed-mods" class="mods-grid"></div><div id="mod-platform-controls"></div><h2>Каталог</h2><div id="catalog-mods" class="mods-grid"></div><details class="ux-disclosure"><summary>Установка из ZIP и разработка</summary><label>ZIP мода<input id="mod-zip" type="file" accept=".zip"></label><label>Папка разработки<input id="mod-dev-path" placeholder="Полный путь к папке мода"></label>${button('development','Подключить папку','')}<p><a href="https://github.com/Kabarab/swch/blob/main/docs/mods.md" target="_blank" rel="noopener noreferrer">Документация для авторов ↗</a></p></details><h3>Очистка сохранённых данных</h3><label>ID удалённого мода<input id="mod-clear-id" placeholder="author.mod"></label>${button('clear-data','Очистить данные','')}`;
     view.querySelector('#mod-search').addEventListener('input',filterCards);
-    view.insertAdjacentHTML('afterbegin',modGuideHTML());setupModGuide(view);
+    view.insertAdjacentHTML('beforeend',modGuideHTML());setupModGuide(view);
   }
   try{const state=await host.api('/api/mods');if(generation!==renderGeneration)return;mods=state.mods||[];theme=state.theme||{};applyModTheme();}catch(e){catalogWarning=e.message;}
   if(generation!==renderGeneration)return;

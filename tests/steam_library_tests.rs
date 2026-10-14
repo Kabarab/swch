@@ -322,7 +322,7 @@ fn inventory_retains_category_and_internal_tag_values_for_steam_filters() {
 fn manifest_update_progress_survives_remote_library_overlay() {
     let temp = tempfile::tempdir().unwrap();
     fs::create_dir_all(temp.path().join("steamapps")).unwrap();
-    fs::write(temp.path().join("steamapps/appmanifest_730.acf"),r#""AppState" {"StateFlags" "1030" "installdir" "cs" "BytesToDownload" "1000" "BytesDownloaded" "250" "BytesToStage" "2000" "BytesStaged" "500"}"#).unwrap();
+    fs::write(temp.path().join("steamapps/appmanifest_730.acf"),r#""AppState" {"StateFlags" "1049862" "installdir" "cs" "BytesToDownload" "1000" "BytesDownloaded" "250" "BytesToStage" "2000" "BytesStaged" "500"}"#).unwrap();
     let mut data = scan(&SteamPaths::new(temp.path())).unwrap();
     let update = data.games[0].update.as_ref().unwrap();
     assert!(update.required);

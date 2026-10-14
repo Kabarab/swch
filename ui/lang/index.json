@@ -1,72 +1,72 @@
 {
   "schema": 1,
-  "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+  "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
   "languages": [
     {
       "locale": "ab",
       "name": "Abkhaz",
-      "nativeName": "абхазский",
+      "nativeName": "Abkhazian",
       "direction": "ltr",
-      "sha256": "cc4e41e567af6b19e51ea65d4338a419315584a6e18f75b8ab65535453095333",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "7061fc364851d08b62f7e345dc3b4c6ad4f5a79834a90ba04e98eeed78824b67",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 375736,
-      "messagesSha256": "04dfe60a03897e870edc64d6aff66f7db58935e8eb2e2a2df50066fb12fb2358"
+      "bytes": 375727,
+      "messagesSha256": "376351e7d4676da1c529b00c4897c8ea18bb49947b95ce8b251b833eead1ddea"
     },
     {
       "locale": "ace",
       "name": "Acehnese",
-      "nativeName": "ачехский",
+      "nativeName": "Acehnese",
       "direction": "ltr",
-      "sha256": "727290b2d286dc5357dd7b495b4dad76ef78e8d197c3d39212caf07f3e75ba9d",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "95ff8cd5313a87f719368dd72b16ba26ed02271a4099a41929ba086e117bf57b",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 299920,
-      "messagesSha256": "2968c28d2cd057c40227d7b33763f0c890c593dca91c05fa17dc6a82038f0ec6"
+      "bytes": 299912,
+      "messagesSha256": "47a140b135ec96687bdcddc6b6c7ee8480e5dd927983f9a73e5c5aea39fe01cb"
     },
     {
       "locale": "ach",
       "name": "Acholi",
-      "nativeName": "ачоли",
+      "nativeName": "Acoli",
       "direction": "ltr",
-      "sha256": "1673fa793afdddd38fd00f9df4fba687c654f7999335c961b2bd9c1743caf60f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "1856326427c4cb5bf69a633695f1099c9c02d943b0bbd3cd0848aa152041eb21",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 289920,
-      "messagesSha256": "21e4267ba5bbea9a01ffbec7484626a104d357f177539379e2aa203465896f26"
+      "bytes": 289912,
+      "messagesSha256": "352555ba42dbbed7287d01afba033e8c6c837013f5e280bfc5a3beecf3636169"
     },
     {
       "locale": "aa",
       "name": "Afar",
-      "nativeName": "афарский",
+      "nativeName": "Afar",
       "direction": "ltr",
-      "sha256": "4c7870a900d385b4d0dbe3e62458a4f8045b0129f6fa7ed2e5a3f7ed7bb710c8",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "e2f1660d04042f283eda08337d6ff241a8097363af82ba35d33a9cea94a3c4d6",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 290444,
-      "messagesSha256": "1b7d567cc477a1b69651914491c498638bc19420c8a8bf9798d01911a72f22e6"
+      "bytes": 290436,
+      "messagesSha256": "32c05442deeda908eb866f15b2cafc33fa3776bce7bef1946431b265164fb0e2"
     },
     {
       "locale": "af",
       "name": "Afrikaans",
       "nativeName": "Afrikaans",
       "direction": "ltr",
-      "sha256": "a77d09be38b935d3c69b6099cce77bc1f4f06dd7b7a145d77948afc831369990",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "ebb1f18d366118caabde5c0395d661157f64f7b7c35a9635be810492050e0c12",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 301432,
-      "messagesSha256": "2ee1061f55508453d89657b9a00bac80a77c94e299783355bd8a1b46d763d18d"
+      "bytes": 301424,
+      "messagesSha256": "df2fbfd9b82a2fedeaecb671674dd89d5ef13c8f2274511a54b77f8f852f3a88"
     },
     {
       "locale": "sq",
       "name": "Albanian",
       "nativeName": "shqip",
       "direction": "ltr",
-      "sha256": "8600b2fbce0839eaca8744dc4af98bc38599be26808b444c679c9b7aee18941e",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "b7668da1578fa0bc85d268ad3165bf861612251f78836facf7061ff886db72af",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 308759,
-      "messagesSha256": "fe9ca2e0b7457f5ea086ffe0719930a8e4e7a1756ee61c734faf3ee07d8c67c9"
+      "bytes": 308751,
+      "messagesSha256": "2fd6e7529be82545a7961dca3f438b52800c1ee4888e03fdac9c2bfbac7946d3"
     },
     {
       "locale": "alz",
@@ -85,11 +85,11 @@
       "name": "Arabic",
       "nativeName": "العربية",
       "direction": "rtl",
-      "sha256": "260dfeab415a80bcb7f29a327aec76161314d9340ea124cacbcf5bfa3603f5e4",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "953eca9d688c4f08ca9f47db9a637291afb39165ac3f2cbef6e8a6aa57e2ff7e",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 348943,
-      "messagesSha256": "13655b48d763ff1415625776b6c9851fd2f5b834e129a1b4f830c5ca5fca3ce5"
+      "bytes": 348934,
+      "messagesSha256": "efd4147d3a627867c3932a4f70202cc81e1aff8b567e24b34e1f5dff61b2b878"
     },
     {
       "locale": "hy",
@@ -106,19 +106,19 @@
     {
       "locale": "av",
       "name": "Avar",
-      "nativeName": "аварский",
+      "nativeName": "Avaric",
       "direction": "ltr"
     },
     {
       "locale": "awa",
       "name": "Awadhi",
-      "nativeName": "авадхи",
+      "nativeName": "Awadhi",
       "direction": "ltr"
     },
     {
       "locale": "ay",
       "name": "Aymara",
-      "nativeName": "аймара",
+      "nativeName": "Aymara",
       "direction": "ltr"
     },
     {
@@ -126,27 +126,27 @@
       "name": "Azerbaijani",
       "nativeName": "azərbaycan",
       "direction": "ltr",
-      "sha256": "8a04c556a3a0d4b14663e799781f619d949c68fb12ec7468d06cd02d87060098",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "8bb692db5b221af09ee8b7213dc09a04f92812a0a10189bec908aba809f7b1ff",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 294994,
-      "messagesSha256": "a73a9face2deef632d5080ec9b4a431e24e6bbb28a0402993c7db0b70e3823a7"
+      "bytes": 294986,
+      "messagesSha256": "6fb1e51333b287b107d89c46d3ce9d17ef483f827b09aba446564427152b32c9"
     },
     {
       "locale": "ban",
       "name": "Balinese",
-      "nativeName": "балийский",
+      "nativeName": "Balinese",
       "direction": "ltr",
-      "sha256": "d45a6d6d17e814bd0aa6ead2b85962f95410ee27a6ffa1a5c844c66d2dfacc8a",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "d0727aea248921e315ec039d3bfa338cfcdc356af4cc383fd6a93e95c4387dc6",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 294246,
-      "messagesSha256": "10529b1d3194cadaffa76eb9740f0dbf767d7ef55e5905ba65d3315be0857188"
+      "bytes": 294238,
+      "messagesSha256": "6f59452f33919d3d8fdb245e96509f7fbed69e9c26b9abda2e3ca2f87320e6f3"
     },
     {
       "locale": "bal",
       "name": "Baluchi",
-      "nativeName": "белуджский",
+      "nativeName": "Baluchi",
       "direction": "rtl"
     },
     {
@@ -164,7 +164,7 @@
     {
       "locale": "ba",
       "name": "Bashkir",
-      "nativeName": "башкирский",
+      "nativeName": "Bashkir",
       "direction": "ltr"
     },
     {
@@ -196,11 +196,11 @@
       "name": "Belarusian",
       "nativeName": "беларуская",
       "direction": "ltr",
-      "sha256": "5675d89f3fa5321cae436ce749ebbe9e978067e1d647220dfbebcbb8739ea1bd",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "d120e19ac88ce4daf969be72d24e9980628f0cea8406c79e5ba5e24d84776438",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 363095,
-      "messagesSha256": "83d3ba279c921ec078e1c9dfe38942627b40f0094cade26c7d667b49e3120e01"
+      "bytes": 363087,
+      "messagesSha256": "82ebe0d717cf984cf4de625c9cf53c948e5bc37a5bc853d259fe87f61fe14cec"
     },
     {
       "locale": "bem",
@@ -229,7 +229,7 @@
     {
       "locale": "bik",
       "name": "Bikol",
-      "nativeName": "бикольский",
+      "nativeName": "Bikol",
       "direction": "ltr"
     },
     {
@@ -253,7 +253,7 @@
     {
       "locale": "bua",
       "name": "Buryat",
-      "nativeName": "бурятский",
+      "nativeName": "Buriat",
       "direction": "ltr"
     },
     {
@@ -277,7 +277,7 @@
     {
       "locale": "ch",
       "name": "Chamorro",
-      "nativeName": "чаморро",
+      "nativeName": "Chamorro",
       "direction": "ltr"
     },
     {
@@ -289,7 +289,7 @@
     {
       "locale": "ny",
       "name": "Chichewa",
-      "nativeName": "ньянджа",
+      "nativeName": "Nyanja",
       "direction": "ltr"
     },
     {
@@ -297,11 +297,11 @@
       "name": "Chinese (Simplified)",
       "nativeName": "简体中文",
       "direction": "ltr",
-      "sha256": "fc317e63a82747536fe47ea74cc5ea11e37b010ff1dac316a229b8384adec2de",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "71d16499d6a97bb76814a7b49edddd165a5b288ae0de7af75d294230bc091dcf",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 279748,
-      "messagesSha256": "0e6c94504f59180f8f59d7a85962ebfa4c3a367c5e33163a7daae271a05fc601"
+      "bytes": 279740,
+      "messagesSha256": "b11b88b05e0a1650a671bcd82bb03c3ea481c85c381520e2597f83b73536e501"
     },
     {
       "locale": "zh-TW",
@@ -312,7 +312,7 @@
     {
       "locale": "chk",
       "name": "Chuukese",
-      "nativeName": "чукотский",
+      "nativeName": "Chuukese",
       "direction": "ltr"
     },
     {
@@ -324,19 +324,19 @@
     {
       "locale": "co",
       "name": "Corsican",
-      "nativeName": "корсиканский",
+      "nativeName": "Corsican",
       "direction": "ltr"
     },
     {
       "locale": "crh",
       "name": "Crimean Tatar (Cyrillic)",
-      "nativeName": "крымско-татарский",
+      "nativeName": "Crimean Tatar",
       "direction": "ltr"
     },
     {
       "locale": "crh-Latn",
       "name": "Crimean Tatar (Latin)",
-      "nativeName": "крымско-татарский (латиница)",
+      "nativeName": "Crimean Tatar (Latin)",
       "direction": "ltr"
     },
     {
@@ -366,13 +366,13 @@
     {
       "locale": "dv",
       "name": "Dhivehi",
-      "nativeName": "мальдивский",
+      "nativeName": "Divehi",
       "direction": "rtl"
     },
     {
       "locale": "din",
       "name": "Dinka",
-      "nativeName": "динка",
+      "nativeName": "Dinka",
       "direction": "ltr"
     },
     {
@@ -396,7 +396,7 @@
     {
       "locale": "dyu",
       "name": "Dyula",
-      "nativeName": "диула",
+      "nativeName": "Dyula",
       "direction": "ltr"
     },
     {
@@ -410,11 +410,11 @@
       "name": "English",
       "nativeName": "English",
       "direction": "ltr",
-      "sha256": "55039c4289b0fda074cd8fae466896dbc2b29118b412711c31fac3b0b16f6541",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "b2ca5906d65d77266836ed1e49aaf5e21afa74701ec2ee2246491d3d6b468554",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 290057,
-      "messagesSha256": "849f7be2057699cc37a99d89f97a98f9e38fcb553beb98fbb8d55d943da92e23"
+      "bytes": 290049,
+      "messagesSha256": "05dd8fa46b67cd400da12bc2d20dbb5c445920a59a32d866bad6b30edc5265ee"
     },
     {
       "locale": "eo",
@@ -443,7 +443,7 @@
     {
       "locale": "fj",
       "name": "Fijian",
-      "nativeName": "фиджи",
+      "nativeName": "Fijian",
       "direction": "ltr"
     },
     {
@@ -461,7 +461,7 @@
     {
       "locale": "fon",
       "name": "Fon",
-      "nativeName": "фон",
+      "nativeName": "Fon",
       "direction": "ltr"
     },
     {
@@ -469,11 +469,11 @@
       "name": "French",
       "nativeName": "français",
       "direction": "ltr",
-      "sha256": "cb7835f00fc529d246fd987758a99114f3ceaad08a980fab45d8bad0472dd6f0",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "89885237e4a5a33bf9afc5e9422c130b270abdba7cf0ffd63e48d846d7fcf960",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 334143,
-      "messagesSha256": "f48fea97759ec10434abc62022111ed545f001f7f37fc377875b8d7661aaeab6"
+      "bytes": 333827,
+      "messagesSha256": "73e159927a7df57da7d2805fa112df752834c047d677bafd56e55383999fe1da"
     },
     {
       "locale": "fr-CA",
@@ -522,11 +522,11 @@
       "name": "German",
       "nativeName": "Deutsch",
       "direction": "ltr",
-      "sha256": "32b3a2a63f25ba21cc0b34595d32416e04227042ddcc1909a4860f32f9945362",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "adcaca082d85aea7612f0b62b4f59864d21d02b4baf84df91690d5fc390be9b3",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 316713,
-      "messagesSha256": "10233244b6bb29a075618ea528ea7ec1312cca2dd57d8e4c2a924354659cf4b2"
+      "bytes": 316705,
+      "messagesSha256": "4a46c2a126794d1a309cea2726823fe7bb6cf8728a1c9654d837a4bfc756513d"
     },
     {
       "locale": "el",
@@ -537,7 +537,7 @@
     {
       "locale": "gn",
       "name": "Guarani",
-      "nativeName": "гуарани",
+      "nativeName": "Guarani",
       "direction": "ltr"
     },
     {
@@ -549,7 +549,7 @@
     {
       "locale": "ht",
       "name": "Haitian Creole",
-      "nativeName": "гаитянский",
+      "nativeName": "Haitian Creole",
       "direction": "ltr"
     },
     {
@@ -575,16 +575,16 @@
       "name": "Hebrew",
       "nativeName": "עברית",
       "direction": "rtl",
-      "sha256": "19537ebe40cc710b6ad38a13c0c783c331c52013ef8fe521b21f032648b1ffaa",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "538d41416b0bc04ac10ab8b0ae8f19071215f0755c3e03a62f6cd454b09c281d",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 323474,
-      "messagesSha256": "249f2ed8c6d401e86b2713aa59d51b7e53569553f5a39b4648b8c45260a3a36a"
+      "bytes": 323465,
+      "messagesSha256": "a77745e4168206cf8e9cf6f7b67b808e7ae29eabff06ee24ad891ee700c8fe27"
     },
     {
       "locale": "hil",
       "name": "Hiligaynon",
-      "nativeName": "хилигайнон",
+      "nativeName": "Hiligaynon",
       "direction": "ltr"
     },
     {
@@ -596,7 +596,7 @@
     {
       "locale": "hmn",
       "name": "Hmong",
-      "nativeName": "хмонг",
+      "nativeName": "Hmong",
       "direction": "ltr"
     },
     {
@@ -614,7 +614,7 @@
     {
       "locale": "iba",
       "name": "Iban",
-      "nativeName": "ибанский",
+      "nativeName": "Iban",
       "direction": "ltr"
     },
     {
@@ -632,7 +632,7 @@
     {
       "locale": "ilo",
       "name": "Ilocano",
-      "nativeName": "илоко",
+      "nativeName": "Iloko",
       "direction": "ltr"
     },
     {
@@ -644,13 +644,13 @@
     {
       "locale": "iu-Latn",
       "name": "Inuktut (Latin)",
-      "nativeName": "инуктитут (латиница)",
+      "nativeName": "Inuktitut (Latin)",
       "direction": "ltr"
     },
     {
       "locale": "iu",
       "name": "Inuktut (Syllabics)",
-      "nativeName": "инуктитут",
+      "nativeName": "Inuktitut",
       "direction": "ltr"
     },
     {
@@ -668,7 +668,7 @@
     {
       "locale": "jam",
       "name": "Jamaican Patois",
-      "nativeName": "Jamaican Patois",
+      "nativeName": "Jamaican Creole English",
       "direction": "ltr"
     },
     {
@@ -676,11 +676,11 @@
       "name": "Japanese",
       "nativeName": "日本語",
       "direction": "ltr",
-      "sha256": "fbcc20a9778a1557028f71a826a9cd37819e4d6f56a8436bc05348543b352462",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "29cc4f27b24315aa538f4afc9a254e32c8e295738c8777b07904b3d5a3c140b7",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 377376,
-      "messagesSha256": "132521ea8c37bb5ff792475fda10ccc72da9e880aaf90612e89e3feaf3779a41"
+      "bytes": 377368,
+      "messagesSha256": "c6dc6e7dee912c78e35db13a8b6029316d64646ed8558a0f8562d5a26e3a7834"
     },
     {
       "locale": "jw",
@@ -691,7 +691,7 @@
     {
       "locale": "kac",
       "name": "Jingpo",
-      "nativeName": "качинский",
+      "nativeName": "Kachin",
       "direction": "ltr"
     },
     {
@@ -709,13 +709,13 @@
     {
       "locale": "kr",
       "name": "Kanuri",
-      "nativeName": "канури",
+      "nativeName": "Kanuri",
       "direction": "ltr"
     },
     {
       "locale": "pam",
       "name": "Kapampangan",
-      "nativeName": "пампанга",
+      "nativeName": "Pampanga",
       "direction": "ltr"
     },
     {
@@ -727,7 +727,7 @@
     {
       "locale": "kha",
       "name": "Khasi",
-      "nativeName": "кхаси",
+      "nativeName": "Khasi",
       "direction": "ltr"
     },
     {
@@ -745,7 +745,7 @@
     {
       "locale": "kg",
       "name": "Kikongo",
-      "nativeName": "конго",
+      "nativeName": "Kongo",
       "direction": "ltr"
     },
     {
@@ -769,7 +769,7 @@
     {
       "locale": "kv",
       "name": "Komi",
-      "nativeName": "коми",
+      "nativeName": "Komi",
       "direction": "ltr"
     },
     {
@@ -823,7 +823,7 @@
     {
       "locale": "la",
       "name": "Latin",
-      "nativeName": "латинский",
+      "nativeName": "Latin",
       "direction": "ltr"
     },
     {
@@ -841,7 +841,7 @@
     {
       "locale": "li",
       "name": "Limburgish",
-      "nativeName": "лимбургский",
+      "nativeName": "Limburgish",
       "direction": "ltr"
     },
     {
@@ -889,7 +889,7 @@
     {
       "locale": "mad",
       "name": "Madurese",
-      "nativeName": "мадурский",
+      "nativeName": "Madurese",
       "direction": "ltr"
     },
     {
@@ -901,7 +901,7 @@
     {
       "locale": "mak",
       "name": "Makassar",
-      "nativeName": "макассарский",
+      "nativeName": "Makasar",
       "direction": "ltr"
     },
     {
@@ -961,13 +961,13 @@
     {
       "locale": "mh",
       "name": "Marshallese",
-      "nativeName": "маршалльский",
+      "nativeName": "Marshallese",
       "direction": "ltr"
     },
     {
       "locale": "mwr",
       "name": "Marwadi",
-      "nativeName": "марвари",
+      "nativeName": "Marwari",
       "direction": "ltr"
     },
     {
@@ -979,7 +979,7 @@
     {
       "locale": "chm",
       "name": "Meadow Mari",
-      "nativeName": "марийский",
+      "nativeName": "Mari",
       "direction": "ltr"
     },
     {
@@ -991,13 +991,13 @@
     {
       "locale": "min",
       "name": "Minang",
-      "nativeName": "минангкабау",
+      "nativeName": "Minangkabau",
       "direction": "ltr"
     },
     {
       "locale": "lus",
       "name": "Mizo",
-      "nativeName": "мизо",
+      "nativeName": "Mizo",
       "direction": "ltr"
     },
     {
@@ -1027,13 +1027,13 @@
     {
       "locale": "nr",
       "name": "Ndebele (South)",
-      "nativeName": "южный ндебеле",
+      "nativeName": "South Ndebele",
       "direction": "ltr"
     },
     {
       "locale": "new",
       "name": "Nepalbhasa (Newari)",
-      "nativeName": "неварский",
+      "nativeName": "Newari",
       "direction": "ltr"
     },
     {
@@ -1087,13 +1087,13 @@
     {
       "locale": "pag",
       "name": "Pangasinan",
-      "nativeName": "пангасинан",
+      "nativeName": "Pangasinan",
       "direction": "ltr"
     },
     {
       "locale": "pap",
       "name": "Papiamento",
-      "nativeName": "папьяменто",
+      "nativeName": "Papiamento",
       "direction": "ltr"
     },
     {
@@ -1113,22 +1113,22 @@
       "name": "Polish",
       "nativeName": "polski",
       "direction": "ltr",
-      "sha256": "3d3c428feefdb1133895c798086242757e9185b99f66e2e58da55e1eb5808d9f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "2f8d6ebf56d2eb8e2d6a57eedd933a4664c54038784056d077b4a70bb8d94417",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 306003,
-      "messagesSha256": "3e523a8415a1801b253ecc5cb2f78e0436a3690f0231d975f994f2342560ecc3"
+      "bytes": 305995,
+      "messagesSha256": "a3e0ef522363c172d201ad3d09ec454ea8ca122227372b7197917b2d303d3dbf"
     },
     {
       "locale": "pt",
       "name": "Portuguese (Brazil)",
       "nativeName": "português",
       "direction": "ltr",
-      "sha256": "d21ce48c8e54f21de4f351ee164cbe8f2d03998960c49a85df7d1c6e25a6aa48",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "a59b2e88af4f630c018fa888fbaf124020ed0b63b25b25a98e71419ac40a94d1",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 304183,
-      "messagesSha256": "bc9dfa44c3b2c981ae435046c9a1027ba861f94e20ca3da1779c205237a8e06c"
+      "bytes": 304175,
+      "messagesSha256": "a4218e017d854b46b0863e92cb4bbe1321f3785b65c772f586f3cb98bc38a530"
     },
     {
       "locale": "pt-PT",
@@ -1163,7 +1163,7 @@
     {
       "locale": "rom",
       "name": "Romani",
-      "nativeName": "цыганский",
+      "nativeName": "Romany",
       "direction": "ltr"
     },
     {
@@ -1183,11 +1183,11 @@
       "name": "Russian",
       "nativeName": "русский",
       "direction": "ltr",
-      "sha256": "99f46ddfe3c691ebbe3a6a6079aef93541eb78b7a06cdb95ddc62ea05768f5f0",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "76df8ac1e5d24973d1a103bae5c78d0523dee9d2aa6eeb75d9a1543ea6ffcfbf",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": false,
-      "bytes": 361496,
-      "messagesSha256": "3e2cb3d89bb8fcb45f40f0bf267aa4b7403a3225d548fea14b2df2dbf7dfb31f"
+      "bytes": 361488,
+      "messagesSha256": "16148e8c34b321bcc80b99aff2852d402d40222dee0c4bc5a889ac9ba2ee050e"
     },
     {
       "locale": "se",
@@ -1198,7 +1198,7 @@
     {
       "locale": "sm",
       "name": "Samoan",
-      "nativeName": "самоанский",
+      "nativeName": "Samoan",
       "direction": "ltr"
     },
     {
@@ -1252,13 +1252,13 @@
     {
       "locale": "crs",
       "name": "Seychellois Creole",
-      "nativeName": "сейшельский креольский",
+      "nativeName": "Seselwa Creole French",
       "direction": "ltr"
     },
     {
       "locale": "shn",
       "name": "Shan",
-      "nativeName": "шанский",
+      "nativeName": "Shan",
       "direction": "ltr"
     },
     {
@@ -1270,7 +1270,7 @@
     {
       "locale": "scn",
       "name": "Sicilian",
-      "nativeName": "сицилийский",
+      "nativeName": "Sicilian",
       "direction": "ltr"
     },
     {
@@ -1314,11 +1314,11 @@
       "name": "Spanish",
       "nativeName": "español",
       "direction": "ltr",
-      "sha256": "394806f9ea1f92ae1c5c0dbde64048d4ae45e9ca7be664a7849a7e1c565e7e4f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "bb42329f7ebca34f24ebf5e7eaed6715a76ad8037e512a5218eb72390a10ab8c",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 319381,
-      "messagesSha256": "fcbf32c73cf15fff10c948980926b5229e9dd213bdea53ef772f9eedcf95451c"
+      "bytes": 319373,
+      "messagesSha256": "ea0b60cff8ddeee2c04b127dee4570b07c6b7151d8a0bd459bd1079e2e5b334e"
     },
     {
       "locale": "su",
@@ -1329,7 +1329,7 @@
     {
       "locale": "sus",
       "name": "Susu",
-      "nativeName": "сусу",
+      "nativeName": "Susu",
       "direction": "ltr"
     },
     {
@@ -1341,7 +1341,7 @@
     {
       "locale": "ss",
       "name": "Swati",
-      "nativeName": "свази",
+      "nativeName": "Swati",
       "direction": "ltr"
     },
     {
@@ -1353,7 +1353,7 @@
     {
       "locale": "ty",
       "name": "Tahitian",
-      "nativeName": "таитянский",
+      "nativeName": "Tahitian",
       "direction": "ltr"
     },
     {
@@ -1395,7 +1395,7 @@
     {
       "locale": "tet",
       "name": "Tetum",
-      "nativeName": "тетум",
+      "nativeName": "Tetum",
       "direction": "ltr"
     },
     {
@@ -1419,13 +1419,13 @@
     {
       "locale": "tiv",
       "name": "Tiv",
-      "nativeName": "тиви",
+      "nativeName": "Tiv",
       "direction": "ltr"
     },
     {
       "locale": "tpi",
       "name": "Tok Pisin",
-      "nativeName": "ток-писин",
+      "nativeName": "Tok Pisin",
       "direction": "ltr"
     },
     {
@@ -1437,13 +1437,13 @@
     {
       "locale": "lua",
       "name": "Tshiluba",
-      "nativeName": "луба-лулуа",
+      "nativeName": "Luba-Lulua",
       "direction": "ltr"
     },
     {
       "locale": "ts",
       "name": "Tsonga",
-      "nativeName": "тсонга",
+      "nativeName": "Tsonga",
       "direction": "ltr"
     },
     {
@@ -1461,7 +1461,7 @@
     {
       "locale": "tum",
       "name": "Tumbuka",
-      "nativeName": "тумбука",
+      "nativeName": "Tumbuka",
       "direction": "ltr"
     },
     {
@@ -1479,7 +1479,7 @@
     {
       "locale": "tyv",
       "name": "Tuvan",
-      "nativeName": "тувинский",
+      "nativeName": "Tuvinian",
       "direction": "ltr"
     },
     {
@@ -1491,7 +1491,7 @@
     {
       "locale": "udm",
       "name": "Udmurt",
-      "nativeName": "удмуртский",
+      "nativeName": "Udmurt",
       "direction": "ltr"
     },
     {
@@ -1499,11 +1499,11 @@
       "name": "Ukrainian",
       "nativeName": "українська",
       "direction": "ltr",
-      "sha256": "f23bd51c6321cf501b0a1961c9c61d260a0a8efba03eea0fa4087141b751572a",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "664ca3a14660c45ab370c06a0a48fa399b94c0810f2ddae4205d7c37ccf55b7d",
+      "revision": "3d56964db9aeec4c85efd058394bc8d2ffa052853ba3c7c876d08464f0d47920",
       "machine": true,
-      "bytes": 367218,
-      "messagesSha256": "1b5b0473e4f8e3696a9b057f9ada0f86432d0512209867fb2a87becda960a013"
+      "bytes": 367210,
+      "messagesSha256": "ee5377010f36035ed27d71a98517255be68c76803953afcf184451687d0c40c4"
     },
     {
       "locale": "ur",
@@ -1526,7 +1526,7 @@
     {
       "locale": "ve",
       "name": "Venda",
-      "nativeName": "венда",
+      "nativeName": "Venda",
       "direction": "ltr"
     },
     {
@@ -1544,7 +1544,7 @@
     {
       "locale": "war",
       "name": "Waray",
-      "nativeName": "варай",
+      "nativeName": "Waray",
       "direction": "ltr"
     },
     {
@@ -1592,7 +1592,7 @@
     {
       "locale": "zap",
       "name": "Zapotec",
-      "nativeName": "сапотекский",
+      "nativeName": "Zapotec",
       "direction": "ltr"
     },
     {

@@ -3,6 +3,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <shlwapi.h>
+#include <propkey.h>
 #include <winhttp.h>
 #include <dwmapi.h>
 #include <wrl/client.h>
@@ -26,6 +27,37 @@ DECLARE_HANDLE(DPI_AWARENESS_CONTEXT);
 #define MAX_HEALTH_RETRIES 50 // 50 * 200ms = 10 seconds
 
 using Microsoft::WRL::ComPtr;
+
+// Window icons and taskbar group icons are separate Windows properties.
+// Give the shell a new icon path instead of its cached swch.exe icon.
+void SetTaskbarIdentity(HWND hwnd, bool clear = false) {
+    ComPtr<IPropertyStore> store;
+    if (FAILED(SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(&store)))) return;
+    auto set = [&](REFPROPERTYKEY key, const std::wstring& text) {
+        PROPVARIANT value = {};
+        if (!clear) {
+            value.vt = VT_LPWSTR;
+            // SetValue copies the string synchronously; this variant borrows it.
+            value.pwszVal = const_cast<LPWSTR>(text.c_str());
+        }
+        return store->SetValue(key, value);
+    };
+    WCHAR path[32768] = {};
+    const DWORD length = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!clear && (!length || length >= ARRAYSIZE(path))) return;
+    const std::wstring executable(path);
+    const auto separator = executable.find_last_of(L"\\/");
+    const std::wstring icon = executable.substr(0, separator + 1) + L"swch-logo-link.ico";
+    const std::wstring iconResource = PathFileExistsW(icon.c_str())
+        ? icon + L",0" : executable + L",-" + std::to_wstring(IDI_SWCH);
+    if (FAILED(set(PKEY_AppUserModel_RelaunchCommand, L"\"" + executable + L"\"")) ||
+        FAILED(set(PKEY_AppUserModel_RelaunchDisplayNameResource,
+                   L"@" + executable + L",-" + std::to_wstring(IDS_SWCH_NAME))) ||
+        FAILED(set(PKEY_AppUserModel_RelaunchIconResource, iconResource)) ||
+        FAILED(set(PKEY_AppUserModel_ID, L"com.kabarab.swch"))) {
+        OutputDebugStringW(L"SWCH: could not set taskbar identity properties.\n");
+    }
+}
 
 // Custom COM callback template with strict QueryInterface and virtual destructor
 template <typename TInterface, const IID* piid, typename... Args>
@@ -519,6 +551,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         return 0;
 
     case WM_DESTROY:
+        SetTaskbarIdentity(hwnd, true);
         CleanShutdownServer();
         PostQuitMessage(0);
         return 0;
@@ -625,6 +658,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
     g_hWnd = hwnd;
+    SetTaskbarIdentity(hwnd);
     SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(wc.hIcon));
     SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(wc.hIconSm));
 

@@ -1,40 +1,40 @@
 # SWCH application icons
 
-The logo is a separate S with two clockwise arrows in a minimalist orange and
-near-black design. Windows uses the approved circular icon; macOS uses the
-approved rounded-square tile. Both have transparent outer backgrounds.
-The masters were created with the built-in Imagegen tool.
+The selected logo is concept 03: two bold orange interlocking forms with a
+diagonal transparent seam. The same approved artwork is used for Windows and
+macOS at every size; the broad shapes do not need a separate taskbar variant.
 
-- Windows master: `src/assets/swch-minimal.png`.
-- Windows optical variant for 16–64px: `src/assets/swch-windows-small.png`.
-- macOS master: `src/assets/swch-macos-minimal.png`.
+- Approved master: `src/assets/swch-logo.png`.
 - Windows resource: `src/assets/swch.ico`, embedded by `src/windows_app.rc`.
 - macOS resource: `swch.app/Contents/Resources/iconfile.icns`, selected by `CFBundleIconFile`.
+- Master SHA-256: `c44a4c2d8e3c0f53ceba9ade58c78c0885af61b34f3125e6e667fcce353416a0`.
 
-On Windows, run `./scripts/build-app-icons.ps1` after replacing a master to
-regenerate the ICO and ICNS sizes. This only packages the finished artwork and
-preserves transparency; it does not generate or redesign the logo.
+The master is the exact PNG chosen by the user, with its transparency intact.
+Run `./scripts/build-app-icons.ps1` on Windows to package ICO frames at
+16/20/24/32/40/48/64/128/256px and ICNS frames at 16–1024px, including Retina.
+The script only resamples and packages the approved image; it does not redraw
+or restyle it. Inspect actual 16/20/24/32px frames when replacing the master.
 
-Windows uses an optical variant at 16–64px with larger arrowheads and wider
-breaks: simply shrinking the large logo makes the two arrows look like a plain
-ring in the taskbar. The original approved artwork is retained at 128/256px.
-Check the actual 16/20/24/32px ICO frames when changing either Windows master.
+The previous S-and-arrows PNGs remain as legacy artwork; they are no longer
+inputs to the icon build.
 
-## Small Windows variant prompt
+Windows packages also ship the ICO as `swch-logo-link.ico`. Installer shortcuts
+and the Installed Apps entry refer to that file explicitly, rather than an
+icon cached under the unchanged `swch.exe` path. Rename the standalone file
+when changing the logo design, and update packaging, installer and smoke tests
+together. The native window still uses its embedded ICO resource. Its window
+property store explicitly supplies the same AppUserModelID, relaunch command,
+display-name resource and standalone taskbar icon before the window is shown;
+these properties are cleared on destruction. A portable executable without
+the sidecar falls back to embedded icon 101.
 
-Created with the built-in Imagegen tool, using the approved Windows master as
-the edit target. Preserve the orange circle, separate near-black S and exactly
-two clockwise perimeter arrows. Enlarge each triangular arrowhead to about 22%
-of the disk diameter, widen both breaks to about 32 degrees, use a roughly 6%
-shaft stroke, and slightly reduce the S for clearance. Use flat orange
-`#FF641E`, near-black `#191919`, transparent margins of about 5%, and no shadows
-or effects. Keep the circular silhouette and opposed arrowheads at 2/8 o'clock;
-the two arcs must remain distinguishable at 16–32px.
+Windows documents the separate group icon in
+[RelaunchIconResource](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-relaunchiconresource)
+and property lifetime in
+[SHGetPropertyStoreForWindow](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetpropertystoreforwindow).
 
-## Final Windows prompt
+## Selected concept prompt
 
-Use case: style-transfer. Edit the attached SWCH logo into a MUCH MORE MINIMALIST flat graphic. Keep its identity: one orange circle, one normal black uppercase S centered, and exactly two clockwise curved arrows forming the very outer edge of the orange circle. Use ONLY two solid colors: orange #FF641E and near-black #191919, plus genuine transparency outside. Absolutely no gradients, no highlights, no shine, no bevel, no 3D volume, no shadow, no textures. A crisp geometric vector-like design. Make the arrow outline noticeably thinner and simpler than the reference, uniform stroke roughly 4% of the circle diameter. Two small simple opposed arrowheads at roughly 2 and 8 o'clock, two neat small breaks. The arrow strokes follow the circumference exactly: their outside edges coincide with the orange disk edge. Keep arrowheads compact and inscribed in the circular silhouette, no bulging corner or pointed projection beyond the circle, no outer orange rim. The S is a clean bold modern sans-serif letter without any tail or attached arrow, centered, with ample clear orange space around it. Perfect front-facing round geometry, equal width and height, no tilt or perspective. One standalone icon with generous transparent margins, clean smooth antialiased edges and true alpha outside. No other elements, no text labels, no mockup, no checkerboard. The result should feel like a simple professional app symbol, NOT a rendered 3D badge.
+Created with the built-in Imagegen tool, without image references:
 
-## Final macOS prompt
-
-Use case: style-transfer. Asset: macOS app icon for SWCH based on the approved minimalist Windows logo in the reference. Keep the same recognizable clean black S and two clockwise circular switching arrows, their proportions, the orange and near-black palette, and the flat minimalist style. Change the outer orange background silhouette into ONE upright, front-facing macOS rounded square / superellipse tile with smooth generously rounded corners, equal width and height, no tilt or perspective. Center the S and the two-arrow circular mark on this orange tile, with even comfortable padding. The arrows remain a circular refresh ring around the separate S, EXACTLY TWO arrowheads and two small opposite breaks. No arrow attached to the S. The orange tile is solid warm orange close to #FF641E and the glyph near-black #191919. Flat restrained finish like the reference: no 3D volume, no bevel, no shiny highlights, no shadows, no metallic look. Simple crisp smooth shapes readable at 32px. ONE tile only, no nested backing squares, no white backing plate, no Apple logo, no words, no labels, no mockup, no checkerboard. True alpha transparency outside the rounded square, with generous transparent canvas margins. The result must look like the same approved logo adapted to a native macOS rounded-square app icon, not a new symbol.
+Use case: logo-brand. Design one original logo concept for SWCH, a vibrant gaming launcher linking several game platforms and switching accounts. Direction 03: a distinctive compact LINK / PORTAL glyph formed from exactly TWO chunky interlocking geometric hook shapes, one entering from upper left and the other from lower right, arranged along a rising diagonal. Each hook is an open squared C with slightly rounded corners; together they create a connected dynamic symbol and a large simple lightning-shaped negative-space seam through the center. Visual idea: two profiles / two platforms united into one hub. Strong bright gaming character, balanced compact almost-square silhouette, clean premium geometry. Solid vivid orange #FF671D only with genuine transparent background and clean transparent cutouts. Keep very thick strokes and generous clear openings so it reads at 16px. Distinct from an ordinary S letter or basic horizontal exchange arrows. No container circle, no separate letter, no small lines, no circular arrows, no recognizable existing brand logos, no Nintendo Switch controller shape, no wordmark or labels, no mascots or shields. Flat vector-like art, no gradients, glow, shadows, volume or texture. One standalone glyph centered upright on square canvas with even 10% transparent margins. Create a professional coherent symbol, not two unrelated rings or a realistic metal chain.

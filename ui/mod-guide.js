@@ -1,6 +1,18 @@
 import {MOD_PROMPT} from './mod-prompt.mjs';
+import {t} from './i18n.js';
 export function modGuideHTML() {
-  return `<details id="mod-author-guide" class="ux-disclosure mod-author-guide">
+  return `<section class="mod-prompt-card" aria-labelledby="mod-prompt-heading">
+    <div class="mod-prompt-heading">
+      <h3 id="mod-prompt-heading">Создать мод с помощью ИИ</h3>
+      <button type="button" class="primary" id="mod-copy-prompt"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg><span>Скопировать промпт на английском</span></button>
+    </div>
+    <p>Скопируй английский промпт, замени описание идеи, имя GitHub и ID мода, затем отправь его ИИ. Проверь созданный код и ZIP перед установкой и публикацией.</p>
+    <p id="mod-prompt-status" role="status" aria-live="polite"></p>
+    <details id="mod-prompt-preview" class="ux-disclosure">
+      <summary>Промпт на английском</summary>
+      <label>Промпт на английском<textarea id="mod-ai-prompt" translate="no" dir="ltr" lang="en" readonly rows="10" spellcheck="false"></textarea></label>
+    </details>
+  </section><details id="mod-author-guide" class="ux-disclosure mod-author-guide">
     <summary>Как создать и опубликовать мод</summary>
     <p>SWCH поддерживает темы, дополнительные вкладки и новые лаунчеры на JavaScript. Пересобирать приложение не нужно.</p>
     <ol>
@@ -22,19 +34,25 @@ node mod-sdk/cli.mjs pack my-mod dist/mod.zip</pre>
       <a href="https://github.com/Kabarab/swch/blob/main/docs/mods.md" target="_blank" rel="noopener noreferrer">Полная документация ↗</a>
       <a href="https://github.com/Kabarab/swch/issues/new?template=publish-mod.yml" target="_blank" rel="noopener noreferrer">Отправить мод в каталог ↗</a>
     </div>
-    <h3>Создать мод с помощью ИИ</h3>
-    <p>Скопируй английский промпт, замени описание идеи, имя GitHub и ID мода, затем отправь его ИИ. Проверь созданный код и ZIP перед установкой и публикацией.</p>
-    <button type="button" class="secondary" id="mod-copy-prompt">Скопировать промпт на английском</button>
-    <p id="mod-prompt-status" role="status" aria-live="polite"></p>
-    <label>Промпт на английском<textarea id="mod-ai-prompt" translate="no" dir="ltr" lang="en" readonly rows="10" spellcheck="false"></textarea></label>
   </details>`;
 }
 export function setupModGuide(view) {
   const field=view.querySelector('#mod-ai-prompt');if(!field)return;
   field.value=MOD_PROMPT;
-  view.querySelector('#mod-copy-prompt').addEventListener('click',async()=>{
+  field.addEventListener('click',()=>field.select());
+  const button=view.querySelector('#mod-copy-prompt');
+  button.addEventListener('click',async()=>{
     const status=view.querySelector('#mod-prompt-status');
-    try {await navigator.clipboard.writeText(MOD_PROMPT);status.textContent='Промпт скопирован';}
-    catch {field.focus();field.select();status.textContent='Текст выделен. Скопируй его сочетанием Ctrl+C или ⌘C.';}
+    button.disabled=true;
+    try {await navigator.clipboard.writeText(MOD_PROMPT);status.textContent=t('Промпт скопирован');}
+    catch {
+      const preview=view.querySelector('#mod-prompt-preview'),wasOpen=preview.open;
+      preview.open=true;field.focus();field.select();
+      let copied=false;
+      try {copied=document.execCommand('copy');} catch {}
+      if(copied){preview.open=wasOpen;button.focus();status.textContent=t('Промпт скопирован');}
+      else status.textContent=t('Текст выделен. Скопируй его сочетанием Ctrl+C или ⌘C.');
+    }
+    finally {button.disabled=false;}
   });
 }

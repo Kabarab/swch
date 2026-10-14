@@ -14,7 +14,7 @@ if (-not $Version) {
 if ($Version -notmatch '^(\d+\.\d+\.\d+)(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid release version' }
 $numericVersion = $Matches[1]
 $packagePath = (Resolve-Path -LiteralPath $PackageDirectory).Path
-foreach ($required in @('swch.exe', 'swch-server.exe', 'runtime/node.exe', 'index.html', 'ui/launcher.js', 'ui/mod-guide.js')) {
+foreach ($required in @('swch.exe', 'swch-server.exe', 'swch-logo-link.ico', 'runtime/node.exe', 'index.html', 'ui/launcher.js', 'ui/mod-guide.js')) {
     if (-not (Test-Path -LiteralPath (Join-Path $packagePath $required) -PathType Leaf)) {
         throw "Incomplete Windows package: $required"
     }

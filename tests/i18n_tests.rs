@@ -53,6 +53,16 @@ async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
     use tower::ServiceExt;
     let folder = tempfile::tempdir().unwrap();
     std::env::set_var("SWCH_I18N_DIR", folder.path());
+    let ui = folder.path().join("web");
+    std::fs::create_dir_all(ui.join("ui/lang")).unwrap();
+    std::fs::write(ui.join("index.html"), "<!doctype html>").unwrap();
+    // Simulate UI assets from a newer build than the server executable.
+    let mut source: serde_json::Value =
+        serde_json::from_str(include_str!("../ui/lang/source.json")).unwrap();
+    source["revision"] = json!("runtime-catalog");
+    let source_path = ui.join("ui/lang/source.json");
+    std::fs::write(&source_path, source.to_string()).unwrap();
+    std::env::set_var("INDEX_HTML_PATH", ui.join("index.html"));
     let db = swch::storage::Database::open_in_memory().unwrap();
     db.run_migrations().await.unwrap();
     let state = swch::server::AppState::new(
@@ -62,8 +72,7 @@ async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
     let app = Router::new()
         .merge(swch::server::i18n::router())
         .with_state(state);
-    let source: serde_json::Value =
-        serde_json::from_str(include_str!("../ui/lang/source.json")).unwrap();
+    std::env::remove_var("INDEX_HTML_PATH");
     let body = json!({"locale":"ru","revision":source["revision"],"machine":false,"messages":source["messages"]});
     let make = |body: &serde_json::Value| {
         Request::builder()
@@ -128,6 +137,35 @@ async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
     let cached: serde_json::Value =
         serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
     assert_eq!(cached["messages"], source["messages"]);
+    // A subsequent UI update must be recognized without restarting the server.
+    source["revision"] = json!("updated-runtime-catalog");
+    std::fs::write(&source_path, source.to_string()).unwrap();
+    assert_eq!(
+        app.clone().oneshot(make(&body)).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+    let mut updated = body.clone();
+    updated["revision"] = source["revision"].clone();
+    assert_eq!(
+        app.clone().oneshot(make(&updated)).await.unwrap().status(),
+        StatusCode::OK
+    );
+    let latest = std::fs::read_to_string(folder.path().join("active.txt")).unwrap();
+    // Missing or broken catalogs must not commit an unvalidated selection.
+    std::fs::write(&source_path, "broken JSON").unwrap();
+    assert_eq!(
+        app.clone().oneshot(make(&updated)).await.unwrap().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    std::fs::remove_file(&source_path).unwrap();
+    assert_eq!(
+        app.clone().oneshot(make(&updated)).await.unwrap().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        std::fs::read_to_string(folder.path().join("active.txt")).unwrap(),
+        latest
+    );
     let mut foreign = make(&body);
     foreign
         .headers_mut()

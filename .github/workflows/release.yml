@@ -86,7 +86,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Backend (Rust Release)
-        run: cargo build --release
+        run: cargo build --release --bins
 
       - name: Build Native GUI Launcher (Swift)
         run: swiftc -O -target arm64-apple-macosx13.5 src/mac_app.swift -o swch_gui
@@ -109,6 +109,7 @@ jobs:
           node scripts/language-packs.mjs --bundle swch.app/Contents/Resources/web/ui/lang
           cp -r browser-extension swch.app/Contents/Resources/web/
           node scripts/bundle-mod-runtime.mjs macos-arm64 swch.app/Contents/Resources/runtime
+          node scripts/build-autoclaimer-mod.mjs macos-arm64 swch.app/Contents/Resources/bundled-mods "$(dirname "$(find target_build target -name swch-autoclaimer -type f 2>/dev/null | head -n 1)")/swch-autoclaimer"
           codesign --force --sign - swch.app
           codesign --verify --deep --strict swch.app
           zip -r -q swch-macos-arm64.zip swch.app
@@ -154,7 +155,7 @@ jobs:
           arch: x64
 
       - name: Build Backend (Rust Release)
-        run: cargo build --release
+        run: cargo build --release --bins
 
       - name: Build Native Windows GUI Launcher
         shell: pwsh
@@ -192,6 +193,7 @@ jobs:
           $binPath = if (Test-Path "target_build/release/swch.exe") { "target_build/release/swch.exe" } elseif (Test-Path "target/x86_64-pc-windows-msvc/release/swch.exe") { "target/x86_64-pc-windows-msvc/release/swch.exe" } else { "target/release/swch.exe" }
           New-Item -ItemType Directory -Force -Path "package"
           Copy-Item "swch_gui.exe" -Destination "package/swch.exe" -Force
+          Copy-Item "src/assets/swch.ico" -Destination "package/swch-logo-link.ico" -Force
           Copy-Item $binPath -Destination "package/swch-server.exe" -Force
           if (Test-Path "src/webview2/WebView2Loader.dll") {
             Copy-Item "src/webview2/WebView2Loader.dll" -Destination "package/WebView2Loader.dll" -Force
@@ -201,6 +203,8 @@ jobs:
           node scripts/language-packs.mjs --bundle package/ui/lang
           Copy-Item -Recurse "browser-extension" -Destination "package/" -Force
           node scripts/bundle-mod-runtime.mjs windows-x64 package/runtime
+          node scripts/build-autoclaimer-mod.mjs windows-x64 package/bundled-mods (Join-Path (Split-Path $binPath) "swch-autoclaimer.exe")
+          if ($LASTEXITCODE -ne 0) { throw 'Autoclaimer packaging failed' }
           Compress-Archive -Path package/* -DestinationPath swch-windows-x86_64.zip -Force
           Copy-Item swch-windows-x86_64.zip swch-windows-amd64.zip -Force
 
@@ -215,6 +219,7 @@ jobs:
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
           ./scripts/test-windows-installer.ps1 -Installer "output/installers/SWCH-Setup-$version.exe" -PackageDirectory package
+          ./scripts/test-windows-installer.ps1 -Installer "output/installers/SWCH-Setup-$version.exe" -PackageDirectory package -Scope machine
 
       - name: Save Windows release artifacts
         uses: actions/upload-artifact@v4

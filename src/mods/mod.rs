@@ -151,6 +151,32 @@ impl ModManager {
             }
         }
     }
+    /// Bundled ZIPs are first-install defaults. A durable marker preserves removal.
+    pub async fn install_bundled(&self) {
+        let Ok(exe) = std::env::current_exe() else { return; };
+        let Some(base) = exe.parent() else { return; };
+        for directory in [base.join("bundled-mods"), base.join("../Resources/bundled-mods")] {
+            let Ok(files) = fs::read_dir(directory) else { continue; };
+            for file in files.flatten() {
+                let path = file.path();
+                if path.extension().and_then(|v| v.to_str()) != Some("zip") { continue; }
+                let Some(id) = path.file_stem().and_then(|v| v.to_str()) else { continue; };
+                if !valid_id(id) { continue; }
+                let marker = self.root.join("bundled").join(format!("{id}.json"));
+                if marker.exists() { continue; }
+                let result: Result<()> = async {
+                    if !self.entries.read().await.contains_key(id) {
+                        if fs::metadata(&path).map_err(error)?.len() > MAX_PACKAGE { return Err("Bundled package too large".into()); }
+                        let bytes = fs::read(&path).map_err(error)?;
+                        let installed = self.install_bytes(&bytes, &package::digest(&bytes), None).await?;
+                        if installed != id { return Err("Bundled package filename must match mod ID".into()); }
+                    }
+                    write_json(&marker, &json!({"installed":true}))
+                }.await;
+                if let Err(error) = result { tracing::warn!("Cannot install bundled mod {id}: {error}"); }
+            }
+        }
+    }
     async fn prepare_host(&self) -> Result<PathBuf> {
         let dir = self.root.join("host");
         fs::create_dir_all(&dir).map_err(error)?;

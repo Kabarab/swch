@@ -12,12 +12,13 @@ const callHost=(method,params)=>new Promise((resolve,reject)=>{
 });
 const registrations={launchers:[],tabs:[],actions:[]};
 const bridge=createSDK(callHost,(method,params)=>send({method,params}),registrations);
-let initialized=false,modId='';
+let initialized=false,modId='',dispose;
 const input=createInterface({input:process.stdin,crlfDelay:Infinity});
 input.on('line',line=>{
   if(Buffer.byteLength(line)>MAX){process.exit(2);return;}
   let request;try{request=JSON.parse(line);}catch{process.exit(2);return;}
   if(!request.method){const p=pending.get(request.id);if(p){clearTimeout(p.timer);pending.delete(request.id);request.error?p.reject(new Error(request.error.message)):p.resolve(request.result);}return;}
+  if(request.method==='shutdown'&&!('id' in request)){void Promise.resolve().then(()=>dispose?.()).finally(()=>process.exit(0));return;}
   if(request.method==='event'&&!('id' in request)){const packet=request.params||{},prefix=`mod:${modId}:`;void bridge.onEvent(packet.event?.startsWith(prefix)?packet.event.slice(prefix.length):packet.event,packet.data??packet);return;}
   void (async()=>{
     try{
@@ -26,7 +27,7 @@ input.on('line',line=>{
         if(initialized)throw new Error('Already initialized');initialized=true;modId=request.params.id;
         const module=await import(pathToFileURL(process.argv[2]).href);
         if(typeof module.default!=='function')throw new Error('Backend must export default activate(swch)');
-        await module.default(bridge.sdk);result={...registrations};registrations.frozen=true;
+        dispose=await module.default(bridge.sdk);if(typeof dispose!=='function')dispose=undefined;result={...registrations};registrations.frozen=true;
       }else result=await bridge.dispatch(request.method,request.params??{});
       send({id:request.id,result:result??null});
     }catch(error){send({id:request.id,error:{code:-32000,message:String(error.message).slice(0,1000)}});}

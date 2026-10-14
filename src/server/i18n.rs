@@ -3,7 +3,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path},
     http::StatusCode,
     routing::get,
-    Json, Router,
+    Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -26,10 +26,19 @@ pub fn directory() -> PathBuf {
                 .join("i18n")
         })
 }
+#[derive(Clone)]
+struct SourceCatalog(PathBuf);
+
 pub fn router() -> Router<super::AppState> {
+    let index_path = super::resolve_index_path();
+    let source_path = index_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("ui/lang/source.json");
     Router::new()
         .route("/api/i18n/selection", get(selection).post(save))
         .route("/api/i18n/packs/:locale", get(pack))
+        .layer(Extension(SourceCatalog(source_path)))
         .layer(DefaultBodyLimit::max(4_000_000))
         .layer(axum::middleware::from_fn(super::mods::local_origin))
 }
@@ -139,9 +148,23 @@ pub fn startup_html(selection: &Selection, error: bool, windows: bool) -> String
         || selection.locale.contains("-Nkoo");
     format!("<!doctype html><html lang=\"{}\" dir=\"{}\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>SWCH</title><style>body{{margin:0;background:#111214;color:#f2f2f4;font:16px/1.5 system-ui,sans-serif;display:grid;min-height:100vh;place-items:center}}main{{text-align:center;max-width:440px;padding:32px;overflow-wrap:anywhere}}p{{color:#adb0bb}}button{{background:#ff642d;border:0;padding:12px 22px;border-radius:8px;font:inherit;white-space:normal}}</style><main><h2>{}</h2><p>{}</p>{}</main></html>",escape(&selection.locale),if rtl {"rtl"} else {"ltr"},title,description,retry)
 }
-async fn save(Json(choice): Json<Selection>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let source: Value =
-        serde_json::from_str(include_str!("../../ui/lang/source.json")).unwrap_or_default();
+async fn save(
+    Extension(SourceCatalog(source_path)): Extension<SourceCatalog>,
+    Json(choice): Json<Selection>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // The UI files can be updated independently of the server executable.
+    // Validate against the same catalog served to the browser, including updates
+    // made after startup, rather than a snapshot embedded at compile time.
+    let source: Value = std::fs::read(&source_path)
+        .map_err(|error| error.to_string())
+        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
+        .map_err(|error| {
+            tracing::warn!(path = %source_path.display(), %error, "Could not read UI language catalog");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error":"language-catalog-unavailable"})),
+            )
+        })?;
     if !validate(&choice, &source) {
         return Err((
             StatusCode::BAD_REQUEST,

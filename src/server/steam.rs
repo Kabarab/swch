@@ -601,19 +601,10 @@ pub async fn launch(
 }
 
 pub async fn downloads() -> Result<Json<serde_json::Value>, ApiError> {
-    let data = tokio::task::spawn_blocking(|| SteamPaths::detect().and_then(|p| library::scan(&p)))
+    let states = tokio::task::spawn_blocking(|| SteamPaths::detect().map(|p| crate::launchers::steam::downloads::snapshot(&p)))
         .await
         .map_err(internal)?
         .map_err(internal)?;
-    let mut states = std::collections::BTreeMap::new();
-    for game in data.games {
-        if let Some(update) = game.update {
-            states.insert(
-                game.game.app_id,
-                serde_json::json!({"update":update,"is_installed":game.game.is_installed}),
-            );
-        }
-    }
     Ok(Json(
         serde_json::json!({"games":states,"updated_at":chrono::Utc::now().to_rfc3339()}),
     ))

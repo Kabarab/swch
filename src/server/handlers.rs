@@ -1295,6 +1295,7 @@ pub async fn get_epic_library(
                     download_total: 0,
                     staged: 0,
                     stage_total: 0,
+                    telemetry: None,
                 }),
                 Some(true),
             )
@@ -1347,6 +1348,7 @@ pub async fn get_epic_library(
                 download_total: 0,
                 staged: 0,
                 stage_total: 0,
+                telemetry: None,
             })
         } else {
             None

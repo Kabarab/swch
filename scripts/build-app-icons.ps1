@@ -34,12 +34,10 @@ public static class SwchIconPacker {
         }
     }
 
-    public static void Ico(string source, string smallSource, string destination) {
+    public static void Ico(string source, string destination) {
         int[] sizes = {16, 20, 24, 32, 40, 48, 64, 128, 256};
         var frames = new byte[sizes.Length][];
-        // Taskbar sizes need wider gaps and larger arrowheads than the large logo.
-        for (int i = 0; i < sizes.Length; i++)
-            frames[i] = Frame(sizes[i] <= 64 ? smallSource : source, sizes[i]);
+        for (int i = 0; i < sizes.Length; i++) frames[i] = Frame(source, sizes[i]);
         using (var stream = File.Create(destination))
         using (var writer = new BinaryWriter(stream)) {
             writer.Write((ushort)0); writer.Write((ushort)1); writer.Write((ushort)sizes.Length);
@@ -78,6 +76,7 @@ public static class SwchIconPacker {
 }
 '@
 }
-[SwchIconPacker]::Ico((Join-Path $projectRoot 'src/assets/swch-minimal.png'), (Join-Path $projectRoot 'src/assets/swch-windows-small.png'), (Join-Path $projectRoot 'src/assets/swch.ico'))
-[SwchIconPacker]::Icns((Join-Path $projectRoot 'src/assets/swch-macos-minimal.png'), (Join-Path $projectRoot 'swch.app/Contents/Resources/iconfile.icns'))
+$master = Join-Path $projectRoot 'src/assets/swch-logo.png'
+[SwchIconPacker]::Ico($master, (Join-Path $projectRoot 'src/assets/swch.ico'))
+[SwchIconPacker]::Icns($master, (Join-Path $projectRoot 'swch.app/Contents/Resources/iconfile.icns'))
 Write-Host 'Generated Windows ICO (16-256px) and macOS ICNS (16-1024px, including Retina).'
