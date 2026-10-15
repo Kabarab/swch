@@ -88,6 +88,8 @@ pub struct Manifest {
     pub platforms: Vec<String>,
     #[serde(default)]
     pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub games: Vec<GameTarget>,
     #[serde(default)]
     pub backend: Option<String>,
     #[serde(default)]
@@ -123,6 +125,7 @@ impl Manifest {
         if platform.is_some_and(|p| !self.platforms.iter().any(|x| x == p)) {
             return Err("Mod does not support this platform".into());
         }
+        validate_game_targets(&self.games)?;
         if self.backend.is_none() && self.ui.is_none() && self.theme.is_none() {
             return Err("Mod has no entry point".into());
         }
@@ -131,6 +134,38 @@ impl Manifest {
         }
         Ok(())
     }
+}
+
+/// A stable game/application identity, scoped to its launcher.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GameTarget {
+    pub launcher: String,
+    pub app_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+pub fn validate_game_targets(games: &[GameTarget]) -> Result<()> {
+    let mut seen = std::collections::HashSet::new();
+    if games.len() > 100 {
+        return Err("At most 100 game bindings are supported".into());
+    }
+    for game in games {
+        if game.launcher.is_empty()
+            || game.launcher.len() > 256
+            || !game.launcher.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"-_.:".contains(&c))
+            || game.app_id.trim().is_empty()
+            || game.app_id.len() > 256
+            || game.app_id != game.app_id.trim()
+            || game.app_id.chars().any(char::is_control)
+            || game.name.as_ref().is_some_and(|n| n.trim().is_empty() || n.len() > 256)
+            || !seen.insert((&game.launcher, &game.app_id))
+        {
+            return Err("Invalid or duplicate game binding".into());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -179,10 +214,16 @@ pub struct CatalogEntry {
     pub release: String,
     pub download_url: String,
     pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloads_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SavedState {
+    #[serde(default)]
+    pub games: Option<Vec<GameTarget>>,
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
@@ -194,6 +235,7 @@ pub struct SavedState {
 #[derive(Debug, Serialize)]
 pub struct ModInfo {
     pub manifest: Manifest,
+    pub games: Vec<GameTarget>,
     pub enabled: bool,
     pub development: bool,
     pub status: String,

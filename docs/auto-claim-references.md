@@ -106,7 +106,7 @@ Prime автоматически не создаются без выбора и 
 
 Пользовательская проверка и ограничения: [auto-claim.md](auto-claim.md).
 Основные модули: `src/auto_claim/{mod,providers,catalog,platforms,web,web_rules,
-browser_claim,gog_claim,store_discovery,fanatical,microsoft,notifications,keys}.rs`, `src/server/auto_claim.rs`, `ui/auto-claim.js`.
+browser_claim,gog_claim,store_discovery,fanatical,microsoft,notifications,keys}.rs`, `src/server/auto_claim.rs`, `mods/autoclaimer/ui.mjs`.
 
 [v-repo]: https://github.com/vogler/free-games-claimer/tree/99c1f05302aeece21a628797cfdffb561ee38956
 [r-repo]: https://github.com/P-Adamiec/Free-Games-Claimer-Remaster/tree/89f510ef4dcf809bd5410997aa8fe1a7f14574f3

@@ -24,6 +24,23 @@ export function register(catalog,entry){
   catalog.history[id][entry.manifest.version]=entry.sha256;
   catalog.mods=catalog.mods.filter(m=>m.manifest.id!==id);catalog.mods.push(entry);catalog.mods.sort((a,b)=>a.manifest.id.localeCompare(b.manifest.id));return catalog;
 }
+export async function downloadStats(api,repository){
+  const name=repositoryName(repository);let downloads=0;
+  for(let page=1;;page++){
+    const releases=await api(`/repos/${name}/releases?per_page=100&page=${page}`);
+    if(!Array.isArray(releases))throw new Error('Invalid GitHub releases response');
+    for(const release of releases){
+      if(release.draft||release.prerelease)continue;
+      for(const asset of release.assets||[]){
+        if(asset.name!=='mod.zip')continue;
+        if(!Number.isSafeInteger(asset.download_count)||asset.download_count<0||!Number.isSafeInteger(downloads+asset.download_count))throw new Error('Invalid GitHub download count');
+        downloads+=asset.download_count;
+      }
+    }
+    if(releases.length<100)break;
+  }
+  return {downloads,downloads_updated_at:new Date().toISOString()};
+}
 async function download(url,max,headers={}){
   const response=await fetch(url,{headers,signal:AbortSignal.timeout(120000)});if(!response.ok)throw new Error(`GitHub returned ${response.status}`);
   if(Number(response.headers.get('content-length'))>max)throw new Error('Download too large');
@@ -65,7 +82,10 @@ export async function run(){
     const bytes=await download(asset.browser_download_url,MAX_PACKAGE);
     const {manifest,sha256}=inspectZip(bytes);
     if(manifest.version.includes('-')||release.tag_name!==`v${manifest.version}`)throw new Error('Stable tag must match manifest version (vX.Y.Z)');
-    register(catalog,{manifest,sha256,author:repo.owner.login,repository:repo.full_name,repository_id:repo.id,owner_id:repo.owner.id,release:release.html_url,download_url:asset.browser_download_url});
+    const previous=catalog.mods.find(m=>m.manifest.id===manifest.id&&m.repository_id===repo.id);
+    let statistics=previous?{downloads:previous.downloads,downloads_updated_at:previous.downloads_updated_at}:{};
+    try{statistics=await downloadStats(api,repo.full_name);}catch(error){console.warn(`Download statistics unavailable for ${manifest.id}: ${error.message}`);}
+    register(catalog,{manifest,sha256,author:repo.owner.login,repository:repo.full_name,repository_id:repo.id,owner_id:repo.owner.id,release:release.html_url,download_url:asset.browser_download_url,...statistics});
   }
   async function report(number,text){await api(`/repos/${central}/issues/${number}/comments`,'POST',{body:text});}
   // Create the catalog branch once; never change the default branch.

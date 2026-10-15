@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {makeZip, inspectDirectory, sha256} from '../mod-sdk/validation.mjs';
+import {makeZip, sha256} from '../mod-sdk/validation.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const source=path.join(root,'mods/autoclaimer');
 export function buildUI() {
   const state=fs.readFileSync(path.join(source,'claim-state.mjs'),'utf8').replace(/\bexport /g,'');
-  const ui=fs.readFileSync(path.join(source,'ui.mjs'),'utf8').replace(/^import .*\n/,'').replace(/\bexport /g,'');
-  const css=fs.readFileSync(path.join(root,'ui/launcher.css'),'utf8');
+  const ui=fs.readFileSync(path.join(source,'ui.mjs'),'utf8').replace(/^import[^\r\n]*\r?\n/gm,'').replace(/\bexport /g,'');
+  const css=fs.readFileSync(path.join(root,'ui/launcher.css'),'utf8')+'\n'+fs.readFileSync(path.join(source,'style.css'),'utf8');
   const view=fs.readFileSync(path.join(source,'view.html'),'utf8');
   const bootstrap=`
 const t=value=>value;
@@ -23,13 +23,13 @@ async function api(path,body) {
 }
 const copyText=text=>control({operation:'clipboard',text});
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function showToast(message){const e=document.getElementById('toast');e.textContent=message;e.classList.add('show');clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>e.classList.remove('show'),5000);}
+function showToast(message){const e=document.getElementById('toast');e.textContent=message;e.hidden=false;clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>e.hidden=true,5000);}
 const {accountState,indexedResults,runSummary,isBrowserChallenge}=(()=>{${state};return {accountState,indexedResults,runSummary,isBrowserChallenge};})();
-${ui}
+const {initAutoClaim,loadAutoClaim}=(()=>{${ui};return {initAutoClaim,loadAutoClaim};})();
 initAutoClaim({api,esc:escape,dateLabel:value=>new Date(value).toLocaleString('ru-RU'),toast:showToast,demo:false});
 void loadAutoClaim();
 `;
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Автоклеймер SWCH</title><style>${css}\nbody{display:block;min-width:0;padding:24px;margin:0}.claim-workspace{max-width:1100px;margin:auto}.claim-workspace h2{margin:0}.settings-panel{display:block}.claim-workspace .claim-view[hidden]{display:none}#toast{position:fixed;bottom:24px;left:24px;right:24px;pointer-events:none;z-index:10}@media(max-width:600px){body{padding:12px}.claim-run-box{flex-wrap:wrap}.claim-tabs{overflow-x:auto}}</style></head><body>${view}<div id="toast" class="toast" role="status"></div><script type="module">${bootstrap.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Раздачи игр и автоклеймер SWCH</title><style>${css}\nbody{display:block;min-width:0;padding:24px;margin:0}.claim-workspace{max-width:1100px;margin:auto}.claim-workspace h2{margin:0}.settings-panel{display:block}.claim-workspace .claim-view[hidden]{display:none}#toast{position:fixed;bottom:24px;left:50%;pointer-events:none;z-index:10}@media(max-width:600px){body{padding:12px}.claim-run-box{flex-wrap:wrap}.claim-tabs{overflow-x:auto}}</style></head><body>${view}<div id="toast" class="toast" role="status" hidden></div><script type="module">${bootstrap.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;
 }
 
 export function buildPackage(target,destination,binary) {

@@ -1,13 +1,14 @@
 import {initI18n, t, getLocale, numberFormat, localizedConfirm} from './i18n.js';
 import {gamePlaytime, timeLabel, timeScopeLabel} from './playtime.mjs?v=time-20261011-1';
 import {PLATFORMS, PLATFORM_IDS, inventoryPlatforms} from './platforms.mjs?v=mods-1';
-import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation} from './mods.js?v=copy-prompt-3';
+import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation,renderGameModsButton} from './mods.js?v=mod-filters-1';
 import {riotKinds, riotKindLabel, riotInventoryData} from './riot-inventory.mjs?v=inventory-20261011-2';
 import {DEADLOCK_HEROES} from './deadlock-heroes.mjs?v=stats-20261011-1';
 import {deadlockOverview,deadlockHeroAccess,deadlockHeroName,deadlockRankLabel} from './deadlock-stats.mjs?v=stats-20261011-1';
 import {platformLogo, hydratePlatformLogos, renderPlatformNavigation, simplifyInventory, simplifyRiotInventory} from './ux.js?v=mods-1';
 import { accountPlayedGames, STYLES, gameKey, metricKey, filterGames, normalizeEpic, normalizeMetrics, safeImage, mergeLibraries, normalizeSteam, steamStats, inventoryKey, appendInventory, eligibleSteamAccounts, aggregateSteamStats, filterInventory, priceKey, inventoryValue, CURRENCIES, convertUsdCents, accountLibraryValue, accountHasGameBan, accountRestrictionsSummary, isItemUnsellable, isIgnoredSteamApp, KNOWN_STEAM_APP_NAMES, KNOWN_GAME_SHORTS, getDota2HeroIconUrl, getInventoryGamesWithItems, DOTA2_LOGO_SVG, inventoryHeroItems, inventoryTagCounts, csInventoryCategories } from './model.mjs';
-import { initStartup } from './startup.js?v=startup-20261011-1';
+import { initStartup } from './startup.js?v=startup-20261014-switches';
+import {readLibraryCache, writeLibraryCache} from './library-cache.mjs';
 void initI18n();
 const confirm = localizedConfirm;
 const $ = (id) => document.getElementById(id);
@@ -25,6 +26,10 @@ const ACCENT_COLORS = [
   { id: 'indigo', name: 'Индиго', hex: '#6366f1', rgb: '99, 102, 241' },
 ];
 let accentColor = read('swch-accent-color', 'orange');
+function normalizeAccentHex(value) {
+ return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : ACCENT_COLORS[0].hex;
+}
+let customAccentColor = normalizeAccentHex(read('swch-custom-accent-color', ACCENT_COLORS[0].hex));
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.game}"/></svg>`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function read(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
@@ -64,6 +69,19 @@ const POPULAR_STEAM_GAMES = [
   { app_id: '271590', name: 'Grand Theft Auto V' },
 ];
 let selectedAccounts = {}, busy = false, loading = true, metricTarget = null, toastTimer;
+let libraryCacheRestored = false;
+function restoreLibraryCache() {
+ if(demo)return;
+ let cached;
+ try { cached=readLibraryCache(localStorage); } catch { return; }
+ if(!cached)return;
+ ({games,accounts,steamRows}=cached);
+ libraryCacheRestored=true;
+ $('footer-status').textContent=['Библиотека','(сохранено в кэше) ·','Загружаем игры и аккаунты.'].map(t).join(' ');
+}
+function persistLibraryCache() {
+ try { writeLibraryCache(localStorage,{games,accounts,steamRows}); } catch { /* Storage can be disabled. */ }
+}
 const format = {format:value=>numberFormat({maximumFractionDigits:1}).format(value)};
 const platformName = value => PLATFORMS[value]?.name || value;
 let hoyoverseStatus = null;
@@ -282,7 +300,8 @@ async function refresh(force = false) {
        const loaded = libraries.flatMap((result,index) => {
          if(result.status === 'fulfilled') return [result.value];
          errors.push(`Библиотека Epic: ${epic[index].display_name}`);
-         return [];
+         const id=epic[index].id;
+         return [games.filter(g=>g.launcher==='epic'&&(g.owner_ids||[g.owner_id]).includes(id)).map(g=>({...g,owner_id:id,owner_ids:[id]}))];
        });
        games = [...games.filter(g=>g.launcher !== 'epic'), ...mergeLibraries(loaded)];
      } else errors.push('Аккаунты Epic Games');
@@ -367,6 +386,9 @@ async function refresh(force = false) {
      } catch { /* Older backends and offline extensions do not hide built-in libraries. */ }
      if(platform!=='all'&&!games.some(g=>g.launcher===platform)&&!(page==='accounts'&&accounts.some(a=>a.launcher===platform)))platform='all';
      const partial = errors.length > 0;
+     // Preserve the previous snapshot if every request failed. Successful empty
+     // responses still replace removed accounts/games in the next snapshot.
+     if(results.some(result=>result.status==='fulfilled'))persistLibraryCache();
      $('connection-state').textContent = partial ? 'Нет полной связи' : 'Подключено';
      $('footer-status').textContent = partial ? 'Не все данные загружены' : 'Библиотека обновлена · ' + new Date().toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'});
      $('footer-dot').style.background = partial ? '#d9ad6a' : '#8cba9c';
@@ -377,7 +399,9 @@ async function refresh(force = false) {
 }
 function applyStyle() {
  document.documentElement.dataset.style=style;
- const activeColor = ACCENT_COLORS.find(c => c.id === accentColor) || ACCENT_COLORS[0];
+ const activeColor = accentColor === 'custom'
+   ? {hex: customAccentColor, rgb: customAccentColor.slice(1).match(/.{2}/g).map(channel => parseInt(channel, 16)).join(', ')}
+   : ACCENT_COLORS.find(c => c.id === accentColor) || ACCENT_COLORS[0];
  document.documentElement.style.setProperty('--accent', activeColor.hex);
  document.documentElement.style.setProperty('--accent-rgb', activeColor.rgb);
  const modeName = t(layout === 'cards' ? 'Карточки' : 'Список');
@@ -976,8 +1000,8 @@ function openGameModal(key) {
           <div class="game-modal-info-col">
             <div class="game-modal-badges">
               <span class="badge" style="background:rgba(255,255,255,0.1);backdrop-filter:blur(4px);color:white;font-weight:700;font-size:11px;padding:4px 10px;border-radius:6px">${platformName(g.launcher).toUpperCase()}</span>
-              <span class="badge" data-game-install-status style="background:${g.is_installed ? 'rgba(46,204,113,0.18)' : 'rgba(255,255,255,0.06)'};color:${g.is_installed ? '#2ecc71' : 'var(--muted)'};font-size:11px;padding:4px 10px;border-radius:6px">
-                ${g.is_installed ? '● Установлена' : '○ Не установлена'}
+              <span class="badge" data-game-install-status style="background:${downloadInProgress(g)||g.update?.required?'rgba(245,158,11,0.15)':g.is_installed ? 'rgba(46,204,113,0.18)' : 'rgba(255,255,255,0.06)'};color:${downloadInProgress(g)||g.update?.required?'#e5ae60':g.is_installed ? '#2ecc71' : 'var(--muted)'};font-size:11px;padding:4px 10px;border-radius:6px">
+                ${esc(gameInstallBadge(g))}
               </span>
               ${timeCaption(g,a?.id??null)}
             </div>
@@ -1015,7 +1039,7 @@ function openGameModal(key) {
       </div>
       <div class="game-modal-details-scroll">
         <div data-game-update>${renderUpdate(g)}</div>
-        ${renderGameAccounts(g)}
+        ${renderGameModsButton(g)}${renderGameAccounts(g)}
       </div>
     `;
     hydrateIcons(modal);
@@ -1054,7 +1078,7 @@ function render() {
 }
 function renderLibrary() {
  const container=$('library-content');
- if(loading && !games.length) {container.innerHTML='<div class="empty-state" role="status"><h2>Собираем твою библиотеку…</h2><p>Загружаем игры и аккаунты.</p></div>';return;}
+ if(loading && !games.length && !libraryCacheRestored) {container.innerHTML='<div class="empty-state" role="status"><h2>Собираем твою библиотеку…</h2><p>Загружаем игры и аккаунты.</p></div>';return;}
  const eligible=games.filter(g=>{
    if(g.launcher!=='steam')return true;
    if(steamAccountFilter!=='all'){
@@ -1085,7 +1109,7 @@ function renderLibrary() {
   container.innerHTML=`<div class="collection-heading"><h3>${page==='favorites'?'Избранные игры':'Вся коллекция'} <span> / ${filtered.length}</span></h3><span>Выбери, во что сыграешь сегодня</span></div><div class="games-grid">${filtered.map(g=>`<article class="game-card" data-download-game="${esc(gameKey(g))}"><button class="poster-button" data-action="open-game" data-game="${esc(gameKey(g))}" aria-label="Открыть ${esc(g.name)}">${downloadCover(g,'poster-art')}<span class="poster-overlay"></span><span class="poster-platform">${platformName(g.launcher).toUpperCase()}</span><span class="poster-name">${esc(g.name)}</span><span class="poster-open">↗</span></button><div class="card-caption"><div><h3>${esc(g.name)}</h3><small data-download-caption>${g.is_installed?'<span class="status-dot"></span>':''}${esc(gameState(g))}${timeCaption(g,g.launcher==='steam'&&steamAccountFilter!=='all'?steamAccountFilter:null)}</small></div><div style="display:flex;align-items:center;gap:4px">${banButton(g)}${favoriteButton(g)}</div></div><div data-card-download>${downloadInProgress(g)?downloadMetrics(g,true):''}</div><button class="primary card-play" data-action="quick-launch" data-game="${esc(gameKey(g))}" ${busy||!canRequestLaunch(g)||downloadState(g)?.phase==='requested'?'disabled':''}>${icon('play')}${esc(playLabel(g))}</button></article>`).join('')}</div>`;
  } else {
   const priceInfo = getGamePriceInfo(selected, chosenAccount(selected));
-  container.innerHTML=`<div class="detail-layout"><nav class="game-list" aria-label="Выбор игры">${filtered.map(g=>`<button data-action="select-game" data-game="${esc(gameKey(g))}" class="${selectedGame===gameKey(g)?'selected':''}" aria-pressed="${selectedGame===gameKey(g)}">${imageTag(g,'')}<span><strong>${esc(g.name)}</strong><small>${platformName(g.launcher)} · ${esc(gameState(g))}${timeCaption(g,g.launcher==='steam'&&steamAccountFilter!=='all'?steamAccountFilter:null)}</small></span></button>`).join('')}</nav><div class="detail-panel">${STYLES[style].layout==='cards'?'<button class="text-button" data-action="back-cards">← Назад к карточкам</button>':''}${hero(selected,true)}${renderUpdate(selected)}${renderGameAccounts(selected)}<div class="game-info"><div>Стоимость<strong><span class="detail-price-box ${priceInfo.isFree?'is-free':''}">${esc(priceInfo.text)}</span></strong></div><div>Платформа<strong>${platformName(selected.launcher)}</strong></div><div>На диске<strong>${selected.size_bytes>0?format.format(selected.size_bytes/1024**3)+' ГБ':'Нет данных'}</strong></div><div>В избранном<strong>${favoriteButton(selected)}</strong></div><div>Блокировка<strong>${banButton(selected)}</strong></div></div></div></div>`;
+  container.innerHTML=`<div class="detail-layout"><nav class="game-list" aria-label="Выбор игры">${filtered.map(g=>`<button data-action="select-game" data-game="${esc(gameKey(g))}" class="${selectedGame===gameKey(g)?'selected':''}" aria-pressed="${selectedGame===gameKey(g)}">${imageTag(g,'')}<span><strong>${esc(g.name)}</strong><small>${platformName(g.launcher)} · ${esc(gameState(g))}${timeCaption(g,g.launcher==='steam'&&steamAccountFilter!=='all'?steamAccountFilter:null)}</small></span></button>`).join('')}</nav><div class="detail-panel">${STYLES[style].layout==='cards'?'<button class="text-button" data-action="back-cards">← Назад к карточкам</button>':''}${hero(selected,true)}${renderUpdate(selected)}${renderGameModsButton(selected)}${renderGameAccounts(selected)}<div class="game-info"><div>Стоимость<strong><span class="detail-price-box ${priceInfo.isFree?'is-free':''}">${esc(priceInfo.text)}</span></strong></div><div>Платформа<strong>${platformName(selected.launcher)}</strong></div><div>На диске<strong>${selected.size_bytes>0?format.format(selected.size_bytes/1024**3)+' ГБ':'Нет данных'}</strong></div><div>В избранном<strong>${favoriteButton(selected)}</strong></div><div>Блокировка<strong>${banButton(selected)}</strong></div></div></div></div>`;
  }
 }
 function favoriteButton(g) {const saved=favorites.includes(gameKey(g));return `<button class="favorite ${saved?'saved':''}" data-action="favorite" data-game="${esc(gameKey(g))}" aria-pressed="${saved}" aria-label="${saved?'Убрать из избранного':'В избранное'}: ${esc(g.name)}">${icon('heart')}</button>`;}
@@ -1346,7 +1370,7 @@ function openRiotCollection(accountId,appId) {
  dialog.showModal();
 }
 
-function showStyles() {
+function renderColorOptions() {
   const colorContainer = $('color-options');
   if (colorContainer) {
     colorContainer.innerHTML = ACCENT_COLORS.map(c => `
@@ -1355,8 +1379,34 @@ function showStyles() {
         <span class="color-name">${c.name}</span>
         ${c.id === accentColor ? '<span class="color-check">✓</span>' : ''}
       </button>
-    `).join('');
+    `).join('') + `
+      <label class="color-swatch-btn custom-color-swatch ${accentColor === 'custom' ? 'selected' : ''}">
+        <span class="color-dot" style="background:${customAccentColor}"></span>
+        <span class="color-name">Свой цвет</span>
+        <span class="color-check" ${accentColor === 'custom' ? '' : 'hidden'}>✓</span>
+        <input id="custom-accent-color" type="color" value="${customAccentColor}" aria-label="Свой цвет интерфейса">
+      </label>`;
   }
+}
+function updateCustomAccentColor(value) {
+ customAccentColor = normalizeAccentHex(value);
+ accentColor = 'custom';
+ save('swch-custom-accent-color', customAccentColor);
+ save('swch-accent-color', accentColor);
+ applyStyle();
+ const container = $('color-options');
+ container.querySelectorAll('[data-color-choice]').forEach(button => {
+   button.classList.remove('selected');
+   button.setAttribute('aria-pressed', 'false');
+   button.querySelector('.color-check')?.remove();
+ });
+ const swatch = container.querySelector('.custom-color-swatch');
+ swatch.classList.add('selected');
+ swatch.querySelector('.color-dot').style.background = customAccentColor;
+ swatch.querySelector('.color-check').hidden = false;
+}
+function showStyles() {
+  renderColorOptions();
   document.querySelectorAll('[data-layout-choice]').forEach(b => {
     const isSelected = b.dataset.layoutChoice === layout;
     b.classList.toggle('selected', isSelected);
@@ -1832,11 +1882,12 @@ function gameState(g) {
  if(u?.required)return 'Требуется обновление';
  return g.is_installed?'Установлена':'Не установлена';
 }
+function gameInstallBadge(g){return downloadInProgress(g)||g.update?.required?gameState(g):g.is_installed?'● Установлена':'○ Не установлена';}
 const pendingDownloads=new Map();
 let downloadsStale=false;
 function downloadState(g){
  const pending=pendingDownloads.get(gameKey(g));
- if(pending&&pending>Date.now()&&!['downloading','installing','verifying','preparing'].includes(g.update?.phase))return {...g.update,phase:'requested',downloaded:0,staged:0,telemetry:null};
+ if((pending&&pending>Date.now()||g.launch_after_update?.status==='watching')&&!['downloading','installing','verifying','preparing','paused','queued'].includes(g.update?.phase))return {...g.update,phase:'requested',downloaded:0,download_total:0,staged:0,stage_total:0,telemetry:null};
  return g.update;
 }
 function downloadInProgress(g){return g.launcher==='steam'&&['requested','queued','preparing','downloading','installing','verifying','paused'].includes(downloadState(g)?.phase);}
@@ -1845,7 +1896,7 @@ function downloadProgress(g){
  if(!u)return {percent:null,done:0,total:0,stage:false};
  const stage=['installing','verifying'].includes(u.phase);
  const done=Number(stage?u.staged:u.downloaded)||0,total=Number(stage?u.stage_total:u.download_total)||0;
- return {percent:total>0?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
+ return {percent:total>0&&!(stage&&done===0)?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
 }
 function coverProgress(g){
  const u=downloadState(g),p=downloadProgress(g);
@@ -1880,9 +1931,11 @@ function playLabel(g){if(g.launcher==='gog')return !g.is_installed?'Не уст�
 function renderUpdate(g){
  if(g.launcher!=='steam')return '';
  const u=downloadState(g);
- if(!u||u.phase==='ready')return `<p class="muted small-text">Статус обновления: ${u?'по локальным данным Steam игра готова':'нет локальных данных'}. Новую версию проверяет клиент Steam.</p>`;
+ const intent=g.launch_after_update;
+ const launchInfo=intent?`<div class="launch-after-update"><small>${intent.status==='failed'?'Не удалось повторить запуск. Нажми «Играть» ещё раз.':intent.status==='watching'?'Steam проверяет обновления и запуск игры.':'Игра запустится после обновления. SWCH отслеживает завершение.'}</small><button class="secondary" data-action="cancel-steam-launch" data-game="${esc(gameKey(g))}">Отменить запуск</button></div>`:'';
+ if(!u||u.phase==='ready')return `<p class="muted small-text">Статус обновления: ${u?'по локальным данным Steam игра готова':'нет локальных данных'}. Новую версию проверяет клиент Steam.</p>${launchInfo}`;
  const {percent:progress,done,total,stage}=downloadProgress(g);
- return `<section class="download-status" role="status"><strong>${esc(gameState(g))}</strong>${progress!=null?`<progress max="100" value="${progress}"></progress><span>${format.format(progress)}% · ${downloadBytes(done)} / ${downloadBytes(total)}${stage?' на диске':''}</span>`:'<p>Ожидаем данные о размере загрузки от Steam.</p>'}${downloadMetrics(g)}<button class="secondary" data-action="update-game" data-game="${esc(gameKey(g))}" ${busy||u.phase==='requested'?'disabled':''}>${u.phase==='paused'?'Продолжить обновление':'Обновить без запуска игры'}</button>${downloadsStale?'<small class="error-text">Не удалось получить свежий прогресс. Показаны последние данные.</small>':''}<small>Время приблизительное; после скачивания Steam может продолжить установку. Чтение и запись относятся ко всему клиенту Steam. Steam может запросить вход или подтверждение.</small></section>`;
+ return `<section class="download-status" role="status"><strong>${esc(gameState(g))}</strong>${progress!=null?`<progress max="100" value="${progress}"></progress><span>${format.format(progress)}% · ${downloadBytes(done)} / ${downloadBytes(total)}${stage?' на диске':''}</span>`:`<progress max="100" aria-label="${esc(gameState(g))}"></progress><p>${stage?'Steam применяет файлы. Точный процент пока недоступен.':u.phase==='requested'?'Проверяем запуск и обновления в Steam…':'Ожидаем данные о размере загрузки от Steam.'}</p>`}${downloadMetrics(g)}${launchInfo}<button class="secondary" data-action="update-game" data-game="${esc(gameKey(g))}" ${busy||u.phase==='requested'?'disabled':''}>${u.phase==='paused'?'Продолжить обновление':'Обновить без запуска игры'}</button>${downloadsStale?'<small class="error-text">Не удалось получить свежий прогресс. Показаны последние данные.</small>':''}<small>Время приблизительное; после скачивания Steam может продолжить установку. Чтение и запись относятся ко всему клиенту Steam. Steam может запросить вход или подтверждение.</small></section>`;
 }
 let launchWarningResolver = null;
 function confirmLaunchWithBan(g, a) {
@@ -1941,7 +1994,7 @@ async function launch(key,accountId=null,updateOnly=false) {
  }
  if(demo){toast('Демо: запуск игры показан для примера. Реальные приложения не запускаются.');return;}
  selectedAccounts[key]=a.id;
- if(g.launcher==='steam'&&(g.update?.required||updateOnly||downloadInProgress(g)))pendingDownloads.set(key,Number.POSITIVE_INFINITY);
+ if(g.launcher==='steam')pendingDownloads.set(key,Number.POSITIVE_INFINITY);
  busy=true;render();refreshGameModalDownload();refreshDownloadVisuals();
  try {
   let result;
@@ -1990,9 +2043,10 @@ function refreshGameModalDownload(){
  if(launch){launch.innerHTML=icon('play')+esc(playLabel(g));launch.disabled=busy||!canRequestLaunch(g)||downloadState(g)?.phase==='requested';}
  const badge=modal.querySelector('[data-game-install-status]');
  if(badge){
-  badge.textContent=g.is_installed?'● Установлена':'○ Не установлена';
-  badge.style.background=g.is_installed?'rgba(46,204,113,0.18)':'rgba(255,255,255,0.06)';
-  badge.style.color=g.is_installed?'#2ecc71':'var(--muted)';
+  const updating=downloadInProgress(g)||g.update?.required;
+  badge.textContent=gameInstallBadge(g);
+  badge.style.background=updating?'rgba(245,158,11,0.15)':g.is_installed?'rgba(46,204,113,0.18)':'rgba(255,255,255,0.06)';
+  badge.style.color=updating?'#e5ae60':g.is_installed?'#2ecc71':'var(--muted)';
  }
  hydrateIcons(modal);
 }
@@ -2000,13 +2054,29 @@ async function pollDownloads(){
  if(demo||downloadPolling||document.hidden)return;downloadPolling=true;
  try {const data=await api('/api/steam/downloads');if(!data.games)throw new Error('Steam progress unavailable');let changed=downloadsStale;downloadsStale=false;
  for(const [key,expires] of pendingDownloads)if(expires<=Date.now()){pendingDownloads.delete(key);changed=true;}
+ for(const g of [...games,...steamRows].filter(g=>g.launcher==='steam')){
+  const intent=data.launch_after_update?.app_id===g.app_id?data.launch_after_update:null;
+  if(JSON.stringify(g.launch_after_update||null)!==JSON.stringify(intent)){g.launch_after_update=intent;changed=true;}
+ }
  for(const [id,state] of Object.entries(data.games)){
-  if(['downloading','installing','verifying','preparing'].includes(state.update?.phase))pendingDownloads.delete(`steam:${id}`);
+  if(state.is_running||['downloading','installing','verifying','preparing'].includes(state.update?.phase)
+     ||('launch_after_update' in data&&!data.launch_after_update&&Number.isFinite(pendingDownloads.get(`steam:${id}`))&&state.update?.phase==='ready'))pendingDownloads.delete(`steam:${id}`);
   for(const g of [...games,...steamRows].filter(g=>g.launcher==='steam'&&g.app_id===id))if(JSON.stringify(g.update)!==JSON.stringify(state.update)||g.is_installed!==state.is_installed){g.update=state.update;g.is_installed=state.is_installed;changed=true;}
  }if(changed&&['library','favorites'].includes(page)){refreshLibraryDownloads();hydrateIcons();}refreshGameModalDownload();refreshDownloadVisuals();}
  catch {downloadsStale=true;refreshLibraryDownloads();refreshGameModalDownload();} finally {downloadPolling=false;}
 }
+async function cancelSteamLaunch(key){
+ const g=games.find(g=>gameKey(g)===key);if(!g||g.launcher!=='steam')return;
+ try{
+  await api('/api/steam/cancel-launch',{app_id:g.app_id});
+  pendingDownloads.delete(key);
+  for(const row of [...games,...steamRows].filter(row=>row.launcher==='steam'&&row.app_id===g.app_id))row.launch_after_update=null;
+  refreshLibraryDownloads();refreshGameModalDownload();refreshDownloadVisuals();
+  toast('Автозапуск отменён. Обновление продолжится в Steam.');
+ }catch(e){toast(e.message);}
+}
  document.addEventListener('click',async e=>{
+  if(e.target.id==='custom-accent-color'){updateCustomAccentColor(e.target.value);return;}
   const b=e.target.closest('button');if(!b)return;
   if(b.hasAttribute('data-close')){const dialog=b.closest('dialog');if(dialog.id==='connect-dialog'&&!await cancelUbisoftAutoLogin())return;dialog.close();return;}
   if(b.dataset.tab){
@@ -2037,7 +2107,7 @@ async function pollDownloads(){
   }
   if(b.dataset.colorChoice){
    accentColor=b.dataset.colorChoice;save('swch-accent-color',accentColor);
-   applyStyle();showStyles();toast('Цвет интерфейса обновлён');return;
+   applyStyle();renderColorOptions();toast('Цвет интерфейса обновлён');return;
  }
  if(b.dataset.layoutChoice){
    const newLayout=b.dataset.layoutChoice;
@@ -2398,6 +2468,7 @@ async function pollDownloads(){
   if(action==='scan-roblox')await scanRoblox();
   if(action==='open-roblox-place-dialog')openRobloxPlaceDialog();
   if(action==='roblox-tab-refresh')await refreshRobloxTab(b.dataset.account);
+  if(action==='cancel-steam-launch')await cancelSteamLaunch(key);
   if(action==='launch')await launch(key);
   if(action==='quick-launch')chooseLaunchAccount(key);
   if(action==='update-game')chooseLaunchAccount(key,true);
@@ -3972,6 +4043,7 @@ async function estimateInventory() {
 $('steam-account-filter').addEventListener('change',e=>{steamAccountFilter=e.target.value;if(steamAccountFilter!=='all')for(const g of games.filter(g=>g.launcher==='steam'))selectedAccounts[gameKey(g)]=steamAccountFilter;renderLibrary();hydrateIcons();});
 $('steam-access-filter').addEventListener('change',e=>{steamAccessFilter=e.target.value;renderLibrary();hydrateIcons();});
 document.addEventListener('input',e=>{
+ if(e.target.id==='custom-accent-color'){updateCustomAccentColor(e.target.value);return;}
  if(e.target.id==='riot-inventory-search'){riotInventorySearch=e.target.value;$('riot-inventory-content').innerHTML=riotInventoryCards();return;}
  if(e.target.id==='inventory-search'||e.target.id==='cs-inventory-search'){
   inventorySearch=e.target.value;
@@ -4006,6 +4078,7 @@ document.addEventListener('input',e=>{
  renderInventoryItems();
 });
 document.addEventListener('change',e=>{
+ if(e.target.id==='custom-accent-color'){updateCustomAccentColor(e.target.value);toast('Цвет интерфейса обновлён');return;}
  if(e.target.matches('[data-deadlock-hero-select]')){deadlockHeroSelection.set(gameStatsKey('1422450',e.target.dataset.account),e.target.value);paintGameStats();return;}
  if(e.target.id==='riot-inventory-kind'){riotInventoryKind=e.target.value;save('swch-riot-inventory-kind-v2',riotInventoryKind);riotInventorySearch='';riotWeaponCategory='';riotWeapon='';renderInventory();return;}
  if(e.target.id==='riot-inventory-weapon'){riotWeapon=e.target.value;if(riotWeapon)riotInventoryKind='skins';renderInventory();return;}
@@ -4234,8 +4307,8 @@ async function estimateLibrary(accountId='all'){
 
 const refreshStartup = initStartup({toast, demo});
 $('mobile-platform').addEventListener('change',e=>{platform=e.target.value;gogAccountFilter='all';if(page!=='accounts')page='library';render();});
-setupMods({api,toast,demo,changed:()=>refresh(true),render});
-hydrateIcons();await refresh();void syncModules();setInterval(syncModules, 10000);void loadCurrencies();if(!demo){void refreshSteamRestrictions();setInterval(refreshSteamRestrictions,15*60*1000);void hydrateInventoryCache();void hydrateGamePrices();void hydrateMissingSteamNames();void pollDownloads();setInterval(pollDownloads,2000);setInterval(pollUbisoftAccounts,3000);setInterval(pollUbisoftAutoLogin,1000);setTimeout(() => void checkForUpdates(false), 1500);}
+setupMods({api,toast,demo,changed:()=>refresh(true),render,gameKey,games:()=>games,accountForGame:chosenAccount,navigate:next=>{const modal=$('game-modal');if(modal?.open)modal.close();page=next;render();},openGame:key=>{page='library';render();openGameModal(key);}});
+restoreLibraryCache();hydrateIcons();await refresh();void syncModules();setInterval(syncModules, 10000);void loadCurrencies();if(!demo){void refreshSteamRestrictions();setInterval(refreshSteamRestrictions,15*60*1000);void hydrateInventoryCache();void hydrateGamePrices();void hydrateMissingSteamNames();void pollDownloads();setInterval(pollDownloads,2000);setInterval(pollUbisoftAccounts,3000);setInterval(pollUbisoftAutoLogin,1000);setTimeout(() => void checkForUpdates(false), 1500);}
 
 // --- Modular Launcher Engine Integration ---
 let installedModules = [];

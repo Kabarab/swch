@@ -31,6 +31,7 @@ pub fn router() -> Router<super::AppState> {
         .route("/api/mods/development", post(development))
         .route("/api/mods/theme", post(theme))
         .route("/api/mods/:id/toggle", post(toggle))
+        .route("/api/mods/:id/games", post(bind_games))
         .route("/api/mods/:id/restart", post(restart))
         .route("/api/mods/:id/remove", post(remove))
         .route("/api/mods/:id/clear-data", post(clear_data))
@@ -170,6 +171,18 @@ async fn toggle(
         m.toggle(&id, input["enabled"].as_bool().unwrap_or(false))
             .await,
     )
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GameBindings {
+    games: Option<Vec<GameTarget>>,
+}
+async fn bind_games(
+    Extension(m): Extension<Arc<ModManager>>,
+    Path(id): Path<String>,
+    Json(input): Json<GameBindings>,
+) -> Response {
+    done(m.bind_games(&id, input.games).await)
 }
 async fn restart(Extension(m): Extension<Arc<ModManager>>, Path(id): Path<String>) -> Response {
     done(m.reload(&id).await)

@@ -15,10 +15,18 @@ export function supportsApi(range){
   return ['^1.0.0','~1.0.0','1.0.0','>=1.0.0 <2.0.0','>=1.0.0, <2.0.0'].includes(range);
 }
 export function validateManifest(m,files){
-  const allowed=['id','name','version','api','platforms','description','backend','ui','theme'];
+  const allowed=['id','name','version','api','platforms','description','backend','ui','theme','games'];
   if(Object.keys(m).some(k=>!allowed.includes(k))||!validId(m.id)||typeof m.name!=='string'||!m.name.trim()||m.name.length>120||typeof (m.description??'')!=='string'||(m.description??'').length>2000)throw new Error('Invalid manifest identity');
   version(m.version);if(!supportsApi(m.api))throw new Error('Use an SDK v1 API range (^1.0.0 recommended)');
   if(!Array.isArray(m.platforms)||!m.platforms.length||m.platforms.some(p=>!['windows-x64','macos-arm64'].includes(p)))throw new Error('Invalid platforms');
+  if(m.games!==undefined){
+    const seen=new Set(),length=v=>Buffer.byteLength(v,'utf8');
+    if(!Array.isArray(m.games)||m.games.length>100)throw new Error('Invalid game bindings');
+    for(const game of m.games){
+      if(!game||typeof game!=='object'||Object.keys(game).some(k=>!['launcher','app_id','name'].includes(k))||typeof game.launcher!=='string'||!game.launcher||length(game.launcher)>256||!/^[a-z0-9_.:-]+$/.test(game.launcher)||typeof game.app_id!=='string'||!game.app_id.trim()||game.app_id!==game.app_id.trim()||length(game.app_id)>256||/[\p{Cc}]/u.test(game.app_id)||(game.name!=null&&(typeof game.name!=='string'||!game.name.trim()||length(game.name)>256)))throw new Error('Invalid game binding');
+      const key=JSON.stringify([game.launcher,game.app_id]);if(seen.has(key))throw new Error('Duplicate game binding');seen.add(key);
+    }
+  }
   const entries=['backend','ui','theme'].filter(k=>m[k]!=null);if(!entries.length)throw new Error('Missing entry point');
   for(const key of entries){safePath(m[key]);if(!files.has(m[key]))throw new Error('Missing '+key+' entry point');}
   if(m.theme){const theme=JSON.parse(files.get(m.theme).toString('utf8'));for(const [k,v]of Object.entries(theme))if(!(k==='radius'?/^\d{1,2}px$/.test(v)&&parseInt(v)<=32:['bg','panel','panel-hover','line','text','muted','accent'].includes(k)&&/^#[\da-f]{6}$/i.test(v)))throw new Error('Invalid theme token '+k);}

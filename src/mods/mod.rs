@@ -328,6 +328,7 @@ impl ModManager {
             }
             info.push(ModInfo {
                 manifest: p.manifest.clone(),
+                games: p.saved.games.clone().unwrap_or_else(|| p.manifest.games.clone()),
                 enabled: p.saved.enabled,
                 development: p.saved.development.is_some(),
                 status: if !p.saved.enabled {
@@ -377,6 +378,20 @@ impl ModManager {
         let _ = self.events.send(json!({"event":"mods.changed"}));
         Ok(())
     }
+    pub async fn bind_games(&self, id: &str, games: Option<Vec<GameTarget>>) -> Result<()> {
+        let _gate = self.mutation.lock().await;
+        if let Some(games) = &games {
+            validate_game_targets(games)?;
+        }
+        let entry = self.entry(id).await?;
+        let mut p = entry.lock().await;
+        let mut saved = p.saved.clone();
+        saved.games = games;
+        write_json(&self.state_file(id), &saved)?;
+        p.saved = saved;
+        let _ = self.events.send(json!({"event":"mods.changed"}));
+        Ok(())
+    }
     pub async fn reload(&self, id: &str) -> Result<()> {
         let entry = self.entry(id).await?;
         let mut p = entry.lock().await;
@@ -405,6 +420,7 @@ impl ModManager {
         }
         let saved = SavedState {
             enabled: true,
+            games: None,
             development: Some(dir.to_string_lossy().into()),
             source: None,
         };
@@ -491,6 +507,7 @@ impl ModManager {
         }
         let saved = SavedState {
             enabled: old.as_ref().map_or(true, |p| p.saved.enabled),
+            games: old.as_ref().and_then(|p| p.saved.games.clone()),
             development: None,
             source,
         };

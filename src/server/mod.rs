@@ -198,15 +198,18 @@ pub fn create_app_with_auto_claim(state: AppState, claimer: Arc<crate::auto_clai
 }
 
 pub fn create_app_with_auto_claim_and_mods(state: AppState, claimer: Arc<crate::auto_claim::AutoClaimer>, manager: Arc<crate::mods::ModManager>) -> Router {
-    build_app(state, Some(claimer), manager)
+    let claims = auto_claim::router(claimer.clone(), state.epic_store.clone());
+    create_app_with_mods(state, manager)
+        .merge(claims)
+        .layer(axum::Extension(claimer))
 }
 
 /// The application starts mods; auto-claiming belongs to the optional mod process.
 pub fn create_app_with_mods(state: AppState, manager: Arc<crate::mods::ModManager>) -> Router {
-    build_app(state, None, manager)
+    build_app(state, manager)
 }
 
-fn build_app(state: AppState, claimer: Option<Arc<crate::auto_claim::AutoClaimer>>, manager: Arc<crate::mods::ModManager>) -> Router {
+fn build_app(state: AppState, manager: Arc<crate::mods::ModManager>) -> Router {
     let index_path = resolve_index_path();
     let static_dir = index_path
         .parent()
@@ -214,14 +217,9 @@ fn build_app(state: AppState, claimer: Option<Arc<crate::auto_claim::AutoClaimer
 
     let cors = CorsLayer::permissive();
 
-    let claims = match &claimer {
-        Some(claimer) => auto_claim::router(claimer.clone(), state.epic_store.clone()).with_state::<AppState>(()),
-        None => Router::new(),
-    };
     let app = Router::new()
         .merge(mods::router())
         .merge(i18n::router())
-        .merge(claims)
         // Core & System routes
         .route("/api/health", get(handlers::health))
         .route("/api/playtime", get(playtime::get))
@@ -283,6 +281,7 @@ fn build_app(state: AppState, claimer: Option<Arc<crate::auto_claim::AutoClaimer
             post(handlers::switch_steam_account),
         )
         .route("/api/steam/launch", post(steam::launch))
+        .route("/api/steam/cancel-launch", post(steam::cancel_launch))
         .route("/api/steam/downloads", get(steam::downloads))
         .route("/api/steam/inventory-contexts", get(steam::inventory_contexts))
         .route("/api/steam/inventory-cache", get(steam::inventory_cache))
@@ -395,5 +394,5 @@ fn build_app(state: AppState, claimer: Option<Arc<crate::auto_claim::AutoClaimer
         .layer(axum::Extension(manager))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
-    if let Some(claimer) = claimer { app.layer(axum::Extension(claimer)) } else { app }
+    app
 }

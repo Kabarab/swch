@@ -1,14 +1,23 @@
 export function initStartup({toast, demo}) {
-  const select = document.getElementById('startup-mode');
+  const toggle = document.getElementById('startup-toggle');
+  const modes = document.getElementById('startup-modes');
+  const choices = modes?.querySelectorAll('input[name="startup-mode"]');
   const note = document.getElementById('startup-note');
   const bridge = window.chrome?.webview;
-  if (!select || !note) return () => {};
+  if (!toggle || !modes || !note) return () => {};
   if (demo || !bridge?.postMessage || !bridge?.addEventListener) {
     note.textContent = demo ? 'Автозапуск недоступен в деморежиме.' : 'Доступно в приложении SWCH для Windows.';
     return () => {};
   }
 
-  let mode = 'off', pending = null, timer, lastFailure = null;
+  let mode = 'off', lastEnabledMode = 'open', pending = null, timer, lastFailure = null;
+  const render = (displayMode = mode, disabled = false) => {
+    toggle.checked = displayMode !== 'off';
+    toggle.disabled = disabled;
+    modes.hidden = displayMode === 'off';
+    modes.disabled = disabled || modes.hidden;
+    for (const choice of choices) choice.checked = choice.value === (displayMode === 'off' ? lastEnabledMode : displayMode);
+  };
   const description = () => mode === 'off'
     ? 'SWCH не запускается автоматически. Выбор сохраняется сразу.'
     : `После входа в Windows SWCH запустится ${t(mode === 'minimized' ? 'свёрнутым на панель задач' : 'открытым окном')}. Выбор сохраняется сразу.`;
@@ -18,16 +27,15 @@ export function initStartup({toast, demo}) {
     const wasSaving = pending === 'save';
     clearTimeout(timer);
     pending = null;
-    select.value = mode;
     // After a failed read, allow reopening settings to retry, but don't guess the state.
-    select.disabled = !wasSaving;
+    render(mode, !wasSaving);
     note.textContent = text;
     if (wasSaving) toast(text);
   };
   const request = (kind, message) => {
     if (pending) return;
     pending = kind;
-    select.disabled = true;
+    render(kind === 'save' ? message.slice('startup:set:'.length) : mode, true);
     note.textContent = kind === 'save' ? 'Сохраняем автозапуск…' : 'Проверяем автозапуск…';
     timer = setTimeout(() => fail('Не удалось получить ответ приложения. Открой настройки ещё раз.'), 5000);
     try { bridge.postMessage(message); }
@@ -46,13 +54,18 @@ export function initStartup({toast, demo}) {
     pending = null;
     lastFailure = null;
     mode = data.mode;
-    select.value = mode;
-    select.disabled = false;
+    if (mode !== 'off') lastEnabledMode = mode;
+    render();
     note.textContent = description();
     if (wasSaving) toast(mode === 'off' ? 'Автозапуск выключен' : 'Автозапуск сохранён');
   });
-  select.addEventListener('change', () => {
-    if (['off', 'open', 'minimized'].includes(select.value)) request('save', `startup:set:${select.value}`);
+  toggle.addEventListener('change', () => {
+    request('save', `startup:set:${toggle.checked ? lastEnabledMode : 'off'}`);
+  });
+  modes.addEventListener('change', event => {
+    if (event.target.matches('input[name="startup-mode"]') && ['open', 'minimized'].includes(event.target.value)) {
+      request('save', `startup:set:${event.target.value}`);
+    }
   });
   document.addEventListener('swch-language-change', () => {
     note.textContent = pending ? (pending === 'save' ? 'Сохраняем автозапуск…' : 'Проверяем автозапуск…') : lastFailure ? lastFailure() : description();

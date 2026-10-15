@@ -26,6 +26,71 @@ fn archive(files: Vec<(&str, String)>) -> Vec<u8> {
 fn manifest(version: &str) -> Value {
     json!({"id":"test.mod","name":"Test Mod","version":version,"api":"^1.0.0","platforms":["windows-x64","macos-arm64"],"backend":"backend.mjs"})
 }
+
+#[test]
+fn manifest_game_bindings_validate_exact_scoped_identities() {
+    use swch::mods::types::Manifest;
+    let mut value = manifest("1.0.0");
+    value["games"] = json!([
+        {"launcher":"hoyoverse","app_id":"genshin","name":"Genshin Impact"},
+        {"launcher":"steam","app_id":"2767030"},
+        {"launcher":"epic","app_id":"2767030"},
+        {"launcher":"mod:alice.launcher:demo","app_id":"game"}
+    ]);
+    let parsed: Manifest = serde_json::from_value(value.clone()).unwrap();
+    parsed.validate(None).unwrap();
+    assert_eq!(serde_json::to_value(&parsed).unwrap()["games"], value["games"]);
+    for games in [
+        json!([{"launcher":"steam","app_id":""}]),
+        json!([{"launcher":"steam","app_id":"x\n"}]),
+        json!([{"launcher":"STEAM","app_id":"x"}]),
+        json!([{"launcher":"steam","app_id":"x","name":" "}]),
+        json!([{"launcher":"steam","app_id":"x","extra":true}]),
+        json!([{"launcher":"steam","app_id":12}]),
+        json!([{"launcher":"steam","app_id":"x"},{"launcher":"steam","app_id":"x"}]),
+        json!(vec![json!({"launcher":"steam","app_id":"x"}); 101]),
+    ] {
+        value["games"] = games;
+        assert!(serde_json::from_value::<Manifest>(value.clone())
+            .and_then(|m| m.validate(None).map_err(serde::de::Error::custom)).is_err());
+    }
+}
+
+#[tokio::test]
+async fn game_bindings_persist_through_disable_update_and_restart_and_can_reset() {
+    let (dir, db, manager) = fixture().await;
+    let package_for = |version: &str| {
+        let mut value = manifest(version);
+        value.as_object_mut().unwrap().remove("backend");
+        value["ui"] = json!("index.html");
+        value["games"] = json!([{"launcher":"hoyoverse","app_id":"genshin"}]);
+        archive(vec![("manifest.json", value.to_string()), ("index.html", "<h1>Inventory</h1>".into())])
+    };
+    let bytes = package_for("1.0.0");
+    manager.install_bytes(&bytes, &package::digest(&bytes), None).await.unwrap();
+    assert_eq!(manager.list().await[0].games[0].app_id, "genshin");
+    let targets = serde_json::from_value(json!([{"launcher":"steam","app_id":"2767030"}])).unwrap();
+    manager.bind_games("test.mod", Some(targets)).await.unwrap();
+    manager.toggle("test.mod", false).await.unwrap();
+    let bytes = package_for("2.0.0");
+    manager.install_bytes(&bytes, &package::digest(&bytes), None).await.unwrap();
+    let info = manager.list().await;
+    assert_eq!(info[0].games[0].app_id, "2767030");
+    assert_eq!(info[0].manifest.games[0].app_id, "genshin");
+    assert!(!info[0].enabled);
+    manager.shutdown().await;
+    let reopened = ModManager::with_dir(db, dir.path().join("mods"), Some(node()));
+    assert_eq!(reopened.list().await[0].games[0].app_id, "2767030");
+    let invalid = serde_json::from_value(json!([{"launcher":"steam","app_id":""}])).unwrap();
+    assert!(reopened.bind_games("test.mod", Some(invalid)).await.is_err());
+    assert_eq!(reopened.list().await[0].games[0].app_id, "2767030");
+    reopened.bind_games("test.mod", Some(vec![])).await.unwrap();
+    assert!(reopened.list().await[0].games.is_empty());
+    reopened.bind_games("test.mod", None).await.unwrap();
+    assert_eq!(reopened.list().await[0].games[0].app_id, "genshin");
+    assert!(reopened.bind_games("missing.mod", None).await.is_err());
+    reopened.shutdown().await;
+}
 fn backend(version: &str, source: &str) -> Vec<u8> {
     archive(vec![
         ("manifest.json", manifest(version).to_string()),
@@ -284,10 +349,18 @@ async fn catalog_cache_and_cross_origin_installation() {
     std::fs::create_dir_all(&m.root).unwrap();
     std::fs::write(
         m.root.join("catalog.json"),
-        json!({"schema":1,"mods":[],"blocked":[]}).to_string(),
+        json!({"schema":1,"mods":[{
+            "manifest":manifest("1.0.0"),"author":"test","repository":"test/mod",
+            "repository_id":1,"owner_id":2,"release":"https://github.com/test/mod/releases/v1.0.0",
+            "download_url":"https://github.com/test/mod/releases/download/v1.0.0/mod.zip",
+            "sha256":"a".repeat(64),"downloads":1234,"downloads_updated_at":"2026-10-15T10:00:00Z"
+        }],"blocked":[]}).to_string(),
     )
     .unwrap();
     assert!(m.catalog(false).await.unwrap()["warning"].is_null());
+    let catalog = m.catalog(false).await.unwrap();
+    assert_eq!(catalog["catalog"]["mods"][0]["downloads"],1234);
+    assert_eq!(catalog["catalog"]["mods"][0]["downloads_updated_at"],"2026-10-15T10:00:00Z");
     let epic = Arc::new(swch::launchers::epic::EpicAuthStore::default_store(
         db.clone(),
     ));

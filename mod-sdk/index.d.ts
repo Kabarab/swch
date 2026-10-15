@@ -1,4 +1,6 @@
 export interface Game {id:string;app_id?:string;name:string;is_installed:boolean;launcher?:string;size_bytes?:number;install_path?:string;executable_path?:string;banner_url?:string;launch_uri?:string;owner_ids?:string[]}
+export interface GameTarget {launcher:string;app_id:string;name?:string}
+export interface ModManifest {id:string;name:string;version:string;api:string;platforms:('windows-x64'|'macos-arm64')[];description?:string;games?:GameTarget[];backend?:string;ui?:string;theme?:string}
 export interface Account {id:string;username:string;launcher?:string;display_name?:string;email?:string;is_active:boolean;last_used?:string}
 export interface KeyValue {get(key:string):Promise<unknown>;set(key:string,value:unknown):Promise<void>;delete(key:string):Promise<void>}
 export type Operation='library'|'sync'|'accounts'|'connect'|'disconnect'|'switch'|'launch';
@@ -21,5 +23,5 @@ export interface SDK {
 }
 export type Activate=(swch:SDK)=>void|Promise<void>;
 /** iframe bridge, supplied as window.swch by SWCH. */
-export interface UIBridge {call(method:string,params?:unknown):Promise<unknown>;on(event:string,listener:(data:unknown)=>void):()=>void}
+export interface UIBridge {tab:string;game:Game|null;account:Account|null;call(method:string,params?:unknown):Promise<unknown>;on(event:string,listener:(data:unknown)=>void):()=>void}
 declare global {interface Window {swch:UIBridge}}

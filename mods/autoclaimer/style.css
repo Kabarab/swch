@@ -1,0 +1,55 @@
+/* Temporary game giveaways */
+.auto-claim-controls { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+.auto-claim-controls label { display:flex; align-items:center; gap:6px; font-size:13px; }
+.auto-claim-controls select { max-width:130px; }
+.auto-claim-controls input:not([type="checkbox"]) { width:150px; max-width:100%; min-width:0; }
+.auto-claim-controls label { flex-wrap:wrap; max-width:100%; }
+#auto-claim-keys select { max-width:100%; }
+.auto-claim-accounts { display:grid; gap:8px; margin:12px 0; }
+.auto-claim-account { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px; border:1px solid var(--border,#36373d); border-radius:8px; }
+.auto-claim-account > span { flex:1; min-width:160px; }
+.auto-claim-account small,.auto-claim-result small { display:block; color:var(--muted,#adb0bb); margin-top:4px; }
+.auto-claim-results { display:grid; gap:6px; max-height:300px; overflow:auto; }
+.auto-claim-result { padding:9px 10px; font-size:12px; border-radius:7px; background:var(--surface,#1b1c20); overflow-wrap:anywhere; }
+.auto-claim-result a { display:inline-block; margin-top:5px; }
+.claim-attention { border-left:3px solid #d99b42; }
+.auto-claim-history { margin-top:12px; font-size:13px; }
+.auto-claim-history summary { cursor:pointer; margin-bottom:8px; }
+.auto-claim-fallback { font-size:11px; color:var(--muted); }
+.auto-claim-fallback summary { cursor:pointer; }
+
+/* Catalog and automatic claiming share one mod workspace. */
+.claim-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);flex-shrink:0}
+.claim-tabs button{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);padding:10px 14px;font-weight:650;font-size:13px;cursor:pointer;border-radius:6px 6px 0 0}
+.claim-tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent);background:rgba(var(--accent-rgb),.07)}
+.claim-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+.claim-view[hidden],#auto-claim-stop[hidden],#claim-next-steps[hidden]{display:none!important}
+.claim-workspace{min-width:0}.claim-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.claim-heading h2{font-size:24px;letter-spacing:-.5px;margin:4px 0 8px}.claim-heading p{font-size:12px;line-height:1.6;max-width:600px;margin:0}.claim-eyebrow{font-size:10px;color:var(--accent);letter-spacing:1px;font-weight:700}
+.claim-pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:20px;padding:4px 9px;font-size:10px;line-height:1.4;color:var(--muted);white-space:normal}.claim-pill.success{color:#8fddae;background:#163826;border-color:#295b3e}.claim-pill.warning{color:#f2c781;background:#372b19;border-color:#674f29}
+.claim-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}.claim-stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:15px;display:flex;flex-direction:column;gap:6px}.claim-stat small{font-size:11px;color:var(--muted)}.claim-stat strong{font-size:27px;line-height:1.2;font-weight:700}.claim-stat span{font-size:10px;color:var(--muted);line-height:1.4}
+.claim-run-box{display:flex;align-items:center;justify-content:space-between;gap:16px;background:rgba(var(--accent-rgb),.07);border:1px solid rgba(var(--accent-rgb),.2);border-radius:12px;padding:16px}.claim-run-box p{margin:0;font-size:13px;font-weight:600;line-height:1.5}.claim-run-box #claim-run-detail{margin-top:6px;font-size:11px;font-weight:400}.claim-run-actions{display:flex;gap:8px;flex-shrink:0}.claim-run-actions button{font-size:12px;padding:10px 14px}
+.claim-next-steps{margin:12px 0 20px;padding:12px 14px;border-left:3px solid #dca750;background:#24211c;border-radius:7px;color:#d7c9ad}.claim-next-steps p{font-size:12px;line-height:1.65;margin:4px 0}.claim-next-steps .text-button{font-size:12px}
+.claim-tabs{margin:20px 0}.claim-tabs button{font-size:12px;padding:10px}.claim-tabs span{font-size:10px;margin-left:5px;color:var(--muted)}
+.claim-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 12px}.claim-section-heading h4,.claim-view>h4{font-size:13px;letter-spacing:0;color:var(--text);text-transform:none;margin:0}.claim-section-heading p{font-size:11px;margin:6px 0 0}.claim-section-heading input{width:220px;min-width:0;font-size:12px}
+.auto-claim-results{display:grid;gap:12px;max-height:none;overflow:visible}.claim-game{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}.claim-game-heading{display:flex;align-items:center;gap:12px;padding:15px;border-bottom:1px solid var(--line)}.claim-game-heading strong{font-size:15px}.claim-game-heading small{display:block;color:var(--muted);font-size:11px;margin-top:5px}.claim-store-logo{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;background:#2b303b;border:1px solid #3c4250;border-radius:9px;font-size:16px;font-weight:700;color:#d2d7df}.claim-store-link{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap}
+.claim-game-accounts{padding:6px 12px}.claim-game-accounts .auto-claim-result{background:transparent;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px;display:flex;align-items:center;flex-wrap:wrap;gap:8px}.claim-game-accounts .auto-claim-result:last-child{border-bottom:0}.claim-game-accounts .auto-claim-result strong{font-size:12px;margin-right:auto}.claim-game-accounts .auto-claim-result small{width:100%;font-size:11px;line-height:1.6;margin:0}.claim-game-accounts .claim-attention{border-left:0}.claim-game-accounts .text-button{font-size:11px;padding-left:0}
+.auto-claim-accounts{display:block;margin:0}.claim-account-group{margin:18px 0}.claim-account-group h5{font-size:12px;margin:0 0 12px;display:flex;gap:8px;align-items:center}.claim-account-group h5 span{font-size:10px;font-weight:400;color:var(--muted)}.claim-account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.claim-account-card{display:block;background:var(--panel);border-color:var(--line);padding:15px;border-radius:12px;min-width:0}.claim-account-heading{display:flex;gap:10px;align-items:flex-start}.claim-account-heading>div{min-width:0;flex:1}.claim-account-heading strong{display:block;font-size:13px;overflow-wrap:anywhere}.claim-account-heading small{font-size:10px;margin-top:4px}.claim-account-heading .claim-pill{max-width:145px;flex-shrink:0;font-size:9px}.claim-account-card p{font-size:11px;line-height:1.7;color:var(--muted);margin:12px 0}.claim-session-note{font-size:10px;color:#b2a288!important}.claim-account-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}.claim-account-actions .primary,.claim-account-actions .secondary{padding:8px 11px;font-size:11px}.claim-account-actions .text-button{font-size:10px}.claim-account-reason,.auto-claim-fallback{font-size:10px;margin-top:10px;color:var(--muted)}.claim-account-reason summary{cursor:pointer}.claim-account-reason p{font-size:10px}.claim-login-field{display:block;font-size:10px;color:var(--muted);margin-top:12px}.claim-login-field input{display:block;width:100%;box-sizing:border-box;margin-top:5px;font-size:12px}
+.claim-empty{padding:32px 20px;border:1px dashed var(--line);border-radius:12px;text-align:center;background:var(--panel)}.claim-empty>span{display:block;font-size:26px;color:var(--accent);margin-bottom:12px}.claim-empty strong{display:block;font-size:14px}.claim-empty p{font-size:12px;color:var(--muted);line-height:1.7;max-width:520px;margin:10px auto 0}.claim-source-notes{font-size:11px;color:var(--muted);margin:14px 0}.claim-source-notes p{line-height:1.6}
+.claim-view>details{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12px}.claim-view>details summary{cursor:pointer;font-weight:600}.claim-view>details>p{font-size:11px;line-height:1.7}.claim-workspace .auto-claim-controls{gap:14px;padding:12px 0;line-height:1.5}.claim-workspace .auto-claim-controls label{font-size:12px}.claim-workspace #claim-notify-panel>label{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:10px 0}.claim-workspace #claim-notify-panel input{width:65%;min-width:0}
+@media(max-width:700px){.claim-heading{flex-direction:column;gap:10px}.claim-summary{gap:8px}.claim-stat{padding:10px}.claim-stat span{display:none}.claim-stat strong{font-size:23px}.claim-run-box{align-items:stretch;flex-direction:column}.claim-run-actions{flex-wrap:wrap}.claim-account-grid{grid-template-columns:1fr}.claim-tabs{overflow-x:auto;gap:0}.claim-tabs button{flex-shrink:0;padding:9px;font-size:11px}.claim-section-heading{align-items:flex-start;flex-direction:column}.claim-section-heading input{width:100%;box-sizing:border-box}.claim-game-heading{gap:8px;flex-wrap:wrap}.claim-store-link{margin-left:46px}.claim-account-heading .claim-pill{max-width:140px}.claim-next-steps{font-size:11px}.claim-workspace input,.claim-workspace select{max-width:100%}}
+.claim-mode-switch{display:flex;flex-direction:column;gap:7px;margin:14px 0;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px}.claim-mode-switch label{font-size:12px;display:flex;align-items:center;gap:8px}.claim-mode-switch small{font-size:10px}
+#auto-claim-settings[data-view="accounts"] .claim-heading p{display:none}#auto-claim-settings[data-view="accounts"] .claim-next-steps{display:none}#auto-claim-settings[data-view="accounts"] .claim-summary{margin:12px 0}#auto-claim-settings[data-view="accounts"] .claim-stat{padding:10px 13px;gap:3px}#auto-claim-settings[data-view="accounts"] .claim-stat span{display:none}#auto-claim-settings[data-view="accounts"] .claim-stat strong{font-size:20px}
+
+.claim-browser-preferences {display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:12px;margin:12px 0;}
+.claim-browser-preferences label {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.claim-browser-preferences select {max-width:100%;}
+.claim-browser-preferences p {margin:0;line-height:1.5;}
+#auto-claim-settings:is([data-view="options"],[data-view="history"]) .claim-summary,
+#auto-claim-settings:is([data-view="options"],[data-view="history"]) .claim-next-steps,
+#auto-claim-settings:is([data-view="options"],[data-view="history"]) .claim-heading p {display:none}
+#auto-claim-settings:is([data-view="options"],[data-view="history"]) .claim-heading h2 {font-size:22px}
+
+.claim-manual-status {padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:10px;margin:14px 0;font-size:12px;line-height:1.6;}
+.claim-manual-status[hidden] {display:none;}
+.claim-manual-status p {margin:8px 0;}
+.claim-manual-status div {padding:4px 0;}

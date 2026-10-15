@@ -55,7 +55,6 @@ function renderAutoClaim(data) {
   const run=data.run||{},index=indexedResults(data),states=(data.accounts||[]).map(a=>({account:a,state:accountState(a,data,index)}));
   const summary=runSummary(data),attention=states.filter(v=>['attention','login'].includes(v.state.kind)),available=states.filter(v=>['ready','saved','automatic'].includes(v.state.kind));
   document.getElementById('claim-summary').innerHTML=[['Можно проверить',available.length,'Сохранённый или доступный автовход'],['Требуют действий',attention.length,'Нужен вход или проверка магазина'],['Получено в этот запуск',summary.added,'Только подтверждённые лицензии']].map(([label,value,detail])=>`<div class="claim-stat"><small>${esc(label)}</small><strong>${value}</strong><span>${esc(detail)}</span></div>`).join('');
-  const badge=document.getElementById('settings-claims-attention');badge.hidden=!attention.length;badge.textContent=attention.length;
   document.getElementById('claim-accounts-count').textContent=states.length;
   document.getElementById('claim-automation-badge').textContent=config.enabled?(config.browser_visible?'Автоматически · с окнами':'Автоматически · в фоне'):'Только ручной запуск';
   const check=document.getElementById('auto-claim-check');check.disabled=!!run.running||autoClaimBusy||demo;check.textContent=config.browser_visible?'Проверить и забрать сейчас':'Проверить и забрать в фоне';

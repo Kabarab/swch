@@ -11,3 +11,9 @@
 #mod-prompt-preview{margin-top:12px}
 #mod-ai-prompt{width:100%;box-sizing:border-box;resize:vertical;padding:12px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:600px){.mod-prompt-card{padding:16px}#mod-copy-prompt{width:100%}}
+
+.game-mods-entry{margin-block:16px}.mod-game-scope:not(:empty){margin-bottom:20px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);overflow-wrap:anywhere}.mod-binding-list{max-height:42vh;overflow:auto;margin-block:16px}.mod-binding-list label{display:flex;gap:12px;align-items:center;padding:10px;overflow-wrap:anywhere}.mod-binding-list label[hidden]{display:none}.mod-binding-list input{flex:none}.mod-binding-list small{display:block}.mod-details>label{display:grid;gap:8px}.mod-details form{margin-top:16px}.mod-frame{margin-top:16px}
+
+.mod-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px;margin-block:12px 20px;align-items:end}.mod-filters label{min-width:0}.mod-filters select{width:100%;min-width:0;max-width:100%;box-sizing:border-box}.mod-filters>button{min-height:40px;margin-bottom:12px}.mod-downloads{font-variant-numeric:tabular-nums}
+
+#mods-view .mod-filters label{margin:0}.mod-filters>button{margin:0}@media(max-width:600px){.mod-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.mod-filters>label:first-child,.mod-filters>button{grid-column:1/-1}.mod-filters label{font-size:12px}}

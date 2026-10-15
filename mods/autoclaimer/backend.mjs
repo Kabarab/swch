@@ -45,7 +45,7 @@ export default async function activate(swch) {
   // The native process also watches this pipe: even a forced Node termination stops it.
   const jobs = new Map();
   const prune=()=>{for(const [id,job] of jobs)if(job.done&&Date.now()-job.finished>600000)jobs.delete(id);};
-  swch.registerTab({id:'giveaways',name:'Автоклеймер'});
+  swch.registerTab({id:'giveaways',name:'Раздачи игр'});
   const request = input=>{
     if(exited)throw new Error('Автоклеймер остановлен. Перезапусти мод на странице «Моды».');
     const {path,body}=input,method=body===undefined?'GET':'POST';

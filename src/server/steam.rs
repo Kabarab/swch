@@ -574,6 +574,9 @@ pub async fn launch(
             serde_json::json!({"status":"dry_run","account_id":account.id,"switch_required":!account.is_active,"command":command,"update":game.update}),
         ));
     }
+    // A newer explicit request supersedes the previous launch intent, including
+    // update-only requests. The watcher must not switch back to an old account.
+    crate::launchers::steam::launch_watch::cancel(None);
     // MostRecent identifies the last selected profile, not a logged-in client.
     // Prepare it even when the library marks it active; the manager can reuse
     // an authenticated running session without restarting Steam.
@@ -593,10 +596,13 @@ pub async fn launch(
             .dispatch()
             .await
             .map_err(|m| error(StatusCode::BAD_GATEWAY, m))?;
+        if !query.update_only {
+            crate::launchers::steam::launch_watch::start(paths, query.app_id.clone(), account.id.clone(), query.args.clone());
+        }
     }
     Ok(Json(
         serde_json::json!({"status":"requested","account_id":account.id,"update_only":query.update_only,
-        "message":if query.update_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Запрос на запуск передан Steam для выбранного аккаунта. Steam выполнит обновление перед запуском, если оно требуется. Если Steam запросит вход, подтверди его."}}),
+        "message":if query.update_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Проверяем запуск в Steam. Если обнаружится обновление, SWCH дождётся завершения и повторит запуск, если Steam не запустит игру сам. Если Steam запросит вход, подтверди его."}}),
     ))
 }
 
@@ -606,8 +612,17 @@ pub async fn downloads() -> Result<Json<serde_json::Value>, ApiError> {
         .map_err(internal)?
         .map_err(internal)?;
     Ok(Json(
-        serde_json::json!({"games":states,"updated_at":chrono::Utc::now().to_rfc3339()}),
+        serde_json::json!({"games":states,"launch_after_update":crate::launchers::steam::launch_watch::status(),"updated_at":chrono::Utc::now().to_rfc3339()}),
     ))
+}
+
+#[derive(Deserialize)]
+pub struct CancelLaunchRequest { pub app_id: String }
+pub async fn cancel_launch(Json(query): Json<CancelLaunchRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    if !library::valid_app_id(&query.app_id) { return Err(invalid()) }
+    let _guard = super::handlers::SWITCH_API.lock().await;
+    crate::launchers::steam::launch_watch::cancel(Some(&query.app_id));
+    Ok(Json(serde_json::json!({"status":"cancelled"})))
 }
 
 #[derive(Deserialize)]

@@ -29,6 +29,75 @@ pub struct DownloadTelemetry {
 pub struct DownloadSnapshot {
     pub update: UpdateState,
     pub is_installed: bool,
+    pub steam_running: bool,
+    pub is_running: bool,
+    pub last_started_at: Option<i64>,
+    pub last_update_finished_at: Option<i64>,
+}
+
+#[derive(Debug, Default)]
+pub struct AppActivity {
+    pub phase: Option<(&'static str, i64)>,
+    pub is_running: bool,
+    pub last_started_at: Option<i64>,
+    pub last_update_finished_at: Option<i64>,
+}
+
+pub fn app_activities(log: &str) -> BTreeMap<String, AppActivity> {
+    let mut apps: BTreeMap<String, AppActivity> = BTreeMap::new();
+    for line in log.lines() {
+        let Some((_, rest)) = line.split_once("AppID ") else {
+            continue;
+        };
+        let Some(id) = rest
+            .split_whitespace()
+            .next()
+            .filter(|id| library::valid_app_id(id))
+        else {
+            continue;
+        };
+        let Some(stamp) = log_timestamp(line) else {
+            continue;
+        };
+        let app = apps.entry(id.to_owned()).or_default();
+        if let Some(phase) = log_phase(line) {
+            app.phase = Some((phase, stamp));
+        }
+        if rest.contains(" state changed :") {
+            app.is_running = rest.contains("App Running");
+            if app.is_running {
+                app.last_started_at = Some(stamp);
+            }
+        }
+        if rest.contains(" finished update,") {
+            app.last_update_finished_at = Some(stamp);
+        }
+    }
+    apps
+}
+
+pub fn apply_activity(
+    update: &mut UpdateState,
+    activity: Option<&AppActivity>,
+    modified: Option<i64>,
+    last_update: Option<i64>,
+    now: i64,
+    running: bool,
+) {
+    let Some((phase, stamp)) = activity.and_then(|a| a.phase) else {
+        return;
+    };
+    // Generic started/queued manifests can be rewritten after a more precise
+    // log entry. A new file mtime alone does not mean downloading resumed.
+    let generic_active = update.required
+        && matches!(update.phase.as_str(), "required" | "queued" | "preparing")
+        && last_update.is_some_and(|t| stamp >= t)
+        && (0..7200).contains(&(now - stamp));
+    // "None" is also written when a job fails/stops, so it cannot confirm ready.
+    if phase != "ready" && running && (modified.is_some_and(|m| stamp >= m) || generic_active) {
+        update.phase = phase.into();
+        update.required = true;
+    }
 }
 
 pub fn counter_rate(previous: u64, current: u64, elapsed: f64) -> Option<f64> {
@@ -172,20 +241,9 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
         .filter(|s| running && *s >= 0.5 && *s <= 15.0)
         .map(|s| writes as f64 / s);
     let log = content_tail(paths);
-    let mut phases = BTreeMap::new();
+    let activities = app_activities(&log);
     let mut steam_download_bps = None;
     for line in log.lines() {
-        if let Some((_, rest)) = line.split_once("AppID ") {
-            if let Some(id) = rest
-                .split_whitespace()
-                .next()
-                .filter(|id| library::valid_app_id(id))
-            {
-                if let (Some(phase), Some(stamp)) = (log_phase(line), log_timestamp(line)) {
-                    phases.insert(id.to_owned(), (phase, stamp));
-                }
-            }
-        }
         if let Some((_, rate)) = line.split_once("Current download rate: ") {
             steam_download_bps = log_timestamp(line)
                 .filter(|stamp| (0..=75).contains(&(chrono::Utc::now().timestamp() - stamp)))
@@ -234,15 +292,18 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
                 .ok()
                 .and_then(|m| m.modified().ok())
                 .map(|t| chrono::DateTime::<chrono::Utc>::from(t).timestamp());
-            if let Some((phase, stamp)) = phases.get(id) {
-                // An older completed update must never override a new manifest.
-                // "None" is also logged when a job stops or fails; only the
-                // manifest's FullyInstalled/required flags can confirm readiness.
-                if *phase != "ready" && running && modified.is_some_and(|m| *stamp >= m) {
-                    update.phase = (*phase).into();
-                    update.required = *phase != "ready";
-                }
-            }
+            let activity = activities.get(id);
+            let last_update = state
+                .get_str("LastUpdated")
+                .and_then(|s| s.parse::<i64>().ok());
+            apply_activity(
+                &mut update,
+                activity,
+                modified,
+                last_update,
+                chrono::Utc::now().timestamp(),
+                running,
+            );
             let active = matches!(
                 update.phase.as_str(),
                 "downloading" | "installing" | "verifying" | "preparing"
@@ -288,6 +349,10 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
                 DownloadSnapshot {
                     update,
                     is_installed,
+                    steam_running: running,
+                    is_running: running && activity.is_some_and(|a| a.is_running),
+                    last_started_at: activity.and_then(|a| a.last_started_at),
+                    last_update_finished_at: activity.and_then(|a| a.last_update_finished_at),
                 },
             );
         }

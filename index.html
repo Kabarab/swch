@@ -24,12 +24,12 @@
       document.documentElement.classList.add('i18n-loading');
     }
   </script>
-  <link rel="stylesheet" href="/ui/launcher.css?v=ux-20261014-portrait-covers">
+  <link rel="stylesheet" href="/ui/launcher.css?v=ux-20261014-settings-switches">
   <link rel="stylesheet" href="/ui/style.css">
   <link rel="stylesheet" href="/ui/ux.css?v=ux-20261011-5">
-  <link rel="stylesheet" href="/ui/mods.css?v=copy-prompt-2">
+  <link rel="stylesheet" href="/ui/mods.css?v=mod-filters-1">
   <link rel="stylesheet" href="/ui/i18n.css?v=1">
-  <script type="module" src="/ui/launcher.js?v=copy-prompt-3"></script>
+  <script type="module" src="/ui/launcher.js?v=mod-filters-1"></script>
 </head>
 <body>
 <div id="file-open-message">
@@ -103,11 +103,11 @@
   <div class="dialog-header">
     <div>
       <h2 id="styles-title">Настройки</h2>
-      <p class="muted">Оформление, магазины и получение раздач</p>
+      <p class="muted">Язык, оформление и запуск приложения</p>
     </div>
     <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
   </div>
-  <div class="settings-body"><div id="settings-general-panel" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-general">
+  <div class="settings-body"><div id="settings-general-panel" class="settings-panel" role="region" aria-label="Общие настройки">
     <section class="settings-group" id="language-settings">
       <h4>Язык интерфейса <span id="language-machine" hidden>Машинный перевод</span></h4>
       <input id="language-search" class="language-search" type="search" placeholder="Найти язык" aria-label="Найти язык">
@@ -172,23 +172,25 @@
     </section>
     <section class="settings-group">
       <h4>Roblox</h4>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="roblox-multi-instance-toggle" checked>
+      <label class="settings-switch-row">
+        <input class="settings-switch" type="checkbox" role="switch" id="roblox-multi-instance-toggle" aria-describedby="roblox-multi-instance-note" checked>
         <span><strong>Multi-Roblox (Multi-Instance)</strong> — одновременный запуск нескольких окон с разных аккаунтов</span>
       </label>
-      <small class="muted small-text" style="display:block; margin-top:4px;">Если отключено, перед запуском нового аккаунта предыдущие процессы Roblox будут закрываться.</small>
+      <small id="roblox-multi-instance-note" class="muted settings-switch-note">Если отключено, перед запуском нового аккаунта предыдущие процессы Roblox будут закрываться.</small>
     </section>
     <section class="settings-group" id="settings-startup-group">
       <h4>Автозапуск Windows</h4>
-      <div class="settings-currency-row">
-        <label for="startup-mode">При включении компьютера
-          <select id="startup-mode" aria-describedby="startup-note" disabled>
-            <option value="off">Выключен</option>
-            <option value="open">Открытым окном</option>
-            <option value="minimized">Свёрнутым на панель задач</option>
-          </select>
-        </label>
-      </div>
+      <label class="settings-switch-row">
+        <input class="settings-switch" type="checkbox" role="switch" id="startup-toggle" aria-controls="startup-modes" aria-describedby="startup-note" disabled>
+        <span>При включении компьютера</span>
+      </label>
+      <fieldset id="startup-modes" class="settings-startup-modes" hidden disabled>
+        <legend>Режим запуска</legend>
+        <div class="settings-startup-options">
+          <label><input type="radio" name="startup-mode" value="open" checked><span>Открытым окном</span></label>
+          <label><input type="radio" name="startup-mode" value="minimized"><span>Свёрнутым на панель задач</span></label>
+        </div>
+      </fieldset>
       <small id="startup-note" class="muted settings-currency-note" role="status">Доступно в приложении SWCH для Windows.</small>
     </section>
     <section class="settings-group" id="settings-updates-group">

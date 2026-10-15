@@ -2,6 +2,7 @@ mod appinfo;
 pub mod library;
 pub mod client_launch;
 pub mod downloads;
+pub mod launch_watch;
 pub mod remote;
 pub mod game_stats;
 pub mod deadlock_stats;
