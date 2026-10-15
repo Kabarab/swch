@@ -1,72 +1,72 @@
 {
   "schema": 1,
-  "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+  "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
   "languages": [
     {
       "locale": "ab",
       "name": "Abkhaz",
       "nativeName": "Abkhazian",
       "direction": "ltr",
-      "sha256": "cc4e41e567af6b19e51ea65d4338a419315584a6e18f75b8ab65535453095333",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "0a77331bf483a77ce6880a3fab604ed998eed19e073f0c391ce8c75f1fe34897",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 375736,
-      "messagesSha256": "04dfe60a03897e870edc64d6aff66f7db58935e8eb2e2a2df50066fb12fb2358"
+      "bytes": 348813,
+      "messagesSha256": "3caa681c3536366a3e56492cc8defa06df205ebf9145619bd67ece33407fd798"
     },
     {
       "locale": "ace",
       "name": "Acehnese",
       "nativeName": "Acehnese",
       "direction": "ltr",
-      "sha256": "727290b2d286dc5357dd7b495b4dad76ef78e8d197c3d39212caf07f3e75ba9d",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "e92e168e0aa38cf95a059a6de27b2ac77bfde72d4ff804f58e7889e980dc9d2e",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 299920,
-      "messagesSha256": "2968c28d2cd057c40227d7b33763f0c890c593dca91c05fa17dc6a82038f0ec6"
+      "bytes": 278713,
+      "messagesSha256": "4ca8f26adec63373891ad24ffc3c45fa65e89aa97e39dff5c3892d402656d699"
     },
     {
       "locale": "ach",
       "name": "Acholi",
       "nativeName": "Acoli",
       "direction": "ltr",
-      "sha256": "1673fa793afdddd38fd00f9df4fba687c654f7999335c961b2bd9c1743caf60f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "a4ef5dd2a3c7291c4ab3a58665255126d75738fd17183cb93b0838fe60b73cb6",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 289920,
-      "messagesSha256": "21e4267ba5bbea9a01ffbec7484626a104d357f177539379e2aa203465896f26"
+      "bytes": 269695,
+      "messagesSha256": "af35d78e14cbd6cf9a8fef8a0dbc6096f0d26c4355fa43272bb42e2e85de8b60"
     },
     {
       "locale": "aa",
       "name": "Afar",
       "nativeName": "Afar",
       "direction": "ltr",
-      "sha256": "4c7870a900d385b4d0dbe3e62458a4f8045b0129f6fa7ed2e5a3f7ed7bb710c8",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "05f5efd96669f452088f1261480ff673e5d22750219df3c0a0064a329353f72e",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 290444,
-      "messagesSha256": "1b7d567cc477a1b69651914491c498638bc19420c8a8bf9798d01911a72f22e6"
+      "bytes": 270052,
+      "messagesSha256": "dbe4f9ade3743239a8734b3462d48c208a7ade2602939a2f69fec53e78235da0"
     },
     {
       "locale": "af",
       "name": "Afrikaans",
       "nativeName": "Afrikaans",
       "direction": "ltr",
-      "sha256": "a77d09be38b935d3c69b6099cce77bc1f4f06dd7b7a145d77948afc831369990",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "885abd99db900be1e35a1e58457410a958feddf03908b724b4153983ca95c32d",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 301432,
-      "messagesSha256": "2ee1061f55508453d89657b9a00bac80a77c94e299783355bd8a1b46d763d18d"
+      "bytes": 280260,
+      "messagesSha256": "f6b79c4f492da08d5617a4d0b46e2d1fd53afa1f9f3c5e6d8dd0c9ea3fc04ee0"
     },
     {
       "locale": "sq",
       "name": "Albanian",
       "nativeName": "shqip",
       "direction": "ltr",
-      "sha256": "8600b2fbce0839eaca8744dc4af98bc38599be26808b444c679c9b7aee18941e",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "4240348ff7feb97cca8dd5a98364fabbd3b82356bb1ca37951e8a404c619f47f",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 308759,
-      "messagesSha256": "fe9ca2e0b7457f5ea086ffe0719930a8e4e7a1756ee61c734faf3ee07d8c67c9"
+      "bytes": 287203,
+      "messagesSha256": "e395af67fa7c6ad0bcb019d1dc295ce34fe491db5e499a9020532e17043868eb"
     },
     {
       "locale": "alz",
@@ -85,11 +85,11 @@
       "name": "Arabic",
       "nativeName": "العربية",
       "direction": "rtl",
-      "sha256": "260dfeab415a80bcb7f29a327aec76161314d9340ea124cacbcf5bfa3603f5e4",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "c399d74831c5dc925d30720f7c132db8503d02b7a650f9bf7711006135e11675",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 348943,
-      "messagesSha256": "13655b48d763ff1415625776b6c9851fd2f5b834e129a1b4f830c5ca5fca3ce5"
+      "bytes": 324131,
+      "messagesSha256": "7aedc2ad93b8c3178da4c2c051424a0982534071cb4745aeea49a3bc9051530b"
     },
     {
       "locale": "hy",
@@ -126,22 +126,22 @@
       "name": "Azerbaijani",
       "nativeName": "azərbaycan",
       "direction": "ltr",
-      "sha256": "8a04c556a3a0d4b14663e799781f619d949c68fb12ec7468d06cd02d87060098",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "65b1f5f0a7004e9b4e2cb351781013edafb1a3e0aaaba9934a988f704fc2c35b",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 294994,
-      "messagesSha256": "a73a9face2deef632d5080ec9b4a431e24e6bbb28a0402993c7db0b70e3823a7"
+      "bytes": 274842,
+      "messagesSha256": "98663a5012d1469e7814e075072b5613e9a95d09d9a403c7710a26355d8b91dd"
     },
     {
       "locale": "ban",
       "name": "Balinese",
       "nativeName": "Balinese",
       "direction": "ltr",
-      "sha256": "d45a6d6d17e814bd0aa6ead2b85962f95410ee27a6ffa1a5c844c66d2dfacc8a",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "08e2504fdda6385debe1ce73c616479bde862b79155bf2bdf845daec03db2fe0",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 294246,
-      "messagesSha256": "10529b1d3194cadaffa76eb9740f0dbf767d7ef55e5905ba65d3315be0857188"
+      "bytes": 274030,
+      "messagesSha256": "c34ffa0fabe4fd9932c2808ca6720b468accbd5f7ce3d7a1a2576e5de8edda06"
     },
     {
       "locale": "bal",
@@ -196,11 +196,11 @@
       "name": "Belarusian",
       "nativeName": "беларуская",
       "direction": "ltr",
-      "sha256": "5675d89f3fa5321cae436ce749ebbe9e978067e1d647220dfbebcbb8739ea1bd",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "54c0ee1f4d4872ebc8f0c0cb13830e16b99b07b086b2fd576014fd814e07f570",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 363095,
-      "messagesSha256": "83d3ba279c921ec078e1c9dfe38942627b40f0094cade26c7d667b49e3120e01"
+      "bytes": 337629,
+      "messagesSha256": "4806f38424e76a5e6cde7ae9bc7c42ae10a2bd97e9346561b8dad8a1aa54715f"
     },
     {
       "locale": "bem",
@@ -297,11 +297,11 @@
       "name": "Chinese (Simplified)",
       "nativeName": "简体中文",
       "direction": "ltr",
-      "sha256": "fc317e63a82747536fe47ea74cc5ea11e37b010ff1dac316a229b8384adec2de",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "00a98d8a86e9eb471f49535da409840b060ec6b0eb977ae79b1c8dc3878fa2c1",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 279748,
-      "messagesSha256": "0e6c94504f59180f8f59d7a85962ebfa4c3a367c5e33163a7daae271a05fc601"
+      "bytes": 260145,
+      "messagesSha256": "d64a75cd7b22adccc0bdd7ae65283beea5c06b2f2ccb4cf2d7e8f2d8e7337fd5"
     },
     {
       "locale": "zh-TW",
@@ -410,11 +410,11 @@
       "name": "English",
       "nativeName": "English",
       "direction": "ltr",
-      "sha256": "55039c4289b0fda074cd8fae466896dbc2b29118b412711c31fac3b0b16f6541",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "eb775d898e015fbd9ec2944120303756e0989a41181efce44d8b1a74d5315594",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 290057,
-      "messagesSha256": "849f7be2057699cc37a99d89f97a98f9e38fcb553beb98fbb8d55d943da92e23"
+      "bytes": 269576,
+      "messagesSha256": "78bd32c2d2356a70e465aed4bf27a691ffe6d937854fc217ac79bd708edadf02"
     },
     {
       "locale": "eo",
@@ -469,11 +469,11 @@
       "name": "French",
       "nativeName": "français",
       "direction": "ltr",
-      "sha256": "cb7835f00fc529d246fd987758a99114f3ceaad08a980fab45d8bad0472dd6f0",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "6e612fe3c39755fd88c4f2a17db417fb0b56cd2df2476cca2292da0dd9a7ecbd",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 334143,
-      "messagesSha256": "f48fea97759ec10434abc62022111ed545f001f7f37fc377875b8d7661aaeab6"
+      "bytes": 309317,
+      "messagesSha256": "033ea88af21e086522e3d55e1e0012c763947f19a2734c37b3c09e0e0127c83f"
     },
     {
       "locale": "fr-CA",
@@ -522,11 +522,11 @@
       "name": "German",
       "nativeName": "Deutsch",
       "direction": "ltr",
-      "sha256": "32b3a2a63f25ba21cc0b34595d32416e04227042ddcc1909a4860f32f9945362",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "17aa3fd5b0cadde460d2e0866df36131137b365e946f7263ab5797c4bc23f92b",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 316713,
-      "messagesSha256": "10233244b6bb29a075618ea528ea7ec1312cca2dd57d8e4c2a924354659cf4b2"
+      "bytes": 294485,
+      "messagesSha256": "d9508dfa1673bb4ca6e323568a5e53b24fdca14bdf304da901dc4c9fc5889b5d"
     },
     {
       "locale": "el",
@@ -575,11 +575,11 @@
       "name": "Hebrew",
       "nativeName": "עברית",
       "direction": "rtl",
-      "sha256": "19537ebe40cc710b6ad38a13c0c783c331c52013ef8fe521b21f032648b1ffaa",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "35b501d0aeba1e118880954ccbd67e49742888a472c587f004390778c5ff1464",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 323474,
-      "messagesSha256": "249f2ed8c6d401e86b2713aa59d51b7e53569553f5a39b4648b8c45260a3a36a"
+      "bytes": 300962,
+      "messagesSha256": "84d427f8f6e9c7df9d0f53936dbf5c8724c4f98499240f973e2ee9c714f469c8"
     },
     {
       "locale": "hil",
@@ -676,11 +676,11 @@
       "name": "Japanese",
       "nativeName": "日本語",
       "direction": "ltr",
-      "sha256": "fbcc20a9778a1557028f71a826a9cd37819e4d6f56a8436bc05348543b352462",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "fcc928a911b6c75b3a3e8f539e4523ae0adf93189dbc3218b4d9546a792e414a",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 377376,
-      "messagesSha256": "132521ea8c37bb5ff792475fda10ccc72da9e880aaf90612e89e3feaf3779a41"
+      "bytes": 350246,
+      "messagesSha256": "c2be87eced657460c2d52e248af312bae1824deb02248aa72d9a95a62ca42e23"
     },
     {
       "locale": "jw",
@@ -1113,22 +1113,22 @@
       "name": "Polish",
       "nativeName": "polski",
       "direction": "ltr",
-      "sha256": "3d3c428feefdb1133895c798086242757e9185b99f66e2e58da55e1eb5808d9f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "eba08fc224b6587367dcb1c655d23798a11ef030b11e30c31efd08153096424e",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 306003,
-      "messagesSha256": "3e523a8415a1801b253ecc5cb2f78e0436a3690f0231d975f994f2342560ecc3"
+      "bytes": 284723,
+      "messagesSha256": "c4a3fad6a87847087150df4d8de0568f13e337b964786eda4c89b97e5ae732da"
     },
     {
       "locale": "pt",
       "name": "Portuguese (Brazil)",
       "nativeName": "português",
       "direction": "ltr",
-      "sha256": "d21ce48c8e54f21de4f351ee164cbe8f2d03998960c49a85df7d1c6e25a6aa48",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "ad95f893b2721fc0a586ad671c13d19dbfd3fca2e7daa9e66137f3e7d9586f9c",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 304183,
-      "messagesSha256": "bc9dfa44c3b2c981ae435046c9a1027ba861f94e20ca3da1779c205237a8e06c"
+      "bytes": 282905,
+      "messagesSha256": "df486b8132f0d9fb8be28017744e7ceb827e714664b07728143fff8ee4ae2fcb"
     },
     {
       "locale": "pt-PT",
@@ -1183,11 +1183,11 @@
       "name": "Russian",
       "nativeName": "русский",
       "direction": "ltr",
-      "sha256": "99f46ddfe3c691ebbe3a6a6079aef93541eb78b7a06cdb95ddc62ea05768f5f0",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "29cc1c944c159ab6db999c38a1ccf15ea94a5fb891110e4218188188e8dcfd97",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": false,
-      "bytes": 361496,
-      "messagesSha256": "3e2cb3d89bb8fcb45f40f0bf267aa4b7403a3225d548fea14b2df2dbf7dfb31f"
+      "bytes": 335534,
+      "messagesSha256": "e8f59c22ef850431f85d57e740b9a4939db0621c6ff50015b1e74257e56b385d"
     },
     {
       "locale": "se",
@@ -1314,11 +1314,11 @@
       "name": "Spanish",
       "nativeName": "español",
       "direction": "ltr",
-      "sha256": "394806f9ea1f92ae1c5c0dbde64048d4ae45e9ca7be664a7849a7e1c565e7e4f",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "29d099b155e56e50ada435180350d1ec88f53406f9a308f7cb82404937284d7f",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 319381,
-      "messagesSha256": "fcbf32c73cf15fff10c948980926b5229e9dd213bdea53ef772f9eedcf95451c"
+      "bytes": 296974,
+      "messagesSha256": "7499ef1f33a2e3497debf0eec35eacff85ae22cbfb94a1a9dbd2ff774879dafd"
     },
     {
       "locale": "su",
@@ -1499,11 +1499,11 @@
       "name": "Ukrainian",
       "nativeName": "українська",
       "direction": "ltr",
-      "sha256": "f23bd51c6321cf501b0a1961c9c61d260a0a8efba03eea0fa4087141b751572a",
-      "revision": "e0d39178a58bd5f5e86731357acd433a86d6f4263b1bbf2d5c4f00ce9d08a462",
+      "sha256": "7fe6c175b99e94ec954ea2ca03e17bdb471c6720fbbcb592f888d6d213da54e6",
+      "revision": "d019f27090eb7b8a12293947b0db669cc8f480eb85e33ad18a153a6fb8d60f17",
       "machine": true,
-      "bytes": 367218,
-      "messagesSha256": "1b5b0473e4f8e3696a9b057f9ada0f86432d0512209867fb2a87becda960a013"
+      "bytes": 340899,
+      "messagesSha256": "2783e1b55de56e1aa4a9a71ae37197950ea8d4b905bba2142141f3c63be1b429"
     },
     {
       "locale": "ur",
