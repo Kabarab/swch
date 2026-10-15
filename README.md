@@ -1,62 +1,82 @@
-# 🎮 SWCH — Твоя универсальная библиотека игр и лаунчер
+# SWCH
 
-SWCH — современный менеджер игровых аккаунтов и библиотека игр с поддержкой **Steam**, **Epic Games**, **Roblox**, **Minecraft**, **Riot Games**, **Ubisoft Connect** и **GOG GALAXY**.
+A desktop game library and account manager for Windows and macOS. Organize games from multiple platforms, switch between your own accounts, and extend the app with optional mods.
 
----
+[Download](https://github.com/Kabarab/swch/releases/latest) · [Русская инструкция](README.ru.md) · [Documentation](#documentation) · [Report an issue](https://github.com/Kabarab/swch/issues) · [Legal notice](docs/LEGAL.md)
 
-## 📥 Скачивание с GitHub
+> **Independent project:** SWCH is not affiliated with or endorsed by the platforms it integrates with. Integration support varies by platform and operating system. Read the [legal notice and conditions of use](docs/LEGAL.md) before connecting accounts or installing mods.
 
-1. Перейдите на страницу [**GitHub Releases**](https://github.com/Kabarab/swch/releases/latest).
-2. Скачайте сборку для вашей операционной системы:
-   - **macOS 13.5+ (Apple Silicon)**: установщик `SWCH-Setup-<версия>-arm64.pkg`. Он установит **SWCH** в папку **Программы** и зарегистрирует приложение для Launchpad и поиска.
-   - **macOS ZIP**: `swch-macos-arm64.zip` — для ручного переноса приложения в `/Applications`.
-   - **Windows**: установщик `SWCH-Setup-<версия>.exe`. Запустите его — SWCH установится без прав администратора, появится в меню «Пуск» и списке установленных приложений. Ярлык на рабочем столе можно выбрать при установке.
-   - **Windows без установки**: `swch-windows-x86_64.zip`.
-3. Если скачали ZIP, распакуйте архив:
-   - На macOS переместите **`swch.app`** в папку **Программы** (`/Applications`).
-   - На Windows запустите **`swch.exe`**.
-4. Запустите приложение — бэкенд и графический интерфейс запустятся автоматически!
+## Features
 
-Подробнее об установке и первом запуске: [Windows и macOS](docs/installation.md).
+- **One game library:** browse installed games and available account libraries across supported platforms.
+- **Account management:** save and switch between your own supported accounts and sessions. Platform authentication and ownership requirements still apply.
+- **Game details:** view supported inventories, collections, statistics, and playtime. Available data varies by integration.
+- **Mods:** add themes, tabs, actions, and launcher integrations through ZIP packages or the mod catalog.
+- **Languages and updates:** select interface language packs and check for application updates from the settings screen.
 
----
+## Platform integrations
 
-## 🔄 Обновление прямо из приложения (без переустановки)
+| Platform | Main capabilities | Notes |
+| --- | --- | --- |
+| Steam | Library, account switching, inventory, account status, and supported game statistics | Requires the relevant account and Steam client/API access. |
+| Epic Games | Account switching, library synchronization, and Fortnite collection data | Requires an authenticated Epic account; service changes can affect support. |
+| Roblox | Account management, game launching, and inventory information | Use only accounts you are authorized to access; individual features vary by OS. |
+| Minecraft | Local Java Edition accounts, profiles, servers, and worlds | Requires an appropriate game license and compatible installed launcher. |
+| Riot Games | League of Legends and VALORANT collections, supported statistics, and saved sessions | Requires the relevant official client and account. |
+| Ubisoft Connect | Installed-game discovery, official-client launching, and saved sessions | Windows integration; game ownership is checked by Ubisoft Connect. |
+| GOG GALAXY | Account libraries, installed games, and account switching | GALAXY launching is supported on Windows. |
+| HoYoverse / HoYoPlay | Installed-game discovery, launching, and saved account sessions | Availability depends on the installed client and OS; registry-based integration is Windows-specific. |
 
-В SWCH встроен механизм автоматического обновления:
-1. Откройте **Настройки** (кнопка в левой панели или в шапке).
-2. В блоке **«Обновление SWCH»** отображается ваша текущая версия и статус обновлений.
-3. Нажмите кнопку **«Проверить»** (также SWCH ненавязчиво проверяет обновления при старте и выведет индикатор **NEW** при обнаружении новой версии).
-4. При появлении новой версии нажмите **«Обновить прямо сейчас»**.
-5. Приложение само скачает актуальный релиз с GitHub, обновит бинарные файлы и перезапустится — ничего переустанавливать вручную не нужно!
+These are community-maintained integrations, not platform approvals. Some depend on interfaces that may change without notice. SWCH cannot guarantee compatibility or protection from platform enforcement.
 
----
+## Download and installation
 
-## ⚡ Возможности
+Get a build from [GitHub Releases](https://github.com/Kabarab/swch/releases/latest).
 
-- **Steam**: Мгновенное переключение аккаунтов, отслеживание банов (VAC/Trade/Community), отображение инвентаря и цен.
-- **Epic Games**: Бесшовный вход, синхронизация библиотеки и скинов Fortnite.
-- **Roblox**: Мульти-аккаунтинг, Multi-Instance режим (одновременный запуск нескольких окон), RAP инвентаря.
-- **Minecraft**: Официальные аккаунты, импорт серверов из `servers.dat`, профили Java Edition.
-- **Riot Games**: Каталог League of Legends и VALORANT, локальная история и коллекция.
-- **Ubisoft Connect (Windows)**: Импорт установленных игр из реестра, запуск через официальный клиент, сохранение и переключение локальных сессий.
-- **GOG GALAXY**: Несколько аккаунтов GOG, онлайн-библиотеки с обложками, импорт установленных игр и запуск через GALAXY на Windows. [Настройка GOG](docs/gog.md).
-- **Мод «Раздачи игр и автоклеймер»**: Steam/Epic, дополнительные магазины через GamerPower и браузерные адаптеры, расписание, dry run, история и очередь ключей. [Настройки, подключение и пределы поддержки](docs/auto-claim.md).
-- **Модульная архитектура**: Неиспользуемые лаунчеры расходуют 0 МБ оперативной памяти.
-- **Моды сообщества**: Темы, вкладки, действия и новые лаунчеры на JavaScript. Установка из ZIP, режим разработки и каталог через GitHub Releases. [SDK и публикация модов](docs/mods.md).
-- **Языки интерфейса**: Выбор языка в настройках, готовые пакеты с GitHub и работа без интернета после загрузки. RTL и перенос длинных подписей. В разделе модов — краткий гайд и копируемый английский промпт для ИИ. [Языковые пакеты](docs/localization.md).
-- **Автозапуск Windows**: В **«Настройки → Общие → Автозапуск Windows»** выберите запуск открытым окном, свёрнутым на панель задач или отключите его. Выбор сохраняется сразу и действует после входа в Windows. После переноса папки SWCH выберите режим повторно, чтобы обновить путь. Настройка доступна в Windows-приложении; обычный запуск ярлыком открывает окно как прежде.
+| System | Installer | Portable archive |
+| --- | --- | --- |
+| Windows x64 | `SWCH-Setup-<version>.exe` | `swch-windows-x86_64.zip` |
+| macOS 13.5+ on Apple Silicon | `SWCH-Setup-<version>-arm64.pkg` | `swch-macos-arm64.zip` |
 
-## 🔐 Вход после перезагрузки
+1. Download the package for your system and follow its installation instructions.
+2. Start SWCH. The desktop interface and local backend start together.
+3. Connect your own accounts and follow the sign-in flow for each platform.
+4. Open the library to browse games. Install optional mods from the **Mods** page if needed.
 
-Для Epic Games подключите аккаунт через SWCH. Данные входа сохраняются на диске, а при переключении SWCH получает новую сессию для Epic Games Launcher.
+For portable Windows builds, extract the ZIP and run `swch.exe`. For the macOS archive, move the app bundle to `/Applications`.
 
-Для Riot Games войдите в Riot Client с включённым **Stay signed in / Оставаться в системе** и один раз нажмите **«Сохранить текущую сессию Riot»** в SWCH. SWCH отслеживает обновления сохранённой сессии каждые 10 секунд, а также перед переключением и при завершении работы. После запуска SWCH подхватывает более свежую сессию с диска, даже если Riot Client уже закрыт.
+For installation details, signing limitations, and troubleshooting, see the [installation guide](docs/installation.md) (Russian). Packaged desktop builds target Windows x64 and macOS Apple Silicon; support for an individual integration may be narrower.
 
-Если Epic или Riot отозвали данные входа, аккаунт нужно подключить заново. Для Riot после повторного входа снова сохраните текущую сессию.
+## Mods and account safety
 
-Для Ubisoft откройте **«Подключить аккаунт → Ubisoft Connect»** и нажмите **«Добавить аккаунт Ubisoft»**. SWCH сохранит текущую сессию и откроет официальный вход. Войдите с включённым **«Запомнить меня»**: SWCH сам определит аккаунт, сохранит его и обновит список. Кнопка **«Отменить»** вернёт предыдущий сохранённый аккаунт. Не используйте **«Выйти»** в Ubisoft для добавления аккаунта: это может отозвать сохранённый токен. Ручное сохранение доступно в разделе **«Имя и ручное сохранение»**. Активный аккаунт и кнопки обновляются после подтверждения входа клиентом. Перед переключением завершите игру. Если Ubisoft отозвал вход, войдите снова через добавление аккаунта. Пароль вводится только в Ubisoft Connect.
+Mods extend SWCH separately from its core library and account-management features. The giveaways/autoclaimer functionality belongs to a mod with its own behavior and platform requirements; it is not a guarantee that a store permits automated claiming.
 
-Имя Ubisoft берётся из профиля официального клиента. Если профиль загрузился позже сохранения, SWCH обновит временное название автоматически. Если имя ещё отсутствует, откройте профиль нажатием на ник в Ubisoft Connect; добавлять аккаунт заново не нужно. Название, заданное вручную, сохраняется.
+Backend mods can access files, the network, and programs with your user's permissions. Install only mods you trust. See the [mod guide and SDK](docs/mods.md) for capabilities and lifecycle details.
 
-Библиотека Ubisoft показывает установки на этом компьютере; владение игрой выбранным аккаунтом проверяет Ubisoft Connect. macOS и Linux пока не поддерживают запуск клиента Ubisoft. Для нестандартной установки можно задать `SWCH_UBISOFT_DIR` (папка клиента), `SWCH_UBISOFT_DATA_DIR` (папка файлов входа) и `SWCH_UBISOFT_SESSIONS_DIR` (папка сохранённых сессий).
+Treat session files, cookies, tokens, local databases, and account exports as sensitive. Do not share them or attach them to public issues. Platform sign-in can expire or be revoked, requiring you to connect the account again. Before changing local session files or troubleshooting an account, close the relevant game and follow the platform's sign-in instructions.
+
+## Documentation
+
+Most detailed guides are currently in Russian.
+
+- [Installation and updates](docs/installation.md)
+- [Account sign-in and switching](README.ru.md#-вход-после-перезагрузки)
+- [GOG setup](docs/gog.md)
+- [Mods and SDK](docs/mods.md)
+- [Language packs](docs/localization.md)
+- [Game statistics](docs/game-statistics.md)
+- [Playtime tracking](docs/playtime.md)
+- [Giveaways/autoclaimer mod](docs/auto-claim.md)
+- [Legal notice and conditions of use](docs/LEGAL.md)
+
+## Support and contributions
+
+Maintained by [Kabarab](https://github.com/Kabarab). Use [GitHub Issues](https://github.com/Kabarab/swch/issues) for bug reports and feature requests. Include the SWCH version, operating system, affected integration, and steps to reproduce the problem. Remove credentials and personal data from logs and screenshots before posting.
+
+For a substantial contribution, open an issue to discuss the scope first. Keep changes focused and describe how they were verified. Never include real account credentials, cookies, tokens, or private session data in a contribution.
+
+## License and third-party rights
+
+A project-wide software license has not yet been specified in this repository. Public availability of the source does not by itself grant unrestricted rights to use, modify, or redistribute it. Third-party components retain their own licenses, and platform names, logos, games, and other content remain the property of their respective owners.
+
+See the [legal notice](docs/LEGAL.md) for conditions of use, platform requirements, and the limits of responsibility.
