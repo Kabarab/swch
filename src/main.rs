@@ -74,7 +74,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mods = Arc::new(swch::mods::ModManager::new(db.clone()));
     mods.initialize().await;
-    mods.install_bundled().await;
     let app = create_app_with_mods(AppState {
         db,
         epic_store,

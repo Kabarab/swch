@@ -1,7 +1,7 @@
 import {initI18n, t, getLocale, numberFormat, localizedConfirm} from './i18n.js';
 import {gamePlaytime, timeLabel, timeScopeLabel} from './playtime.mjs?v=time-20261011-1';
 import {PLATFORMS, PLATFORM_IDS, inventoryPlatforms} from './platforms.mjs?v=mods-1';
-import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation,renderGameModsButton} from './mods.js?v=mod-filters-1';
+import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation,renderGameModsButton} from './mods.js?v=mod-covers-1';
 import {riotKinds, riotKindLabel, riotInventoryData} from './riot-inventory.mjs?v=inventory-20261011-2';
 import {DEADLOCK_HEROES} from './deadlock-heroes.mjs?v=stats-20261011-1';
 import {deadlockOverview,deadlockHeroAccess,deadlockHeroName,deadlockRankLabel} from './deadlock-stats.mjs?v=stats-20261011-1';
@@ -202,9 +202,10 @@ function toast(text) { $('toast').textContent = text; $('toast').hidden = false;
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 async function api(path, body, options = {}) {
  let response;
+ const timeout = options.timeout ?? (/^\/api\/(?:mods|platforms)(?:[/?]|$)/.test(path) ? null : path === '/api/riot/accounts/sync' ? 120000 : 60000);
  try { response = await fetch(path, {
    cache: 'no-store',
-   signal: AbortSignal.timeout(options.timeout || (path === '/api/riot/accounts/sync' ? 120000 : 60000)),
+   ...(timeout === null ? {} : {signal: AbortSignal.timeout(timeout)}),
    ...(body === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
  }); } catch (error) {
    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
@@ -213,8 +214,8 @@ async function api(path, body, options = {}) {
    throw new Error('Нет соединения с сервером SWCH. Перезапусти SWCH и повтори действие.');
  }
  const isJson = Boolean(response.headers.get('content-type')?.includes('application/json'));
- const data = isJson ? await response.json().catch(() => null) : null;
- if (!response.ok || data === null) {
+ const data = isJson ? await response.json().catch(() => undefined) : undefined;
+ if (!response.ok || data === undefined) {
    if (path.startsWith('/api/epic/auth/browser/') && [404,405].includes(response.status)) {
      throw new Error('Запущен сервер SWCH без нового входа Epic. Обнови сборку и перезапусти SWCH. Подключение по коду доступно ниже.');
    }

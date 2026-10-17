@@ -46,6 +46,7 @@ export function buildPackage(target,destination,binary) {
   const bytes=makeZip(files);
   fs.mkdirSync(destination,{recursive:true});
   const output=path.join(destination,'swch.autoclaimer.zip');fs.writeFileSync(output,bytes);
+  fs.writeFileSync(path.join(destination,'swch.autoclaimer.json'),JSON.stringify({manifest:JSON.parse(files.get('manifest.json').toString()),sha256:sha256(bytes),author:'SWCH',repository:'Kabarab/swch',bundled:true},null,2)+'\n');
   console.log(JSON.stringify({path:output,sha256:sha256(bytes),files:files.size}));
   return output;
 }

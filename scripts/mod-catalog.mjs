@@ -1,7 +1,10 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {inspectZip,compareVersions,MAX_PACKAGE} from '../mod-sdk/validation.mjs';
+import {pipeline} from 'node:stream/promises';
+import {Transform} from 'node:stream';
+import {inspectZipFile,compareVersions,packageLimits} from '../mod-sdk/validation.mjs';
 
 export function repositoryName(input){
   const name=String(input).trim().replace(/^https:\/\/github\.com\//,'').replace(/\/$/,'');
@@ -24,6 +27,14 @@ export function register(catalog,entry){
   catalog.history[id][entry.manifest.version]=entry.sha256;
   catalog.mods=catalog.mods.filter(m=>m.manifest.id!==id);catalog.mods.push(entry);catalog.mods.sort((a,b)=>a.manifest.id.localeCompare(b.manifest.id));return catalog;
 }
+export function compatibleCatalog(catalog){
+  const core=new Set(['id','name','version','api','platforms','description','backend','ui','theme']);
+  return {...catalog,mods:catalog.mods.map(entry=>{
+    const full={...entry.manifest_extensions,...entry.manifest},manifest={},manifest_extensions={};
+    for(const [key,value]of Object.entries(full))(core.has(key)?manifest:manifest_extensions)[key]=value;
+    return {...entry,manifest,...(Object.keys(manifest_extensions).length?{manifest_extensions}:{})};
+  })};
+}
 export async function downloadStats(api,repository){
   const name=repositoryName(repository);let downloads=0;
   for(let page=1;;page++){
@@ -41,10 +52,12 @@ export async function downloadStats(api,repository){
   }
   return {downloads,downloads_updated_at:new Date().toISOString()};
 }
-async function download(url,max,headers={}){
-  const response=await fetch(url,{headers,signal:AbortSignal.timeout(120000)});if(!response.ok)throw new Error(`GitHub returned ${response.status}`);
-  if(Number(response.headers.get('content-length'))>max)throw new Error('Download too large');
-  const chunks=[];let count=0;for await(const chunk of response.body){count+=chunk.length;if(count>max)throw new Error('Download too large');chunks.push(chunk);}return Buffer.concat(chunks);
+export async function downloadPackage(url,destination,limits=packageLimits(),headers={}){
+  const response=await fetch(url,{headers});if(!response.ok)throw new Error(`GitHub returned ${response.status}`);
+  if(!response.body)throw new Error('Missing GitHub release asset body');
+  if(limits.zipBytes&&Number(response.headers.get('content-length'))>limits.zipBytes){await response.body.cancel();throw new Error('ZIP package exceeds configured limit ('+limits.zipBytes+')');}
+  let size=0;const meter=new Transform({transform(chunk,encoding,callback){size+=chunk.length;if(limits.zipBytes&&size>limits.zipBytes)callback(new Error('ZIP package exceeds configured limit ('+limits.zipBytes+')'));else callback(null,chunk);}});
+  await pipeline(response.body,meter,fs.createWriteStream(destination,{flags:'wx'}));
 }
 export async function run(){
   const central=repositoryName(process.env.GITHUB_REPOSITORY),token=process.env.GITHUB_TOKEN;
@@ -76,11 +89,12 @@ export async function run(){
     verifyOwner(repo,author);
     const release=await api(`/repos/${repositoryName(repo.full_name)}/releases/latest`);
     if(release.draft||release.prerelease)throw new Error('A stable release is required');
-    const asset=release.assets.find(a=>a.name==='mod.zip');if(!asset||asset.size>MAX_PACKAGE)throw new Error('Release must contain mod.zip (at most 50 MiB)');
+    const asset=release.assets.find(a=>a.name==='mod.zip');if(!asset)throw new Error('Release must contain mod.zip');
     const expected=`https://github.com/${repo.full_name}/releases/download/`;
     if(!asset.browser_download_url.startsWith(expected))throw new Error('Invalid GitHub release asset URL');
-    const bytes=await download(asset.browser_download_url,MAX_PACKAGE);
-    const {manifest,sha256}=inspectZip(bytes);
+    const temporary=await fs.promises.mkdtemp(path.join(os.tmpdir(),'swch-mod-catalog-'));let manifest,sha256;
+    try{const archive=path.join(temporary,'mod.zip');await downloadPackage(asset.browser_download_url,archive);({manifest,sha256}=await inspectZipFile(archive));}
+    finally{await fs.promises.rm(temporary,{recursive:true,force:true});}
     if(manifest.version.includes('-')||release.tag_name!==`v${manifest.version}`)throw new Error('Stable tag must match manifest version (vX.Y.Z)');
     const previous=catalog.mods.find(m=>m.manifest.id===manifest.id&&m.repository_id===repo.id);
     let statistics=previous?{downloads:previous.downloads,downloads_updated_at:previous.downloads_updated_at}:{};
@@ -90,7 +104,7 @@ export async function run(){
   async function report(number,text){await api(`/repos/${central}/issues/${number}/comments`,'POST',{body:text});}
   // Create the catalog branch once; never change the default branch.
   try{await api(`/repos/${central}/git/ref/heads/mod-catalog`);}catch(e){if(e.status!==404)throw e;await api(`/repos/${central}/git/refs`,'POST',{ref:'refs/heads/mod-catalog',sha:process.env.GITHUB_SHA});}
-  const content=JSON.stringify(catalog,null,2)+'\n';
+  const content=JSON.stringify(compatibleCatalog(catalog),null,2)+'\n';
   if(!current||Buffer.from(current.content,'base64').toString()!==content){await api(`/repos/${central}/contents/index.json`,'PUT',{message:'Update SWCH mod catalog',branch:'mod-catalog',content:Buffer.from(content).toString('base64'),...(current?{sha:current.sha}:{})});}
   if(issue){await report(issue.number,'Mod validated and published to the SWCH catalog. Future stable releases are checked every six hours.');await api(`/repos/${central}/issues/${issue.number}`,'PATCH',{state:'closed'});}
 }

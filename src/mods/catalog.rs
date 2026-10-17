@@ -46,6 +46,34 @@ pub async fn bounded_download(url: &str, max: u64) -> Result<Vec<u8>> {
 }
 
 impl ModManager {
+
+    pub fn bundled_packages(&self) -> Vec<(serde_json::Value, std::path::PathBuf)> {
+        let Ok(exe) = std::env::current_exe() else { return vec![]; };
+        let Some(base) = exe.parent() else { return vec![]; };
+        let mut entries = Vec::new();
+        for directory in [base.join("bundled-mods"), base.join("../Resources/bundled-mods")] {
+            let Ok(files) = fs::read_dir(&directory) else { continue; };
+            for file in files.flatten() {
+                let path = file.path();
+                if path.extension().and_then(|v| v.to_str()) != Some("json") { continue; }
+                let Ok(metadata) = fs::metadata(&path) else { continue; };
+                if metadata.len() > 32768 { continue; }
+                let Ok(bytes) = fs::read(&path) else { continue; };
+                let Ok(mut entry) = serde_json::from_slice::<serde_json::Value>(&bytes) else { continue; };
+                let Ok(manifest) = serde_json::from_value::<Manifest>(entry["manifest"].clone()) else { continue; };
+                if manifest.validate(None).is_err() || path.file_stem().and_then(|v| v.to_str()) != Some(&manifest.id) { continue; }
+                let hash = entry["sha256"].as_str().unwrap_or("");
+                if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) { continue; }
+                let package = directory.join(format!("{}.zip", manifest.id));
+                if !fs::metadata(&package).is_ok_and(|m| m.is_file()) { continue; }
+                if entries.iter().any(|(other, _): &(serde_json::Value, std::path::PathBuf)| other["manifest"]["id"] == manifest.id) { continue; }
+                entry["bundled"] = json!(true);
+                entries.push((entry, package));
+            }
+        }
+        entries
+    }
+
     pub async fn catalog(&self, refresh: bool) -> Result<serde_json::Value> {
         let path = self.root.join("catalog.json");
         let fresh = fs::metadata(&path)
@@ -55,7 +83,7 @@ impl ModManager {
             .is_some_and(|t| t.as_secs() < 21600);
         let mut warning = None;
         if refresh || !fresh {
-            match bounded_download(CATALOG_URL, 2 * 1024 * 1024).await {
+            match tokio::time::timeout(std::time::Duration::from_secs(8), bounded_download(CATALOG_URL, 2 * 1024 * 1024)).await.unwrap_or_else(|_| Err("Catalog request timed out".into())) {
                 Ok(bytes) => {
                     let catalog: Catalog =
                         serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
@@ -86,10 +114,13 @@ impl ModManager {
             })
             .collect();
         Ok(
-            json!({"catalog":catalog,"compatibility":compatibility,"warning":warning,"target":target(),"api":API_VERSION}),
+            json!({"catalog":catalog,"bundled":self.bundled_packages().into_iter().map(|(entry,_)|entry).collect::<Vec<_>>(),"compatibility":compatibility,"warning":warning,"target":target(),"api":API_VERSION}),
         )
     }
     pub async fn install_catalog(&self, id: &str) -> Result<String> {
+        if let Some((entry, path)) = self.bundled_packages().into_iter().find(|(entry, _)| entry["manifest"]["id"] == id) {
+            return self.install_file(&path, entry["sha256"].as_str().ok_or("Missing package hash")?, None).await;
+        }
         let catalog: Catalog = serde_json::from_value(self.catalog(true).await?["catalog"].clone())
             .map_err(|e| e.to_string())?;
         if catalog.blocked.iter().any(|b| b == id) {
@@ -101,8 +132,14 @@ impl ModManager {
             .find(|e| e.manifest.id == id)
             .ok_or("Mod not found in catalog")?;
         entry.manifest.validate(Some(target()))?;
-        let bytes = bounded_download(&entry.download_url, MAX_PACKAGE).await?;
-        self.install_bytes(&bytes, &entry.sha256.clone(), Some(entry))
+        let response = reqwest::Client::builder()
+            .user_agent("SWCH-Mods/1")
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build().map_err(|e| e.to_string())?
+            .get(&entry.download_url).send().await.map_err(|e| e.to_string())?
+            .error_for_status().map_err(|e| e.to_string())?;
+        let (file, _) = super::package::spool(response.bytes_stream(), &self.root.join("downloads")).await?;
+        self.install_file(file.path(), &entry.sha256.clone(), Some(entry))
             .await
     }
 }

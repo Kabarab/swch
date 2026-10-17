@@ -1,4 +1,9 @@
 pub mod catalog;
+pub mod jobs;
+mod files;
+mod tools;
+mod desktop;
+pub(crate) mod process;
 mod host;
 pub mod package;
 pub mod runtime;
@@ -11,10 +16,11 @@ use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs,
+    io::{BufReader, Cursor, Read, Seek},
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use types::*;
 
 struct Plugin {
@@ -32,6 +38,7 @@ pub struct ModManager {
     db: Database,
     node: Option<PathBuf>,
     entries: RwLock<HashMap<String, Arc<Mutex<Plugin>>>>,
+    runtime_cancellation: RwLock<HashMap<String, watch::Sender<bool>>>,
     mutation: Mutex<()>,
     data_gate: Arc<Mutex<()>>,
     host: Arc<host::Services>,
@@ -119,12 +126,16 @@ impl ModManager {
             db: db.clone(),
             gate: data_gate.clone(),
             events: events.clone(),
+            jobs: Arc::new(jobs::JobStore::new(root.clone(), events.clone())),
+            files: Arc::new(files::FileStore::new(root.clone())),
+            tools: Arc::new(tools::ToolManager::new()),
         });
         Self {
             root,
             db,
             node,
             entries: RwLock::new(entries),
+            runtime_cancellation: RwLock::new(HashMap::new()),
             mutation: Mutex::new(()),
             data_gate,
             host,
@@ -148,32 +159,6 @@ impl ModManager {
             let mut p = entry.lock().await;
             if p.saved.enabled {
                 let _ = self.start(&mut p).await;
-            }
-        }
-    }
-    /// Bundled ZIPs are first-install defaults. A durable marker preserves removal.
-    pub async fn install_bundled(&self) {
-        let Ok(exe) = std::env::current_exe() else { return; };
-        let Some(base) = exe.parent() else { return; };
-        for directory in [base.join("bundled-mods"), base.join("../Resources/bundled-mods")] {
-            let Ok(files) = fs::read_dir(directory) else { continue; };
-            for file in files.flatten() {
-                let path = file.path();
-                if path.extension().and_then(|v| v.to_str()) != Some("zip") { continue; }
-                let Some(id) = path.file_stem().and_then(|v| v.to_str()) else { continue; };
-                if !valid_id(id) { continue; }
-                let marker = self.root.join("bundled").join(format!("{id}.json"));
-                if marker.exists() { continue; }
-                let result: Result<()> = async {
-                    if !self.entries.read().await.contains_key(id) {
-                        if fs::metadata(&path).map_err(error)?.len() > MAX_PACKAGE { return Err("Bundled package too large".into()); }
-                        let bytes = fs::read(&path).map_err(error)?;
-                        let installed = self.install_bytes(&bytes, &package::digest(&bytes), None).await?;
-                        if installed != id { return Err("Bundled package filename must match mod ID".into()); }
-                    }
-                    write_json(&marker, &json!({"installed":true}))
-                }.await;
-                if let Err(error) = result { tracing::warn!("Cannot install bundled mod {id}: {error}"); }
             }
         }
     }
@@ -209,6 +194,8 @@ impl ModManager {
             return Ok(());
         }
         let result: Result<()> = async {
+            let tools_directory=self.host.files.directory(&p.manifest.id,"tools")?;
+            self.host.tools.prepare(&p.manifest.id,&p.manifest,&p.directory,&tools_directory).await?;
             let mut contributions = Contributions::default();
             if p.manifest.ui.is_some() {
                 contributions.tabs.push(Contribution {
@@ -222,6 +209,8 @@ impl ModManager {
                     None => runtime::node_path()?,
                 };
                 let host = self.prepare_host().await?;
+                let (cancellation, _) = watch::channel(false);
+                self.runtime_cancellation.write().await.insert(p.manifest.id.clone(), cancellation.clone());
                 p.runtime = Some(
                     Runtime::spawn(
                         &node,
@@ -230,6 +219,8 @@ impl ModManager {
                         p.logs.clone(),
                         self.host.clone(),
                         p.manifest.id.clone(),
+                        cancellation,
+                        &p.directory,
                     )
                     .await?,
                 );
@@ -240,6 +231,8 @@ impl ModManager {
                     .request("initialize", json!({"api":API_VERSION,"id":p.manifest.id}))
                     .await?;
                 let registered: Contributions = serde_json::from_value(response).map_err(error)?;
+                let mut job_types=HashSet::new();
+                if registered.job_types.iter().any(|kind|!valid_id(kind)||!job_types.insert(kind)) { return Err("Invalid or duplicate job type".into()); }
                 let mut seen = HashSet::new();
                 for item in registered
                     .launchers
@@ -255,11 +248,6 @@ impl ModManager {
                     {
                         return Err("Invalid or duplicate contribution ID".into());
                     }
-                }
-                if registered.launchers.len() + registered.tabs.len() + registered.actions.len()
-                    > 100
-                {
-                    return Err("Too many contributions".into());
                 }
                 for platform in &registered.launchers {
                     if platform.capabilities.iter().any(|c| {
@@ -360,8 +348,15 @@ impl ModManager {
         }
         out
     }
+    async fn interrupt_runtime(&self, id: &str) {
+        if let Some(cancellation) = self.runtime_cancellation.read().await.get(id) {
+            cancellation.send_replace(true);
+        }
+        self.host.tools.stop_mod(id).await;
+    }
     pub async fn toggle(&self, id: &str, enabled: bool) -> Result<()> {
         let entry = self.entry(id).await?;
+        self.interrupt_runtime(id).await;
         let mut p = entry.lock().await;
         let mut saved = p.saved.clone();
         saved.enabled = enabled;
@@ -394,6 +389,7 @@ impl ModManager {
     }
     pub async fn reload(&self, id: &str) -> Result<()> {
         let entry = self.entry(id).await?;
+        self.interrupt_runtime(id).await;
         let mut p = entry.lock().await;
         if let Some(mut runtime) = p.runtime.take() {
             runtime.stop().await;
@@ -448,10 +444,33 @@ impl ModManager {
         hash: &str,
         source: Option<CatalogEntry>,
     ) -> Result<String> {
+        self.install_reader(Cursor::new(bytes.to_vec()), hash, source).await
+    }
+    /// Install from disk without loading the ZIP or its expanded entries into RAM.
+    pub async fn install_file(
+        &self,
+        path: &Path,
+        hash: &str,
+        source: Option<CatalogEntry>,
+    ) -> Result<String> {
+        let file = fs::File::open(path).map_err(error)?;
+        self.install_reader(BufReader::new(file), hash, source).await
+    }
+    async fn install_reader<R: Read + Seek + Send + 'static>(
+        &self,
+        reader: R,
+        hash: &str,
+        source: Option<CatalogEntry>,
+    ) -> Result<String> {
         let _gate = self.mutation.lock().await;
-        fs::create_dir_all(self.root.join("packages")).map_err(error)?;
-        let staging = tempfile::tempdir_in(self.root.join("packages")).map_err(error)?;
-        let manifest = package::extract(bytes, hash, staging.path(), Some(target()))?;
+        let packages = self.root.join("packages");
+        let expected_hash = hash.to_owned();
+        let (staging, manifest) = tokio::task::spawn_blocking(move || -> Result<_> {
+            fs::create_dir_all(&packages).map_err(error)?;
+            let staging = tempfile::tempdir_in(packages).map_err(error)?;
+            let manifest = package::extract_reader(reader, &expected_hash, staging.path(), Some(target()))?;
+            Ok((staging, manifest))
+        }).await.map_err(error)??;
         if let Some(source) = &source {
             if source.sha256.to_ascii_lowercase() != hash.to_ascii_lowercase()
                 || serde_json::to_value(&source.manifest).map_err(error)?
@@ -551,6 +570,7 @@ impl ModManager {
         Ok(id)
     }
     pub async fn uninstall(&self, id: &str) -> Result<()> {
+        self.interrupt_runtime(id).await;
         let _gate = self.mutation.lock().await;
         let entry = self.entry(id).await?;
         let mut p = entry.lock().await;
@@ -567,6 +587,7 @@ impl ModManager {
             fs::remove_file(state).map_err(error)?;
         }
         self.entries.write().await.remove(id);
+        self.runtime_cancellation.write().await.remove(id);
         let _ = self.events.send(json!({"event":"mods.changed"}));
         Ok(())
     }
@@ -596,6 +617,7 @@ impl ModManager {
             }
         }
         self.db.clear_mod_data(id).await.map_err(error)?;
+        self.host.files.remove(id).await?;
         if dir.exists() {
             fs::remove_dir_all(dir).map_err(error)?;
         }
@@ -615,10 +637,20 @@ impl ModManager {
         }
         let path = p.manifest.ui.as_ref().ok_or("No mod interface")?;
         let bytes = fs::read(p.directory.join(path)).map_err(error)?;
-        if bytes.len() > MAX_MESSAGE {
-            return Err("Interface too large".into());
-        }
         String::from_utf8(bytes).map_err(error)
+    }
+    pub async fn asset(&self, id: &str, relative: &str) -> Result<PathBuf> {
+        let relative = safe_relative(relative)?;
+        if relative.components().any(|part| part.as_os_str().to_string_lossy().starts_with('.')) {
+            return Err("Hidden package files are not UI assets".into());
+        }
+        let entry = self.entry(id).await?;
+        let p = entry.lock().await;
+        if !p.saved.enabled || p.error.is_some() { return Err("Mod not active".into()); }
+        let root = p.directory.canonicalize().map_err(error)?;
+        let path = root.join(relative).canonicalize().map_err(error)?;
+        if !path.starts_with(root) || !path.is_file() { return Err("Asset outside package or missing".into()); }
+        Ok(path)
     }
     pub async fn theme(&self, id: Option<&str>) -> Result<Value> {
         if let Some(id) = id {
@@ -669,11 +701,29 @@ impl ModManager {
     }
     pub async fn sdk_call(&self, id: &str, method: String, params: Value) -> Result<Value> {
         let entry = self.entry(id).await?;
+        if method=="files.configure" {
+            self.interrupt_runtime(id).await;
+            let mut p=entry.lock().await;
+            if let Some(mut runtime)=p.runtime.take(){runtime.stop().await;}
+            let result=self.host_call(id,method,params).await;
+            p.error=None;
+            if p.saved.enabled {
+                if let Err(e)=self.start(&mut p).await { return Err(format!("Storage configuration finished; restart failed: {e}")); }
+            }
+            return result;
+        }
         {
             let p = entry.lock().await;
-            if !p.saved.enabled || p.error.is_some() {
+            let management = method.starts_with("files.") || matches!(method.as_str(),"dialogs.openFolder" | "shell.openFolder");
+            if (!p.saved.enabled || p.error.is_some()) && !management {
                 return Err("Mod not active".into());
             }
+            if matches!(method.as_str(),"jobs.update"|"jobs.recover") { return Err("Internal job lifecycle method".into()); }
+            if method=="jobs.start" && !p.contributions.job_types.iter().any(|kind|Some(kind.as_str())==params["type"].as_str()) { return Err("Unknown job type".into()); }
+        }
+        if method == "method" {
+            let mut p = entry.lock().await;
+            return self.request(&mut p, "method", params).await;
         }
         if method == "action" {
             return self
@@ -914,9 +964,13 @@ impl ModManager {
         self.host.call(id, method, params).await
     }
     pub async fn shutdown(&self) {
+        for cancellation in self.runtime_cancellation.read().await.values() {
+            cancellation.send_replace(true);
+        }
         let entries: Vec<_> = self.entries.read().await.values().cloned().collect();
         for entry in entries {
             let mut p = entry.lock().await;
+            self.host.tools.stop_mod(&p.manifest.id).await;
             if let Some(mut runtime) = p.runtime.take() {
                 runtime.stop().await;
             }

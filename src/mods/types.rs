@@ -2,11 +2,29 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Component, Path};
 
-pub const API_VERSION: &str = "1.0.0";
-pub const MAX_PACKAGE: u64 = 50 * 1024 * 1024;
-pub const MAX_EXPANDED: u64 = 200 * 1024 * 1024;
-pub const MAX_MESSAGE: usize = 1024 * 1024;
+pub const API_VERSION: &str = "1.1.0";
 pub type Result<T> = std::result::Result<T, String>;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PackageLimits {
+    pub zip_bytes: Option<u64>,
+    pub expanded_bytes: Option<u64>,
+    pub files: Option<u64>,
+}
+impl PackageLimits {
+    pub fn from_env() -> Result<Self> {
+        fn read(key: &str) -> Result<Option<u64>> {
+            match std::env::var(key) {
+                Err(std::env::VarError::NotPresent) => Ok(None),
+                Ok(value) if value.trim().is_empty() => Ok(None),
+                Ok(value) => value.trim().parse::<u64>().map(|n| (n > 0).then_some(n))
+                    .map_err(|_| format!("{key} must be a nonnegative integer")),
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        Ok(Self { zip_bytes: read("SWCH_MOD_MAX_ZIP_BYTES")?, expanded_bytes: read("SWCH_MOD_MAX_EXPANDED_BYTES")?, files: read("SWCH_MOD_MAX_FILES")? })
+    }
+}
 
 pub fn valid_id(id: &str) -> bool {
     !id.is_empty()
@@ -79,7 +97,6 @@ pub fn target() -> &'static str {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub id: String,
     pub name: String,
@@ -88,6 +105,8 @@ pub struct Manifest {
     pub platforms: Vec<String>,
     #[serde(default)]
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub games: Vec<GameTarget>,
     #[serde(default)]
@@ -96,6 +115,8 @@ pub struct Manifest {
     pub ui: Option<String>,
     #[serde(default)]
     pub theme: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_tools: Vec<NativeTool>,
 }
 
 impl Manifest {
@@ -114,6 +135,9 @@ impl Manifest {
         if !req.matches(&semver::Version::parse(API_VERSION).unwrap()) {
             return Err("Unsupported SDK API version".into());
         }
+        if !self.native_tools.is_empty() && req.matches(&semver::Version::new(1,0,0)) {
+            return Err("Native tools require a minimum SDK API of 1.1.0".into());
+        }
         if self.platforms.is_empty()
             || self
                 .platforms
@@ -126,6 +150,37 @@ impl Manifest {
             return Err("Mod does not support this platform".into());
         }
         validate_game_targets(&self.games)?;
+        let mut tools = std::collections::HashSet::new();
+        for tool in &self.native_tools {
+            if !valid_id(&tool.id) || !tools.insert((&tool.id, &tool.platform))
+                || !matches!(tool.platform.as_str(), "windows-x64" | "macos-arm64")
+                || tool.version.trim().is_empty() || safe_relative(&tool.version)?.components().count() != 1
+                || tool.license.trim().is_empty() || tool.files.is_empty() {
+                return Err("Invalid native tool metadata".into());
+            }
+            let mut files = std::collections::HashSet::new();
+            for file in &tool.files {
+                safe_relative(&file.path)?;
+                if !files.insert(file.path.to_ascii_lowercase()) || file.path.to_ascii_lowercase().ends_with(".node")
+                    || file.sha256.len() != 64 || !file.sha256.bytes().all(|c| c.is_ascii_hexdigit()) {
+                    return Err("Invalid native tool file".into());
+                }
+            }
+        }
+        if let Some(cover) = &self.cover_url {
+            let valid = cover.len() <= 2048
+                && !cover.chars().any(char::is_whitespace)
+                && !cover.chars().any(char::is_control)
+                && reqwest::Url::parse(cover).ok().is_some_and(|url| {
+                    url.scheme() == "https"
+                        && url.host_str().is_some()
+                        && url.username().is_empty()
+                        && url.password().is_none()
+                });
+            if !valid {
+                return Err("Mod cover_url must be an HTTPS URL without credentials (at most 2048 bytes)".into());
+            }
+        }
         if self.backend.is_none() && self.ui.is_none() && self.theme.is_none() {
             return Err("Mod has no entry point".into());
         }
@@ -134,6 +189,22 @@ impl Manifest {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NativeTool {
+    pub id: String,
+    pub platform: String,
+    pub version: String,
+    pub license: String,
+    pub files: Vec<NativeToolFile>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NativeToolFile {
+    pub path: String,
+    pub sha256: String,
+    #[serde(default)]
+    pub executable: bool,
 }
 
 /// A stable game/application identity, scoped to its launcher.
@@ -148,9 +219,6 @@ pub struct GameTarget {
 
 pub fn validate_game_targets(games: &[GameTarget]) -> Result<()> {
     let mut seen = std::collections::HashSet::new();
-    if games.len() > 100 {
-        return Err("At most 100 game bindings are supported".into());
-    }
     for game in games {
         if game.launcher.is_empty()
             || game.launcher.len() > 256
@@ -170,6 +238,8 @@ pub fn validate_game_targets(games: &[GameTarget]) -> Result<()> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Contributions {
+    #[serde(default)]
+    pub job_types: Vec<String>,
     #[serde(default)]
     pub launchers: Vec<Platform>,
     #[serde(default)]
@@ -198,10 +268,23 @@ pub struct Platform {
 pub struct Catalog {
     #[serde(default)]
     pub schema: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with="deserialize_catalog_entries")]
     pub mods: Vec<CatalogEntry>,
     #[serde(default)]
     pub blocked: Vec<String>,
+}
+
+// Publishers keep legacy manifest fields separate from extensions so older strict
+// clients can still read the catalog. New clients merge before compatibility checks.
+fn deserialize_catalog_entries<'de,D:serde::Deserializer<'de>>(deserializer:D)->std::result::Result<Vec<CatalogEntry>,D::Error> {
+    let entries=Vec::<Value>::deserialize(deserializer)?;
+    entries.into_iter().map(|mut entry| {
+        if let Some(extensions)=entry.get("manifest_extensions").and_then(Value::as_object).cloned() {
+            let manifest=entry.get_mut("manifest").and_then(Value::as_object_mut).ok_or_else(||serde::de::Error::custom("Missing catalog manifest"))?;
+            for (key,value) in extensions { if !manifest.contains_key(&key) {manifest.insert(key,value);} }
+        }
+        serde_json::from_value(entry).map_err(serde::de::Error::custom)
+    }).collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -9,13 +9,90 @@ pub struct Services {
     pub db: Database,
     pub gate: Arc<Mutex<()>>,
     pub events: broadcast::Sender<Value>,
+    pub jobs: Arc<super::jobs::JobStore>,
+    pub files: Arc<super::files::FileStore>,
+    pub tools: Arc<super::tools::ToolManager>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn mod_storage_can_exceed_ten_mebibytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let events = broadcast::channel(8).0;
+        let services = Services {
+            root: directory.path().to_path_buf(),
+            db: Database::open_in_memory().unwrap(),
+            gate: Arc::new(Mutex::new(())),
+            jobs: Arc::new(super::super::jobs::JobStore::new(directory.path().to_path_buf(),events.clone())),
+            files: Arc::new(super::super::files::FileStore::new(directory.path().to_path_buf())),
+            tools: Arc::new(super::super::tools::ToolManager::new()),
+            events,
+        };
+        let value = "x".repeat(11 * 1024 * 1024);
+        services
+            .call(
+                "large.mod",
+                "storage.set".into(),
+                json!({"key":"payload","value":value}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            services
+                .call("large.mod", "storage.get".into(), json!({"key":"payload"}))
+                .await
+                .unwrap(),
+            value
+        );
+        services
+            .call(
+                "large.mod",
+                "storage.delete".into(),
+                json!({"key":"payload"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            services
+                .call("large.mod", "storage.get".into(), json!({"key":"payload"}))
+                .await
+                .unwrap(),
+            Value::Null
+        );
+    }
 }
 impl Services {
+    pub async fn call_from_runtime(&self,id:&str,method:String,params:Value)->Result<Value> {
+        if method=="files.configure" { return Err("Change file locations through SWCH mod settings or the UI bridge so the mod can be stopped and restarted safely".into()); }
+        self.call(id,method,params).await
+    }
     pub async fn call(&self, id: &str, method: String, params: Value) -> Result<Value> {
         if !valid_id(id) {
             return Err("Invalid mod ID".into());
         }
+        if method.starts_with("jobs.") { return self.jobs.call(id,&method,params).await; }
+        if method.starts_with("files.") {
+            if method=="files.configure" && params["kind"]=="tools" { self.tools.stop_mod(id).await; }
+            let value=self.files.call(id,&method,params).await?;
+            if method=="files.configure" { self.tools.relocate(id,&self.files.directory(id,"tools")?).await; }
+            return Ok(value);
+        }
+        if method.starts_with("tools.") { return self.tools.call(id,&method,params,&self.files.directory(id,"data")?).await; }
+        if method.starts_with("dialogs.") || method.starts_with("clipboard.") || method=="shell.openFolder" {
+            return super::desktop::call(&method,params).await;
+        }
         match method.as_str() {
+            "library.refreshSteam" => {
+                let result = if let Some(account_id)=params["account_id"].as_str() {
+                    crate::server::steam::sync_library(axum::extract::State(self.db.clone()),axum::Json(crate::server::steam::SyncRequest{account_id:account_id.into(),api_key:None,access_token:None})).await
+                } else { crate::server::steam::get_library(axum::extract::State(self.db.clone())).await };
+                let value=result.map_err(|(_,axum::Json(body))|body.error)?;
+                let _=self.events.send(json!({"event":"library.changed"}));
+                return serde_json::to_value(value.0).map_err(error);
+            }
             "library.list" => {
                 return serde_json::to_value(self.db.get_games().await.map_err(error)?)
                     .map_err(error)
@@ -94,9 +171,6 @@ impl Services {
             "storage.get" => Ok(data[key].clone()),
             "storage.set" => {
                 data[key] = params["value"].clone();
-                if serde_json::to_vec(&data).map_err(error)?.len() > 10 * MAX_MESSAGE {
-                    return Err("Mod storage exceeds 10 MiB".into());
-                }
                 write_json(&path, &data)?;
                 Ok(Value::Null)
             }

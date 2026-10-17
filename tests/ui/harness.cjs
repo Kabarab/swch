@@ -12,9 +12,10 @@ function emptyApi(endpoint) {
   if(endpoint==='/api/modules')return {modules:[]};
   return {};
 }
-async function staticServer() {
+async function staticServer(handleRequest) {
   const server=http.createServer((req,res)=>{
     const pathname=new URL(req.url,'http://localhost').pathname;
+    if(handleRequest?.(req,res,pathname))return;
     const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));
     if(!file.startsWith(root+path.sep)){res.writeHead(403);res.end();return;}
     fs.readFile(file,(error,bytes)=>{

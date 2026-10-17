@@ -28,6 +28,25 @@ fn manifest(version: &str) -> Value {
 }
 
 #[test]
+fn manifest_cover_urls_survive_extraction_and_reject_unsafe_sources() {
+    use swch::mods::types::Manifest;
+    let mut value = manifest("1.0.0");
+    value["cover_url"] = json!("https://raw.githubusercontent.com/alice/mod/main/cover.png");
+    let bytes = archive(vec![("manifest.json", value.to_string()), ("backend.mjs", "export default async function() {}".into())]);
+    let dir = tempfile::tempdir().unwrap();
+    let parsed = package::extract(&bytes, &package::digest(&bytes), dir.path(), None).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap()["cover_url"], value["cover_url"]);
+    let legacy: Manifest = serde_json::from_value(manifest("1.0.0")).unwrap();
+    assert!(legacy.cover_url.is_none());
+    assert!(serde_json::to_value(legacy).unwrap().get("cover_url").is_none());
+    for invalid in [json!(""), json!(7), json!({}), json!("cover.png"), json!("http://example.com/cover.png"), json!("javascript:alert(1)"), json!("data:image/png;base64,AAAA"), json!("file:///cover.png"), json!("https://user:pass@example.com/cover.png"), json!("https://example.com/a b.png"), json!("https://example.com/a\n.png"), json!(format!("https://example.com/{}", "a".repeat(2048)))] {
+        value["cover_url"] = invalid;
+        assert!(serde_json::from_value::<Manifest>(value.clone())
+            .and_then(|m| m.validate(None).map_err(serde::de::Error::custom)).is_err());
+    }
+}
+
+#[test]
 fn manifest_game_bindings_validate_exact_scoped_identities() {
     use swch::mods::types::Manifest;
     let mut value = manifest("1.0.0");
@@ -126,7 +145,7 @@ export default async function(s){
  });
  s.registerAction({id:'count',name:'Count'},async()=>{const n=Number(await s.storage.get('count')||0)+1;await s.storage.set('count',n);return n;});
  s.registerAction({id:'crash',name:'Crash'},()=>process.exit(9));
- s.registerAction({id:'hang',name:'Hang'},()=>new Promise(()=>{}));
+ s.registerAction({id:'hang',name:'Hang'},()=>{s.events.emit('hanging',true);return new Promise(()=>{});});
  s.registerAction({id:'slow',name:'Slow'},async()=>{await new Promise(r=>setTimeout(r,200));return 'complete';});
  s.registerAction({id:'fail',name:'Fail'},()=>{throw new Error('Recoverable');});
  console.log('activation log');
@@ -134,7 +153,7 @@ export default async function(s){
 "#;
 
 #[test]
-fn packages_reject_corruption_paths_api_platform_and_addons() {
+fn packages_reject_corruption_paths_api_and_platform() {
     for id in ["con", "aux.mod", "trailing."] {
         assert!(!swch::mods::types::valid_id(id));
     }
@@ -316,7 +335,7 @@ async fn failing_update_rolls_back_and_update_waits_for_current_operation() {
 }
 
 #[tokio::test]
-async fn errors_crashes_restart_and_timeout_do_not_crash_host() {
+async fn errors_crashes_and_cancelled_operations_do_not_crash_host() {
     let (_dir, _db, m) = fixture().await;
     let bytes = backend("1.0.0", PROVIDER);
     m.install_bytes(&bytes, &package::digest(&bytes), None)
@@ -328,13 +347,21 @@ async fn errors_crashes_restart_and_timeout_do_not_crash_host() {
     assert_eq!(m.list().await[0].status, "error");
     m.reload("test.mod").await.unwrap();
     assert_eq!(m.action("test.mod", "count", json!({})).await.unwrap(), 1);
-    assert!(m
-        .action("test.mod", "hang", json!({}))
-        .await
-        .unwrap_err()
-        .contains("timed out"));
-    assert_eq!(m.list().await[0].status, "error");
-    m.reload("test.mod").await.unwrap();
+    let mut events = m.events.subscribe();
+    let pending = tokio::spawn({
+        let m = m.clone();
+        async move { m.action("test.mod", "hang", json!({})).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if events.recv().await.unwrap()["event"] == "mod:test.mod:hanging" { break; }
+        }
+    }).await.expect("Action should start before it is cancelled");
+    tokio::time::timeout(std::time::Duration::from_secs(15), m.reload("test.mod"))
+        .await.expect("Restart must cancel a pending operation").unwrap();
+    assert!(pending.await.unwrap().unwrap_err().contains("cancelled"));
+    assert_eq!(m.list().await[0].status, "active");
+    assert_eq!(m.action("test.mod", "count", json!({})).await.unwrap(), 2);
     m.shutdown().await;
 }
 

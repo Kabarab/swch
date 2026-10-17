@@ -1,8 +1,8 @@
 use crate::mods::{types::*, ModManager};
 use axum::{
-    body::Bytes,
+    body::Body,
     extract::{DefaultBodyLimit, Path, Query},
-    http::StatusCode,
+    http::{header, Method, StatusCode},
     response::sse::{Event, KeepAlive, Sse},
     routing::{get, post},
     Extension, Json, Router,
@@ -10,6 +10,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{convert::Infallible, path::PathBuf, sync::Arc};
+use tower::ServiceExt;
+use tower_http::services::ServeFile;
 
 type Response = std::result::Result<Json<Value>, (StatusCode, Json<Value>)>;
 fn respond(value: Result<Value>) -> Response {
@@ -37,12 +39,13 @@ pub fn router() -> Router<super::AppState> {
         .route("/api/mods/:id/clear-data", post(clear_data))
         .route("/api/mods/:id/logs", get(logs))
         .route("/api/mods/:id/ui", get(ui))
+        .route("/api/mods/:id/assets/*path", get(asset))
         .route("/api/mods/:id/settings", get(settings).post(save_settings))
         .route("/api/mods/:id/sdk", post(sdk))
         .route("/api/platforms", get(platforms))
         .route("/api/platforms/library", get(library))
         .route("/api/platforms/:id/:operation", post(platform_operation))
-        .layer(DefaultBodyLimit::max(MAX_PACKAGE as usize))
+        .layer(DefaultBodyLimit::disable())
         .layer(axum::middleware::from_fn(local_origin))
 }
 pub(crate) async fn local_origin(
@@ -59,12 +62,17 @@ pub(crate) async fn local_origin(
         .split(':')
         .next()
         .is_some_and(|h| matches!(h, "127.0.0.1" | "localhost"));
-    let origin_ok = request.headers().get("origin").map_or(true, |o| {
+    // Sandboxed mod frames have an opaque origin. Only package resource reads
+    // are public to that origin; management and SDK routes retain their guard.
+    let asset_read = matches!(*request.method(), Method::GET | Method::HEAD)
+        && matches!(request.uri().path().split('/').collect::<Vec<_>>().as_slice(), ["", "api", "mods", id, "assets", rest @ ..] if !id.is_empty() && !rest.is_empty())
+        && request.headers().get(header::ORIGIN).map_or(true, |origin| origin == "null");
+    let origin_ok = asset_read || request.headers().get("origin").map_or(true, |o| {
         o.to_str()
             .ok()
             .is_some_and(|o| o == format!("http://{host}"))
     });
-    let site_ok = request
+    let site_ok = asset_read || request
         .headers()
         .get("sec-fetch-site")
         .map_or(true, |s| s != "cross-site");
@@ -129,23 +137,23 @@ async fn install(Extension(m): Extension<Arc<ModManager>>, Json(input): Json<Ins
 }
 #[derive(Deserialize)]
 struct LocalQuery {
-    sha256: String,
+    sha256: Option<String>,
     #[serde(default)]
     trusted: bool,
 }
 async fn install_file(
     Extension(m): Extension<Arc<ModManager>>,
     Query(q): Query<LocalQuery>,
-    bytes: Bytes,
+    body: Body,
 ) -> Response {
     if !q.trusted {
         return respond(Err("Confirm that you trust the mod author".into()));
     }
-    respond(
-        m.install_bytes(&bytes, &q.sha256, None)
-            .await
-            .map(|id| json!({"id":id})),
-    )
+    respond(async {
+        let (file, hash) = crate::mods::package::spool(body.into_data_stream(), &m.root.join("downloads")).await?;
+        let id = m.install_file(file.path(), q.sha256.as_deref().unwrap_or(&hash), None).await?;
+        Ok(json!({"id":id}))
+    }.await)
 }
 #[derive(Deserialize)]
 struct Development {
@@ -198,6 +206,26 @@ async fn logs(Extension(m): Extension<Arc<ModManager>>, Path(id): Path<String>) 
 }
 async fn ui(Extension(m): Extension<Arc<ModManager>>, Path(id): Path<String>) -> Response {
     respond(m.ui(&id).await.map(|html| json!({"html":html})))
+}
+async fn asset(
+    Extension(m): Extension<Arc<ModManager>>,
+    Path((id, path)): Path<(String, String)>,
+    request: axum::extract::Request,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let path = match m.asset(&id, &path).await {
+        Ok(path) => path,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let mut response = match ServeFile::new(path).oneshot(request).await {
+        Ok(response) => response.map(Body::new),
+        Err(error) => return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response(),
+    };
+    let headers = response.headers_mut();
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, header::HeaderValue::from_static("null"));
+    headers.insert(header::CACHE_CONTROL, header::HeaderValue::from_static("no-cache"));
+    headers.insert(header::X_CONTENT_TYPE_OPTIONS, header::HeaderValue::from_static("nosniff"));
+    response
 }
 async fn settings(Extension(m): Extension<Arc<ModManager>>, Path(id): Path<String>) -> Response {
     respond(m.sdk_call(&id, "settings.get".into(), json!({})).await)
