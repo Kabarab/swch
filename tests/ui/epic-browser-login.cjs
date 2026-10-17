@@ -1,4 +1,4 @@
-const {launchOptions}=require('./harness.cjs');
+const {launchOptions,emptyApi}=require('./harness.cjs');
 const assert = require('node:assert/strict');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
@@ -11,10 +11,12 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     page.on('pageerror', error => errors.push(error.message));
     const id = 'a'.repeat(64);
     let state = 'pending', library = 'syncing', legacy = true;
+    await page.route('https://**', route => route.abort());
     await page.route('**/api/**', async route => {
       const request = route.request();
       const url = new URL(request.url());
       const path = url.pathname;
+      if (path === '/api/i18n/selection') return route.fulfill({json:emptyApi(path)});
       if (request.method() === 'POST') writes.push({path, body: request.postDataJSON()});
       if (path.startsWith('/api/epic/auth/browser/')) {
         if (legacy) return route.fulfill({status: 405, body: ''});

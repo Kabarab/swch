@@ -19,5 +19,5 @@ jobs:
           node-version: '24'
       - uses: dtolnay/rust-toolchain@stable
       - run: node --test tests/mod-sdk.test.mjs tests/mod-jobs-sdk.test.mjs tests/mod-runtime.test.mjs
-      - run: cargo test --lib mods::
+      - run: 'cargo test --lib mods::'
       - run: cargo test --test mods_tests --test mod_jobs_tests --test mod_assets_tests --test mod_large_packages_tests --test mod_native_tools_tests

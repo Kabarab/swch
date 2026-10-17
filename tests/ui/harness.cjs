@@ -3,7 +3,7 @@ const root=path.resolve(__dirname,'../..');
 function emptyApi(endpoint) {
   // Existing feature regressions explicitly use Russian; first-run language
   // detection is exercised separately by the localization browser tests.
-  if(endpoint==='/api/i18n/selection')return {locale:'ru',preference:'ru',saved:true};
+  if(endpoint==='/api/i18n/selection')return {locale:'ru',preference:'ru',saved:true,revision:require('../../ui/lang/source.json').revision};
   if(endpoint==='/api/steam/library')return {games:[],accounts:[],warnings:[]};
   if(endpoint==='/api/epic/accounts')return {accounts:[]};
   if(endpoint==='/api/epic/library')return [];

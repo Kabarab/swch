@@ -212,7 +212,7 @@ async fn test_update_check_endpoint() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     println!("Response status: {}, body: {:?}", status, json);
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["current_version"], "1.2.0");
+    assert_eq!(json["current_version"], env!("CARGO_PKG_VERSION"));
     assert!(json["target_platform"].is_string());
 }
 
