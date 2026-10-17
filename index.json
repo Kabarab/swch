@@ -1,6 +1,35 @@
 {
   "schema": 1,
-  "mods": [],
+  "mods": [
+    {
+      "manifest": {
+        "id": "kabarab.sff",
+        "name": "SFF for SWCH",
+        "version": "1.0.1",
+        "api": "^1.1.0",
+        "platforms": [
+          "windows-x64",
+          "macos-arm64"
+        ],
+        "description": "Steam library, Lua/manifests, downloads, game tools and verified save backups integrated into SWCH. Windows game tools; portable features on macOS.",
+        "backend": "backend.mjs",
+        "ui": "index.html"
+      },
+      "sha256": "47a0a3c6b6e62666e36b0adb3940af4a2a72c4d05c4a048b6a0a6a01a8f69c8c",
+      "author": "Kabarab",
+      "repository": "Kabarab/swch-sff",
+      "repository_id": 1423565807,
+      "owner_id": 161946521,
+      "release": "https://github.com/Kabarab/swch-sff/releases/tag/v1.0.1",
+      "download_url": "https://github.com/Kabarab/swch-sff/releases/download/v1.0.1/mod.zip",
+      "downloads": 1,
+      "downloads_updated_at": "2026-10-17T17:37:33.500Z"
+    }
+  ],
   "blocked": [],
-  "history": {}
+  "history": {
+    "kabarab.sff": {
+      "1.0.1": "47a0a3c6b6e62666e36b0adb3940af4a2a72c4d05c4a048b6a0a6a01a8f69c8c"
+    }
+  }
 }
