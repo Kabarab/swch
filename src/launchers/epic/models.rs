@@ -355,6 +355,11 @@ pub struct SyncSummary {
 /// Comprehensive error type for Epic Games integration.
 #[derive(Error, Debug)]
 pub enum EpicError {
+    #[error("Обнови игру в Epic Games Launcher перед запуском из SWCH.")]
+    UpdateRequired,
+
+    #[error("Не удалось проверить версию игры. Открой Epic Games Launcher, проверь обновления и повтори запуск.")]
+    UpdateCheckUnavailable,
     #[error("HTTP request failed: {0}")]
     Reqwest(#[from] reqwest::Error),
 

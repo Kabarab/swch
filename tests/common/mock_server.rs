@@ -187,6 +187,10 @@ fn create_mock_router(
     counter: Arc<AtomicUsize>,
 ) -> Router {
     Router::new()
+        .route("/launcher/api/public/assets/:platform", get(|| async {
+            Json(serde_json::json!(["Sugar", "GameAlpha", "GameBeta"].map(|name|
+                serde_json::json!({"appName":name,"namespace":"fn","catalogItemId":format!("catalog_{name}"),"buildVersion":"1.0"}))))
+        }))
         .route("/account/api/oauth/token", post(handle_oauth_token))
         .route(
             "/account/api/public/account/:account_id/deviceAuth",

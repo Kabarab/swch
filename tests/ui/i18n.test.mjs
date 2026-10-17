@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import {createTranslator,validatePack,validateIndex,direction,intlLocale} from '../../ui/i18n-core.mjs';
+import {createTranslator,validatePack,validateIndex,direction,intlLocale,systemLocale} from '../../ui/i18n-core.mjs';
 import {MOD_PROMPT} from '../../ui/mod-prompt.mjs';
 const source={revision:'v1',messages:{'Библиотека':'Библиотека','Запуск {0} для {1}':'Запуск {0} для {1}','Цена:':'Цена:'}};
 const pack={schema:1,locale:'en',revision:'v1',machine:true,messages:{'Библиотека':'Library','Запуск {0} для {1}':'Launch {0} for {1}','Цена:':'Price:'}};
@@ -22,6 +22,16 @@ test('RTL scripts and legacy provider locale codes',()=>{
  for(const language of ['ar','iw','fa-AF','pa-Arab','bm-Nkoo','ckb'])assert.equal(direction(language),'rtl');
  for(const language of ['ru','de','ku','iu-Latn'])assert.equal(direction(language),'ltr');
  assert.equal(intlLocale('iw'),'he');assert.equal(intlLocale('jw'),'jv');assert.equal(intlLocale('zh-CN'),'zh-Hans');
+});
+test('system languages resolve regional tags, aliases and scripts with English fallback',()=>{
+ const languages=['en','ru','de','fr','fr-CA','zh-CN','zh-TW','iw','pt','pt-PT','sr'].map(locale=>({locale,sha256:'ready'}));
+ for(const [preferred,expected] of [
+  [['en-GB'],'en'],[['ru-RU'],'ru'],[['de-DE'],'de'],[['fr-CA'],'fr-CA'],
+  [['fr-BE'],'fr'],[['zh-HK'],'zh-TW'],[['zh-SG'],'zh-CN'],[['he-IL'],'iw'],
+  [['pt-BR'],'pt'],[['pt-PT'],'pt-PT'],[['sr-Latn'],'en'],[['de_DE'],'de'],
+  [['not/a/locale','ru-RU'],'ru'],[['xx-XX','de-DE'],'de'],[[],'en'],
+ ])assert.equal(systemLocale(preferred,languages),expected,preferred.join(','));
+ assert.equal(systemLocale(['de-DE'],[{locale:'de'},{locale:'en',sha256:'ready'}]),'en','Unpublished packs are unavailable');
 });
 test('remote catalogs cannot change revision or introduce path-like IDs and invalid digests',()=>{
  const index={schema:1,revision:'v1',languages:[{locale:'ru',name:'Russian',nativeName:'Русский'}]};

@@ -23,6 +23,28 @@ export function intlLocale(locale) {
   const aliases = {iw:'he',jw:'jv','zh-CN':'zh-Hans','zh-TW':'zh-Hant',tl:'fil',no:'nb','ber':'zgh'};
   try { return Intl.getCanonicalLocales(aliases[locale] || locale)[0]; } catch { return 'en'; }
 }
+export const DEFAULT_LOCALE = 'en';
+export const SYSTEM_LANGUAGE = 'system';
+// Match OS/browser tags to published pack IDs, including provider aliases and
+// regional/script variants. Never pick a different script just by language.
+export function systemLocale(preferences, languages) {
+  const available = languages.filter(entry => entry.locale === 'ru' || entry.sha256).map(entry => {
+    const locale = new Intl.Locale(intlLocale(entry.locale));
+    return {id:entry.locale, locale, expanded:locale.maximize()};
+  });
+  for (const value of preferences || []) {
+    let locale;
+    try { locale = new Intl.Locale(intlLocale(Intl.getCanonicalLocales(String(value).replace(/_/g,'-'))[0])); }
+    catch { continue; }
+    const exact = available.find(entry => entry.locale.toString().toLowerCase() === locale.toString().toLowerCase());
+    if (exact) return exact.id;
+    const expanded = locale.maximize();
+    const matches = available.filter(entry => entry.expanded.language === expanded.language && entry.expanded.script === expanded.script);
+    const regional = matches.find(entry => entry.expanded.region === expanded.region);
+    if (regional || matches.length) return (regional || matches[0]).id;
+  }
+  return DEFAULT_LOCALE;
+}
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function createTranslator(source, messages) {
   const patterns = Object.keys(source.messages).filter(k => /\{\d+\}/.test(k) && (k.replace(/\{\d+\}/g,'').length >= 6 || / (ч|мин|шт|ГБ|МБ|КБ)$/.test(k))).sort((a,b)=>b.length-a.length).map(key => {

@@ -34,8 +34,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         checkAndStartBackend()
     }
 
+    func defaultStartupHTML(_ original: String) -> String {
+        let language = Locale.preferredLanguages.first ?? "en"
+        let russian = language == "ru" || language.hasPrefix("ru-")
+        var html = original.replacingOccurrences(of: "<html>", with: russian ? "<html lang=\"ru\">" : "<html lang=\"en\">")
+        if !russian {
+            for (source, english) in [
+                ("Запуск SWCH...", "Starting SWCH..."),
+                ("Инициализация игрового пространства", "Initializing your game library"),
+                ("Не удалось запустить SWCH", "Unable to start SWCH"),
+                ("Серверный движок не ответил вовремя. Проверьте запуск приложения или повторите попытку.", "The backend did not respond in time. Check that the application is running or try again."),
+                ("Повторить попытку", "Try again")
+            ] { html = html.replacingOccurrences(of: source, with: english) }
+        }
+        return html
+    }
+
     // Read the fixed, escaped template persisted by the local backend.
-    func localizedStartupHTML(_ fallback: String, error: Bool) -> String {
+    func localizedStartupHTML(_ originalFallback: String, error: Bool) -> String {
+        let fallback = defaultStartupHTML(originalFallback)
         let directory: URL
         if let custom = ProcessInfo.processInfo.environment["SWCH_I18N_DIR"] {
             directory = URL(fileURLWithPath: custom)
@@ -152,6 +169,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let proc = Process()
         proc.executableURL = serverExe
         proc.environment = ProcessInfo.processInfo.environment
+        proc.environment?["SWCH_SYSTEM_LANGUAGES"] = Locale.preferredLanguages.joined(separator: ",")
 
         let webDir = bundleURL.appendingPathComponent("Contents/Resources/web")
         if FileManager.default.fileExists(atPath: webDir.path) {

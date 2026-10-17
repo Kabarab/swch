@@ -6,6 +6,7 @@ fn language_choices_require_full_compatible_text_and_preserve_slots() {
     let source = json!({"revision":"one","messages":{"Hello {0}":"Hello {0}","Name":"Name"}});
     let mut choice = Selection {
         locale: "ar".into(),
+        preference: None,
         revision: "one".into(),
         machine: true,
         messages: BTreeMap::from([
@@ -14,6 +15,11 @@ fn language_choices_require_full_compatible_text_and_preserve_slots() {
         ]),
     };
     assert!(validate(&choice, &source));
+    choice.preference = Some("system".into());
+    assert!(validate(&choice, &source));
+    choice.preference = Some("en".into());
+    assert!(!validate(&choice, &source));
+    choice.preference = None;
     choice.locale = "../ar".into();
     assert!(!validate(&choice, &source));
     choice.locale = "ar".into();
@@ -26,6 +32,7 @@ fn language_choices_require_full_compatible_text_and_preserve_slots() {
 fn native_templates_escape_translations_and_keep_retry_behavior() {
     let choice = Selection {
         locale: "ar".into(),
+        preference: None,
         revision: "one".into(),
         machine: true,
         messages: BTreeMap::from([(
@@ -40,6 +47,17 @@ fn native_templates_escape_translations_and_keep_retry_behavior() {
     assert!(windows.contains("window.chrome.webview.postMessage('retry')"));
     let mac = startup_html(&choice, true, false);
     assert!(mac.contains("http://127.0.0.1:4242/"));
+    let english = Selection {
+        locale: "en".into(),
+        preference: Some("system".into()),
+        revision: "one".into(),
+        machine: false,
+        messages: BTreeMap::new(),
+    };
+    let fallback = startup_html(&english, true, true);
+    assert!(fallback.contains("Unable to start SWCH"));
+    assert!(fallback.contains("Try again"));
+    assert!(!fallback.contains("Повторить"));
 }
 #[tokio::test]
 async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
@@ -73,6 +91,25 @@ async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
         .merge(swch::server::i18n::router())
         .with_state(state);
     std::env::remove_var("INDEX_HTML_PATH");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/i18n/selection")
+                .header("host", "127.0.0.1:4242")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let initial: serde_json::Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(initial["locale"], "en");
+    assert_eq!(initial["preference"], "system");
+    assert_eq!(initial["saved"], false);
+    assert!(initial["systemLanguages"]
+        .as_array()
+        .is_some_and(|languages| !languages.is_empty()));
     let body = json!({"locale":"ru","revision":source["revision"],"machine":false,"messages":source["messages"]});
     let make = |body: &serde_json::Value| {
         Request::builder()
@@ -122,6 +159,8 @@ async fn selection_is_persistent_atomic_shared_and_rejects_foreign_origins() {
     let result: serde_json::Value =
         serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
     assert_eq!(result["locale"], "ru");
+    assert_eq!(result["preference"], "ru");
+    assert_eq!(result["saved"], true);
     let response = app
         .clone()
         .oneshot(

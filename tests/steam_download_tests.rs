@@ -21,6 +21,19 @@ fn rates_and_eta_handle_pause_counter_reset_and_missing_samples() {
     assert_eq!(remaining_seconds(100, 200, Some(f64::NAN)), None);
 }
 
+#[test]
+fn unchanged_manifest_is_not_live_download_progress() {
+    use swch::launchers::steam::downloads::progress_stale;
+    for phase in ["downloading", "installing", "verifying"] {
+        assert!(progress_stale(phase, Some(1000), 1016));
+        assert!(progress_stale(phase, None, 1016));
+        assert!(!progress_stale(phase, Some(1015), 1016));
+    }
+    for phase in ["ready", "paused", "queued"] {
+        assert!(!progress_stale(phase, Some(1000), 2000));
+    }
+}
+
 fn watch_state(phase: &str) -> DownloadSnapshot {
     DownloadSnapshot {
         update: serde_json::from_value(serde_json::json!({"required":phase!="ready","phase":phase,"downloaded":0,"download_total":100,"staged":0,"stage_total":100})).unwrap(),

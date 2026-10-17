@@ -59,7 +59,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux keyring build dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-      - run: cargo test --test deadlock_hero_tests --test steam_game_stats_tests --test playtime_tests --test riot_profiles_tests --test i18n_tests
+      - run: cargo test --test deadlock_hero_tests --test steam_game_stats_tests --test playtime_tests --test riot_profiles_tests --test i18n_tests --test steam_download_tests --test epic_update_tests --test updater_tests
 
   build-macos:
     needs: [ui-regressions, game-stats-regressions, mod-regressions]

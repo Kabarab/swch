@@ -127,6 +127,11 @@ async fn test_update_status_endpoint() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["phase"], "idle");
     assert_eq!(json["progress_percent"], 0);
+    assert_eq!(json["downloaded_bytes"], 0);
+    assert!(json["total_bytes"].is_null());
+    assert!(json["download_percent"].is_null());
+    assert_eq!(json["bytes_per_second"], 0);
+    assert!(json["eta_seconds"].is_null());
 }
 
 #[test]

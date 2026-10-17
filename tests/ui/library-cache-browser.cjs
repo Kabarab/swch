@@ -5,6 +5,9 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
  const server=await staticServer(),browser=await chromium.launch(launchOptions);
  try {
   const context=await browser.newContext(),errors=[];
+  // This cache regression deliberately suspends every API, including language
+  // selection. Pin its assertions' locale independently of the system default.
+  await context.addInitScript(()=>localStorage.setItem('swch-language','ru'));
   let mode='fresh',release;
   let gate=Promise.resolve();
   const steam={games:[{id:'steam_730',launcher:'steam',app_id:'730',name:'Cached Counter-Strike',is_installed:true,account_id:'alice',access:'owned'}],accounts:[{id:'alice',launcher:'steam',username:'Alice',display_name:'Alice',access_token:'do-not-cache'}],warnings:[]};

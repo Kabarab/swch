@@ -4,10 +4,18 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
+use futures_util::{Stream, StreamExt, TryStreamExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 use tracing::{error, info};
+
+#[cfg(test)]
+#[path = "updater_download_tests.rs"]
+mod download_tests;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseAsset {
@@ -66,6 +74,157 @@ pub struct UpdateStatusResponse {
     pub message: String,
     pub error: Option<String>,
     pub target_version: Option<String>,
+    pub downloaded_bytes: u64,
+    pub total_bytes: Option<u64>,
+    pub download_percent: Option<f64>,
+    pub bytes_per_second: u64,
+    pub eta_seconds: Option<u64>,
+    pub download_attempt: u8,
+}
+
+const DOWNLOAD_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+// Both HTTP and curl feed this writer, so fallback downloads report the same
+// byte counts and cannot block the async runtime or wait forever without data.
+async fn write_download_stream<S, E>(
+    state: &Arc<Mutex<UpdateStatusResponse>>,
+    stream: S,
+    archive_path: &Path,
+    total: Option<u64>,
+) -> Result<(), String>
+where
+    S: Stream<Item = Result<Vec<u8>, E>>,
+    E: std::fmt::Display,
+{
+    let mut file = tokio::fs::File::create(archive_path).await
+        .map_err(|e| format!("Не удалось создать файл обновления: {e}"))?;
+    let total = total.filter(|&n| n > 0);
+    let mut downloaded = 0u64;
+    let mut sample_bytes = 0;
+    let mut sample_at = Instant::now();
+    let mut last_data = Instant::now();
+    let mut ticker = tokio::time::interval(Duration::from_millis(250));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    futures_util::pin_mut!(stream);
+    loop {
+        tokio::select! {
+            chunk = stream.next() => {
+                match chunk {
+                    Some(Ok(bytes)) if !bytes.is_empty() => {
+                        file.write_all(&bytes).await
+                            .map_err(|e| format!("Не удалось записать обновление на диск: {e}"))?;
+                        downloaded += bytes.len() as u64;
+                        last_data = Instant::now();
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(e)) => return Err(format!("Ошибка получения обновления: {e}")),
+                    None => break,
+                }
+            }
+            _ = ticker.tick() => {
+                let now = Instant::now();
+                let elapsed = now.duration_since(sample_at).as_secs_f64();
+                let speed = ((downloaded - sample_bytes) as f64 / elapsed.max(0.001)) as u64;
+                let waiting = now.duration_since(last_data);
+                report_download(state, downloaded, total, speed, waiting >= Duration::from_secs(3)).await;
+                sample_bytes = downloaded;
+                sample_at = now;
+                if waiting >= DOWNLOAD_IDLE_TIMEOUT {
+                    return Err("Сервер не передаёт данные уже 30 секунд. Проверьте соединение и повторите загрузку.".to_string());
+                }
+            }
+        }
+    }
+    file.flush().await.map_err(|e| format!("Не удалось сохранить обновление: {e}"))?;
+    // Never pass an empty or truncated archive on to the installer.
+    report_download(state, downloaded, total, 0, false).await;
+    if downloaded == 0 || total.is_some_and(|size| downloaded != size) {
+        return Err("Архив обновления загружен не полностью. Повторите загрузку.".to_string());
+    }
+    Ok(())
+}
+
+async fn report_download(
+    state: &Arc<Mutex<UpdateStatusResponse>>,
+    downloaded: u64,
+    total: Option<u64>,
+    speed: u64,
+    waiting: bool,
+) {
+    let mut st = state.lock().await;
+    st.downloaded_bytes = downloaded;
+    st.total_bytes = total;
+    st.download_percent = total.map(|size| (downloaded as f64 / size as f64 * 100.0).min(100.0));
+    st.progress_percent = st.download_percent.unwrap_or(0.0) as u8;
+    st.bytes_per_second = speed;
+    st.eta_seconds = total.filter(|_| speed > 0)
+        .map(|size| size.saturating_sub(downloaded).div_ceil(speed));
+    st.message = if waiting {
+        "Ожидание данных от сервера…".to_string()
+    } else if st.download_attempt > 1 {
+        "Скачивание обновления с GitHub… Повторная попытка".to_string()
+    } else {
+        "Скачивание обновления с GitHub…".to_string()
+    };
+}
+
+async fn download_archive(
+    state: &Arc<Mutex<UpdateStatusResponse>>,
+    client: &reqwest::Client,
+    url: &str,
+    archive_path: &Path,
+    total_hint: Option<u64>,
+) -> Result<(), String> {
+    let primary = async {
+        let response = tokio::time::timeout(Duration::from_secs(15),
+            client.get(url).timeout(Duration::from_secs(1800)).send()).await
+            .map_err(|_| "Сервер не ответил за 15 секунд".to_string())?
+            .map_err(|e| format!("Ошибка соединения: {e}"))?
+            .error_for_status().map_err(|e| format!("Ошибка HTTP: {e}"))?;
+        let total = response.content_length().or(total_hint);
+        report_download(state, 0, total.filter(|&n| n > 0), 0, false).await;
+        write_download_stream(state, response.bytes_stream().map_ok(|bytes| bytes.to_vec()), archive_path, total).await
+    }.await;
+    let primary_error = match primary {
+        Ok(()) => return Ok(()),
+        Err(e) => e,
+    };
+    info!("Update download retry using curl: {}", primary_error);
+    report_download(state, 0, total_hint.filter(|&n| n > 0), 0, false).await;
+    {
+        let mut st = state.lock().await;
+        st.download_attempt = 2;
+        st.message = "Повторное подключение к GitHub для загрузки…".to_string();
+    }
+    let mut command = tokio::process::Command::new("curl");
+    command.args(["--fail", "--location", "--silent", "--show-error", "--no-buffer",
+        "--connect-timeout", "15", "--max-time", "1800",
+        "--speed-time", "30", "--speed-limit", "1", "--url", url])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let mut child = command.spawn().map_err(|e| format!("{primary_error}. Не удалось запустить резервную загрузку: {e}"))?;
+    let stdout = child.stdout.take().ok_or("Не удалось прочитать резервную загрузку")?;
+    let stream = futures_util::stream::try_unfold(stdout, |mut reader| async move {
+        let mut bytes = vec![0; 64 * 1024];
+        let count = reader.read(&mut bytes).await?;
+        bytes.truncate(count);
+        Ok::<_, std::io::Error>(if count == 0 { None } else { Some((bytes, reader)) })
+    });
+    let result = write_download_stream(state, stream, archive_path, total_hint).await;
+    if let Err(e) = result {
+        let _ = child.kill().await;
+        return Err(format!("{primary_error}. Повторная загрузка: {e}"));
+    }
+    let status = tokio::time::timeout(Duration::from_secs(5), child.wait()).await
+        .map_err(|_| "Резервная загрузка не завершилась вовремя".to_string())?
+        .map_err(|e| format!("Ошибка резервной загрузки: {e}"))?;
+    if !status.success() {
+        return Err(format!("{primary_error}. Резервная загрузка завершилась с ошибкой ({status}). Повторите попытку."));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,6 +375,12 @@ impl UpdateManager {
                 message: "Готов к проверке обновлений".to_string(),
                 error: None,
                 target_version: None,
+                downloaded_bytes: 0,
+                total_bytes: None,
+                download_percent: None,
+                bytes_per_second: 0,
+                eta_seconds: None,
+                download_attempt: 0,
             })),
             client,
             default_repo,
@@ -250,7 +415,7 @@ impl UpdateManager {
             Err(err) => {
                 // Fallback to system curl
                 let mut cmd = std::process::Command::new("curl");
-                cmd.arg("-s").arg("-f")
+                cmd.args(["-s", "-f", "--connect-timeout", "15", "--max-time", "30"])
                     .arg("-H").arg("Accept: application/vnd.github.v3+json")
                     .arg("-H").arg(format!("User-Agent: swch/{}", env!("CARGO_PKG_VERSION")));
                 if let Some(t) = token {
@@ -331,33 +496,45 @@ impl UpdateManager {
             return Err("Обновление уже выполняется".to_string());
         }
 
-        let target_url = match download_url {
-            Some(u) => u,
+        let (target_url, total_hint, target_version) = match download_url {
+            Some(u) => (u, None, None),
             None => {
                 drop(st);
                 let check = self.check_for_updates(None, force).await?;
                 let url = check.download_url.ok_or_else(|| "Не найден подходящий файл обновления для вашей ОС".to_string())?;
                 st = self.state.lock().await;
-                url
+                if matches!(st.phase, UpdatePhase::Downloading | UpdatePhase::Extracting | UpdatePhase::Installing | UpdatePhase::Restarting) {
+                    return Err("Обновление уже выполняется".to_string());
+                }
+                (url, check.asset_size.filter(|&n| n > 0), Some(check.latest_version))
             }
         };
 
         st.phase = UpdatePhase::Downloading;
-        st.progress_percent = 5;
-        st.message = "Запуск скачивания обновления...".to_string();
+        st.progress_percent = 0;
+        st.message = "Подключение к GitHub для загрузки…".to_string();
         st.error = None;
+        st.target_version = target_version;
+        st.downloaded_bytes = 0;
+        st.total_bytes = total_hint;
+        st.download_percent = total_hint.map(|_| 0.0);
+        st.bytes_per_second = 0;
+        st.eta_seconds = None;
+        st.download_attempt = 1;
         drop(st);
 
         let state_clone = self.state.clone();
         let client_clone = self.client.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = Self::run_update_pipeline(state_clone.clone(), client_clone, target_url).await {
+            if let Err(e) = Self::run_update_pipeline(state_clone.clone(), client_clone, target_url, total_hint).await {
                 error!("Update pipeline failed: {}", e);
                 let mut st = state_clone.lock().await;
                 st.phase = UpdatePhase::Error;
                 st.error = Some(e.clone());
                 st.message = format!("Ошибка обновления: {}", e);
+                st.bytes_per_second = 0;
+                st.eta_seconds = None;
             }
         });
 
@@ -372,48 +549,23 @@ impl UpdateManager {
         state: Arc<Mutex<UpdateStatusResponse>>,
         client: reqwest::Client,
         url: String,
+        total_hint: Option<u64>,
     ) -> Result<(), String> {
         info!("Starting update download from: {}", url);
 
-        // 1. Download file
-        {
-            let mut st = state.lock().await;
-            st.phase = UpdatePhase::Downloading;
-            st.progress_percent = 15;
-            st.message = "Скачивание обновления с GitHub...".to_string();
-        }
-
+        // 1. Stream the archive to disk and publish actual download progress.
         let temp_dir = std::env::temp_dir().join(format!("swch_update_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Не удалось создать временную папку: {}", e))?;
         let archive_path = temp_dir.join("swch_package.zip");
 
-        let mut downloaded = false;
-        if let Ok(resp) = client.get(&url).send().await {
-            if resp.status().is_success() {
-                if let Ok(bytes) = resp.bytes().await {
-                    if std::fs::write(&archive_path, &bytes).is_ok() {
-                        downloaded = true;
-                    }
-                }
-            }
-        }
-
-        if !downloaded {
-            let curl_status = std::process::Command::new("curl")
-                .arg("-sL")
-                .arg("-o")
-                .arg(&archive_path)
-                .arg(&url)
-                .status();
-            if !curl_status.map(|s| s.success()).unwrap_or(false) || !archive_path.exists() {
-                return Err("Не удалось загрузить архив обновления (ошибка сети)".to_string());
-            }
-        }
+        download_archive(&state, &client, &url, &archive_path, total_hint).await?;
 
         {
             let mut st = state.lock().await;
             st.phase = UpdatePhase::Extracting;
-            st.progress_percent = 55;
+            st.progress_percent = 100;
+            st.bytes_per_second = 0;
+            st.eta_seconds = None;
             st.message = "Распаковка архива обновления...".to_string();
         }
 
@@ -477,7 +629,7 @@ impl UpdateManager {
         {
             let mut st = state.lock().await;
             st.phase = UpdatePhase::Installing;
-            st.progress_percent = 85;
+            st.progress_percent = 100;
             st.message = "Установка новой версии swch...".to_string();
         }
 

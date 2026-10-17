@@ -14,6 +14,8 @@ A desktop game library and account manager for Windows and macOS. Organize games
 - **Mods:** add themes, tabs, actions, and launcher integrations through ZIP packages or the mod catalog.
 - **Languages and updates:** select interface language packs and check for application updates from the settings screen.
 
+English is the app's base and fallback language. By default, SWCH selects your system language on startup; if a translation is unavailable, it uses English. You can choose a different language in settings, and that choice is preserved.
+
 ## Platform integrations
 
 | Platform | Main capabilities | Notes |

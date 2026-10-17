@@ -18,6 +18,8 @@ use std::{
 pub struct DownloadTelemetry {
     #[serde(default)]
     pub data_stale: bool,
+    #[serde(default)]
+    pub progress_stale: bool,
     pub download_bps: Option<f64>,
     pub stage_bps: Option<f64>,
     pub eta_seconds: Option<u64>,
@@ -108,6 +110,13 @@ pub fn remaining_seconds(done: u64, total: u64, rate: Option<f64>) -> Option<u64
     rate.filter(|r| r.is_finite() && *r > 0.0)
         .filter(|_| total > done)
         .map(|r| ((total - done) as f64 / r).ceil() as u64)
+}
+
+/// Steam can leave its manifest unchanged throughout an active transfer.
+/// Such counters are a checkpoint, not a measurement of current progress.
+pub fn progress_stale(phase: &str, modified: Option<i64>, now: i64) -> bool {
+    matches!(phase, "downloading" | "installing" | "verifying")
+        && !modified.is_some_and(|stamp| (0..=15).contains(&(now - stamp)))
 }
 
 #[derive(Default)]
@@ -309,6 +318,9 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
                 "downloading" | "installing" | "verifying" | "preparing"
             );
             let mut telemetry = DownloadTelemetry::default();
+            telemetry.progress_stale = progress_stale(
+                &update.phase, modified, chrono::Utc::now().timestamp(),
+            );
             if active {
                 telemetry.steam_read_bps = read_bps;
                 telemetry.steam_write_bps = write_bps;
@@ -317,7 +329,8 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
                 }
                 if let (Some(previous), Some(seconds)) = (sampler.previous.get(id), elapsed) {
                     let prev = &previous.update;
-                    if prev.download_total == update.download_total
+                    if !telemetry.progress_stale
+                        && prev.download_total == update.download_total
                         && prev.stage_total == update.stage_total
                         && prev.phase != "ready"
                         && prev.phase != "paused"

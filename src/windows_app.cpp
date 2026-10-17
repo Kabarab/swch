@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 #include <functional>
 #include <string>
+#include <vector>
 #include "webview2/WebView2.h"
 #include "embedded_loader.h"
 #include "windows_startup.h"
@@ -181,8 +182,39 @@ static const wchar_t* kErrorHtml = LR"rawhtml(
 </html>
 )rawhtml";
 
+// Before the backend has saved a language, use the system display language
+// where a built-in translation exists, with English as the base language.
+static std::wstring DefaultStartupHtml(const wchar_t* original) {
+    ULONG count = 0, size = 0;
+    std::wstring language = L"en";
+    GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &size);
+    if (size > 1 && size <= 32768) {
+        std::vector<wchar_t> names(size);
+        if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, names.data(), &size)) language = names.data();
+    }
+    const bool russian = language == L"ru" || language.rfind(L"ru-", 0) == 0;
+    std::wstring html(original);
+    auto replace = [&](const std::wstring& from, const std::wstring& to) {
+        size_t offset = 0;
+        while ((offset = html.find(from, offset)) != std::wstring::npos) {
+            html.replace(offset, from.size(), to);
+            offset += to.size();
+        }
+    };
+    replace(L"<html>", russian ? L"<html lang=\"ru\">" : L"<html lang=\"en\">");
+    if (!russian) {
+        replace(L"Запуск SWCH...", L"Starting SWCH...");
+        replace(L"Инициализация игрового пространства", L"Initializing your game library");
+        replace(L"Не удалось запустить SWCH", L"Unable to start SWCH");
+        replace(L"Серверный движок не ответил вовремя. Проверьте запуск приложения или повторите попытку.", L"The backend did not respond in time. Check that the application is running or try again.");
+        replace(L"Повторить попытку", L"Try again");
+    }
+    return html;
+}
+
 // The backend writes these fixed, escaped templates when the language changes.
-static std::wstring LocalStartupHtml(const wchar_t* fallback, bool error) {
+static std::wstring LocalStartupHtml(const wchar_t* originalFallback, bool error) {
+    const std::wstring fallback = DefaultStartupHtml(originalFallback);
     wchar_t path[32768] = {};
     DWORD count = GetEnvironmentVariableW(L"SWCH_I18N_DIR", path, 32768);
     std::wstring directory;

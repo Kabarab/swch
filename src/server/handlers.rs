@@ -1509,6 +1509,9 @@ pub async fn launch_epic_game(
     };
 
     match epic_store.launch_game_with_options(options).await {
+        Err(e @ (EpicError::UpdateRequired | EpicError::UpdateCheckUnavailable)) => Err((
+            StatusCode::CONFLICT, Json(ErrorResponse { error: e.to_string() }),
+        )),
         Ok(result) => Ok(Json(LaunchGameResponse {
             status: "success",
             app_name: result.app_name,

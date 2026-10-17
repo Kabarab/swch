@@ -59,6 +59,7 @@ fn create_test_manifest(dir: &std::path::Path, app_name: &str) -> PathBuf {
     let manifest_json = format!(
         r#"{{
             "FormatVersion": 0,
+            "AppVersionString": "1.0",
             "AppName": "{}",
             "CatalogItemId": "catalog_{}",
             "CatalogNamespace": "fn",

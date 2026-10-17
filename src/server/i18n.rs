@@ -12,9 +12,93 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[derive(Deserialize, Serialize)]
 pub struct Selection {
     pub locale: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preference: Option<String>,
     pub revision: String,
     pub machine: bool,
     pub messages: BTreeMap<String, String>,
+}
+
+/// Read display-language preferences rather than numeric/date region settings.
+pub fn system_languages() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetUserPreferredUILanguages(
+                flags: u32,
+                count: *mut u32,
+                buffer: *mut u16,
+                size: *mut u32,
+            ) -> i32;
+        }
+        let (mut count, mut size) = (0, 0);
+        unsafe {
+            GetUserPreferredUILanguages(8, &mut count, std::ptr::null_mut(), &mut size);
+        }
+        if (2..=32768).contains(&size) {
+            let mut buffer = vec![0u16; size as usize];
+            if unsafe { GetUserPreferredUILanguages(8, &mut count, buffer.as_mut_ptr(), &mut size) }
+                != 0
+            {
+                let languages: Vec<_> = buffer
+                    .split(|c| *c == 0)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from_utf16_lossy)
+                    .filter(|s| valid_locale(s))
+                    .collect();
+                if !languages.is_empty() {
+                    return languages;
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // The native launcher passes Foundation's ordered preferred languages.
+        if let Ok(languages) = std::env::var("SWCH_SYSTEM_LANGUAGES") {
+            let languages: Vec<_> = languages
+                .split(',')
+                .filter(|s| valid_locale(s))
+                .map(str::to_owned)
+                .collect();
+            if !languages.is_empty() {
+                return languages;
+            }
+        }
+        if let Ok(output) = std::process::Command::new("/usr/bin/defaults")
+            .args(["read", "-g", "AppleLanguages"])
+            .output()
+        {
+            if output.status.success() {
+                let languages: Vec<_> = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .map(|line| {
+                        line.trim()
+                            .trim_matches(|c: char| matches!(c, '"' | ',' | '(' | ')'))
+                    })
+                    .filter(|s| valid_locale(s))
+                    .map(str::to_owned)
+                    .collect();
+                if !languages.is_empty() {
+                    return languages;
+                }
+            }
+        }
+    }
+    for variable in ["LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"] {
+        if let Ok(value) = std::env::var(variable) {
+            let languages: Vec<_> = value
+                .split(':')
+                .map(|s| s.split(['.', '@']).next().unwrap_or("").replace('_', "-"))
+                .filter(|s| valid_locale(s))
+                .collect();
+            if !languages.is_empty() {
+                return languages;
+            }
+        }
+    }
+    vec!["en".into()]
 }
 pub fn directory() -> PathBuf {
     std::env::var_os("SWCH_I18N_DIR")
@@ -52,8 +136,16 @@ fn snapshot() -> Option<PathBuf> {
 async fn selection() -> Json<Value> {
     let value = snapshot()
         .and_then(|dir| std::fs::read(dir.join("selection.json")).ok())
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-    Json(value.unwrap_or_else(|| json!({"locale":"ru"})))
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .filter(|value| value["locale"].as_str().is_some_and(valid_locale));
+    let saved = value.is_some();
+    let mut value = value.unwrap_or_else(|| json!({"locale":"en","preference":"system"}));
+    if value["preference"].as_str().is_none() {
+        value["preference"] = value["locale"].clone();
+    }
+    value["saved"] = json!(saved);
+    value["systemLanguages"] = json!(system_languages());
+    Json(value)
 }
 async fn pack(Path(locale): Path<String>) -> Result<Json<Value>, StatusCode> {
     if !valid_locale(&locale) {
@@ -98,6 +190,10 @@ pub fn validate(selection: &Selection, source: &Value) -> bool {
         return false;
     };
     valid_locale(&selection.locale)
+        && selection
+            .preference
+            .as_deref()
+            .is_none_or(|p| p == "system" || p == selection.locale)
         && source["revision"].as_str() == Some(selection.revision.as_str())
         && selection.messages.len() == messages.len()
         && messages.keys().all(|key| {
@@ -113,7 +209,14 @@ pub fn startup_html(selection: &Selection, error: bool, windows: bool) -> String
                 .messages
                 .get(key)
                 .map(String::as_str)
-                .unwrap_or(key),
+                .unwrap_or_else(|| match key {
+                    "Не удалось запустить SWCH" => "Unable to start SWCH",
+                    "Запуск SWCH..." => "Starting SWCH...",
+                    "Серверный движок не ответил вовремя. Проверьте запуск приложения или повторите попытку." => "The backend did not respond in time. Check that the application is running or try again.",
+                    "Инициализация игрового пространства" => "Initializing your game library",
+                    "Повторить попытку" => "Try again",
+                    _ => key,
+                }),
         )
     };
     let title = text(if error {
@@ -189,7 +292,9 @@ async fn save(
         }
         crate::storage::atomic::atomic_write(
             dir.join("selection.json"),
-            serde_json::to_vec(&json!({"locale":choice.locale,"revision":choice.revision}))?,
+            serde_json::to_vec(
+                &json!({"locale":choice.locale,"preference":choice.preference.as_deref().unwrap_or(&choice.locale),"revision":choice.revision}),
+            )?,
         )?;
         std::fs::create_dir_all(root.join("packs"))?;
         crate::storage::atomic::atomic_write(

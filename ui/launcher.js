@@ -1221,7 +1221,7 @@ function renderAccounts() {
  const groups=accountPlatforms.filter(p=>visible.some(a=>a.launcher===p));
  $('accounts-view').innerHTML=`
   <div class="accounts-toolbar"><div class="account-platform-tabs" aria-label="Фильтр аккаунтов">${['all',...accountPlatforms.filter(p=>accounts.some(a=>a.launcher===p))].map(p=>`<button data-platform="${p}" class="${p===platform?'selected':''}" aria-pressed="${p===platform}">${p==='all'?'Все':platformLogo(p)+esc(platformName(p))}<span>${p==='all'?accounts.length:accounts.filter(a=>a.launcher===p).length}</span></button>`).join('')}</div><label class="search account-search">${icon('search')}<input id="account-search-input" type="search" placeholder="Найти аккаунт" aria-label="Найти аккаунт" value="${esc(accountSearch)}"></label></div>
-  <div class="accounts-list-heading"><span>${visible.length} аккаунтов · ${visible.filter(a=>a.is_active).length} активных</span><button class="primary" data-action="connect" ${['ubisoft','gog'].includes(platform)?`data-connect-tab="${platform}"`:''}>${icon('plus')}Добавить аккаунт</button></div>
+  <div class="accounts-list-heading"><span>${visible.length} аккаунтов · ${visible.filter(a=>a.is_active).length} активных</span><button class="primary" data-action="connect" ${PLATFORMS[platform]&&!isModPlatform(platform)?`data-connect-tab="${platform}"`:''}>${icon('plus')}Добавить аккаунт</button></div>
   ${visible.length?groups.map(p=>`<section class="account-platform-group" aria-label="Аккаунты ${esc(platformName(p))}"><div class="account-group-heading">${platformLogo(p)}<h2>${esc(platformName(p))}</h2><span>${visible.filter(a=>a.launcher===p).length}</span></div><div class="account-grid account-list">${visible.filter(a=>a.launcher===p).map(renderCompactAccount).join('')}</div></section>`).join(''):empty(platform==='all'?'Все аккаунты — под рукой':'Нет аккаунтов '+platformName(platform),'Добавь аккаунт, чтобы выбирать профиль для игры.','connect','Подключить аккаунт')}
   <p id="accounts-no-results" class="accounts-no-results" hidden>Аккаунты не найдены. Попробуй другое имя или платформу.</p>
   <p class="accounts-hint">${icon('game')}Статистика, ранг и время в игре — в карточке игры для выбранного аккаунта.</p>
@@ -1664,20 +1664,49 @@ async function prepareUbisoftLogin() {
 function switchConnectTab(tabName) {
   const tabs = document.querySelectorAll('#connect-dialog .connect-tab-btn');
   const panes = document.querySelectorAll('#connect-dialog .connect-tab-pane');
+  if(![...tabs].some(btn=>btn.dataset.tab===tabName))tabName='steam';
   tabs.forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
-    if(btn.dataset.tab===tabName)requestAnimationFrame(()=>btn.scrollIntoView({block:'nearest',inline:'nearest'}));
+    const selected=btn.dataset.tab===tabName;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('role','tab');
+    btn.id='connect-tab-'+btn.dataset.tab;
+    btn.setAttribute('aria-controls','connect-pane-'+btn.dataset.tab);
+    btn.setAttribute('aria-selected',String(selected));
+    btn.tabIndex=selected?0:-1;
   });
   panes.forEach(pane => {
-    pane.classList.toggle('active', pane.dataset.pane === tabName);
+    const selected=pane.dataset.pane===tabName;
+    pane.classList.toggle('active', selected);
+    pane.id='connect-pane-'+pane.dataset.pane;
+    pane.setAttribute('role','tabpanel');
+    pane.setAttribute('aria-labelledby','connect-tab-'+pane.dataset.pane);
+    pane.tabIndex=0;
+    pane.hidden=!selected;
   });
+  $('connect-platform-select').value=tabName;
+  document.querySelector('#connect-dialog .connect-tabs-content').scrollTop=0;
   if(tabName==='ubisoft')void fillUbisoftAccountName();
 }
+
+const connectNavigation=document.querySelector('#connect-dialog .connect-tabs-nav');
+connectNavigation.setAttribute('role','tablist');
+connectNavigation.setAttribute('aria-orientation','vertical');
+connectNavigation.addEventListener('keydown',event=>{
+  const tabs=[...connectNavigation.querySelectorAll('.connect-tab-btn')];
+  const index=tabs.indexOf(event.target);
+  if(index<0||!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
+  event.preventDefault();
+  const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowDown'?1:-1)+tabs.length)%tabs.length;
+  switchConnectTab(tabs[next].dataset.tab);
+  tabs[next].focus();
+});
+$('connect-platform-select').addEventListener('change',event=>switchConnectTab(event.target.value));
 
 async function connect(defaultTab = 'steam') {
   if(demo) {toast('В демо подключение отключено. Для реальных аккаунтов открой обычную библиотеку.');return;}
   if (!await cancelEpicBrowserLogin()) return;
   renderSteamConnect();
+  $('steam-scan-status').textContent='';
   updateConnectTabBadges();
   switchConnectTab(defaultTab);
   $('login-error').textContent='';$('oauth-code-input').value='';$('epic-auth-link').removeAttribute('href');$('connect-dialog').showModal();
@@ -1897,7 +1926,7 @@ function downloadProgress(g){
  if(!u)return {percent:null,done:0,total:0,stage:false};
  const stage=['installing','verifying'].includes(u.phase);
  const done=Number(stage?u.staged:u.downloaded)||0,total=Number(stage?u.stage_total:u.download_total)||0;
- return {percent:total>0&&!(stage&&done===0)?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
+ return {percent:!u.telemetry?.progress_stale&&total>0&&!((stage||u.phase==='downloading')&&done===0)?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
 }
 function coverProgress(g){
  const u=downloadState(g),p=downloadProgress(g);
@@ -1923,9 +1952,9 @@ function downloadEta(g){
 function downloadMetrics(g,compact=false){
  const u=downloadState(g),t=u?.telemetry||{},p=downloadProgress(g);
  const clientRate=!(t.download_bps>0)&&Number.isFinite(t.steam_download_bps);
- const rate=clientRate?t.steam_download_bps:t.download_bps;
+ const rate=clientRate?t.steam_download_bps:t.progress_stale||t.download_bps===0?null:t.download_bps;
  const rateLabel=clientRate?'Скачивание Steam':'Скачивание';
- if(compact)return `<div class="card-download" role="status"><div><strong>${p.percent==null?'—':format.format(p.percent)+'%'}</strong><span>${downloadBytes(p.done)} / ${p.total>0?downloadBytes(p.total):'—'}${p.stage?' на диске':''}</span></div><small>${rateLabel}: ${downloadRate(rate)} · ${downloadEta(g)}</small><small>Диск Steam: ↓ ${downloadRate(t.steam_read_bps)} · ↑ ${downloadRate(t.steam_write_bps)}</small>${downloadsStale?'<small class="error-text">Связь со Steam потеряна. Показаны последние данные.</small>':''}</div>`;
+ if(compact)return `<div class="card-download" role="status"><div><strong>${p.percent==null?'—':format.format(p.percent)+'%'}</strong><span>${p.percent==null?'—':downloadBytes(p.done)} / ${p.total>0?downloadBytes(p.total):'—'}${p.stage?' на диске':''}</span></div><small>${rateLabel}: ${downloadRate(rate)} · ${downloadEta(g)}</small><small>Диск Steam: ↓ ${downloadRate(t.steam_read_bps)} · ↑ ${downloadRate(t.steam_write_bps)}</small>${downloadsStale?'<small class="error-text">Связь со Steam потеряна. Показаны последние данные.</small>':''}</div>`;
  return `<dl class="download-metrics"><div><dt>${rateLabel}</dt><dd>${downloadRate(rate)}</dd></div><div><dt>${p.stage?'Осталось на установку':'Осталось на скачивание'}</dt><dd>${downloadEta(g)}</dd></div><div><dt>Чтение диска · Steam</dt><dd>${downloadRate(t.steam_read_bps)}</dd></div><div><dt>Запись диска · Steam</dt><dd>${downloadRate(t.steam_write_bps)}</dd></div></dl>`;
 }
 function playLabel(g){if(g.launcher==='gog')return !g.is_installed?'Не установлена':!gogStatus?.launch_supported?'Запуск на Windows':!gogStatus?.client_installed?'Нужен GALAXY':'Играть';if(g.launcher==='riot')return !riotStatus?.client_installed?'Нужен Riot Client':g.is_installed?'Играть':'Установить / открыть';if(g.launcher==='roblox')return 'Играть в Roblox';if(g.launcher==='minecraft')return g.id.startsWith('minecraft_server_') ? 'Войти на сервер' : 'Играть в Minecraft';return downloadState(g)?.phase==='requested'?'Ожидаем Steam':downloadInProgress(g)&&g.update?.phase!=='paused'?'Играть после обновления':g.update?.required?'Обновить и играть':g.is_installed?'Играть':'Не установлена';}
@@ -1936,7 +1965,7 @@ function renderUpdate(g){
  const launchInfo=intent?`<div class="launch-after-update"><small>${intent.status==='failed'?'Не удалось повторить запуск. Нажми «Играть» ещё раз.':intent.status==='watching'?'Steam проверяет обновления и запуск игры.':'Игра запустится после обновления. SWCH отслеживает завершение.'}</small><button class="secondary" data-action="cancel-steam-launch" data-game="${esc(gameKey(g))}">Отменить запуск</button></div>`:'';
  if(!u||u.phase==='ready')return `<p class="muted small-text">Статус обновления: ${u?'по локальным данным Steam игра готова':'нет локальных данных'}. Новую версию проверяет клиент Steam.</p>${launchInfo}`;
  const {percent:progress,done,total,stage}=downloadProgress(g);
- return `<section class="download-status" role="status"><strong>${esc(gameState(g))}</strong>${progress!=null?`<progress max="100" value="${progress}"></progress><span>${format.format(progress)}% · ${downloadBytes(done)} / ${downloadBytes(total)}${stage?' на диске':''}</span>`:`<progress max="100" aria-label="${esc(gameState(g))}"></progress><p>${stage?'Steam применяет файлы. Точный процент пока недоступен.':u.phase==='requested'?'Проверяем запуск и обновления в Steam…':'Ожидаем данные о размере загрузки от Steam.'}</p>`}${downloadMetrics(g)}${launchInfo}<button class="secondary" data-action="update-game" data-game="${esc(gameKey(g))}" ${busy||u.phase==='requested'?'disabled':''}>${u.phase==='paused'?'Продолжить обновление':'Обновить без запуска игры'}</button>${downloadsStale?'<small class="error-text">Не удалось получить свежий прогресс. Показаны последние данные.</small>':''}<small>Время приблизительное; после скачивания Steam может продолжить установку. Чтение и запись относятся ко всему клиенту Steam. Steam может запросить вход или подтверждение.</small></section>`;
+ return `<section class="download-status" role="status"><strong>${esc(gameState(g))}</strong>${progress!=null?`<progress max="100" value="${progress}"></progress><span>${format.format(progress)}% · ${downloadBytes(done)} / ${downloadBytes(total)}${stage?' на диске':''}</span>`:`<progress max="100" aria-label="${esc(gameState(g))}"></progress><p>${stage?'Steam применяет файлы. Точный процент пока недоступен.':u.phase==='requested'?'Проверяем запуск и обновления в Steam…':u.phase==='downloading'?'Steam скачивает игру, но ещё не обновил счётчик загруженных байтов. Точный процент пока недоступен.':'Ожидаем данные о размере загрузки от Steam.'}</p>`}${downloadMetrics(g)}${launchInfo}<button class="secondary" data-action="update-game" data-game="${esc(gameKey(g))}" ${busy||u.phase==='requested'?'disabled':''}>${u.phase==='paused'?'Продолжить обновление':'Обновить без запуска игры'}</button>${downloadsStale?'<small class="error-text">Не удалось получить свежий прогресс. Показаны последние данные.</small>':''}<small>Время приблизительное; после скачивания Steam может продолжить установку. Чтение и запись относятся ко всему клиенту Steam. Steam может запросить вход или подтверждение.</small></section>`;
 }
 let launchWarningResolver = null;
 function confirmLaunchWithBan(g, a) {
@@ -2079,7 +2108,7 @@ async function cancelSteamLaunch(key){
  document.addEventListener('click',async e=>{
   if(e.target.id==='custom-accent-color'){updateCustomAccentColor(e.target.value);return;}
   const b=e.target.closest('button');if(!b)return;
-  if(b.hasAttribute('data-close')){const dialog=b.closest('dialog');if(dialog.id==='connect-dialog'&&!await cancelUbisoftAutoLogin())return;dialog.close();return;}
+  if(b.hasAttribute('data-close')||b.dataset.action==='finish-connect'){const dialog=b.closest('dialog');if(dialog.id==='connect-dialog'&&!await cancelUbisoftAutoLogin())return;dialog.close();return;}
   if(b.dataset.tab){
     switchConnectTab(b.dataset.tab);
     return;
@@ -2177,6 +2206,22 @@ async function cancelSteamLaunch(key){
   }
   if(b.dataset.filter){installed=b.dataset.filter;render();return;}
   const action=b.dataset.action,key=b.dataset.game;
+  if(action==='scan-steam-accounts'){
+    if(busy||demo)return;
+    busy=true;
+    b.disabled=true;
+    $('steam-scan-status').textContent='Ищем сохранённые аккаунты…';
+    try{
+      const data=await api('/api/steam/library');
+      applySteam(data);
+      persistLibraryCache();
+      renderSteamConnect();
+      updateConnectTabBadges();
+      $('steam-scan-status').textContent=data.warnings?.length?data.warnings.join(' '):accounts.some(a=>a.launcher==='steam')?'Поиск завершён. Найденные профили доступны в разделе «Аккаунты».':'Аккаунты не найдены. Войди в Steam с «Запомнить меня» и повтори поиск.';
+    }catch(error){$('steam-scan-status').textContent=error.message;}
+    finally{busy=false;b.disabled=false;render();}
+    return;
+  }
   if(action==='reset-account-filter'){platform='all';render();return;}
   if(action==='account-games'){
  const account=accounts.find(a=>a.id===b.dataset.account);if(!account)return;
@@ -2372,7 +2417,7 @@ async function cancelSteamLaunch(key){
   }
  if(action==='styles'||action==='settings'){showStyles();return;}
  if(action==='refresh'){if(platform==='gog')await syncGog(gogAccountFilter==='all'?null:gogAccountFilter);else await refresh(true);}
- if(action==='connect'){await connect(b.dataset.connectTab||b.dataset.tab||(platform==='gog'?'gog':'steam'));return;}
+ if(action==='connect'){await connect(b.dataset.connectTab||b.dataset.tab||(PLATFORMS[platform]&&!isModPlatform(platform)?platform:'steam'));return;}
  if(action==='demo'){const u=new URL(location.href);u.searchParams.set('demo','1');location.href=u.href;}
  if(action==='reset'){gogAccountFilter='all';platform='all';installed='all';steamAccountFilter='all';steamAccessFilter='all';query='';page='library';$('search-input').value='';render();}
  if(action==='open-game'||action==='select-game'){
@@ -3421,6 +3466,10 @@ function renderSteamConnect() {
  const list=accounts.filter(a=>a.launcher==='steam');
  $('steam-sync-account').innerHTML=list.length?list.map(a=>`<option value="${esc(a.id)}" ${a.is_active?'selected':''}>${esc(a.display_name||a.username)}</option>`).join(''):'<option value="">Сначала войди в Steam и обнови библиотеку</option>';
  $('steam-api-key').value='';$('steam-access-token').value='';$('steam-sync-error').textContent='';
+ $('steam-status-dot').className='status-indicator-dot '+(list.length?'online':'');
+ $('steam-status-desc').textContent=list.length?`Подключено аккаунтов: ${list.length}. Можно добавить ещё один или обновить игры.`:'Пока нет подключённых аккаунтов. Начни со входа в Steam.';
+ $('steam-sync-account').disabled=!list.length;
+ $('steam-sync-form').querySelector('button[type="submit"]').disabled=!list.length;
 }
 function accountAvatar(a) {
  const src=a.launcher==='steam'&&!demo?`/api/steam/avatar?account_id=${encodeURIComponent(a.id)}`:safeImage(a.headshot_url || a.avatar_url || a.avatar);
@@ -4481,7 +4530,7 @@ async function checkForUpdates(manual = false) {
 
     if (data.update_available) {
       if (indicator) indicator.hidden = false;
-      if (panel) panel.style.display = 'flex';
+      if (panel) panel.style.display = updatePollingActive ? 'none' : 'flex';
       if (card) card.classList.add('has-update');
 
       if ($('update-new-version')) $('update-new-version').textContent = `v${data.latest_version}`;
@@ -4529,14 +4578,12 @@ async function checkForUpdates(manual = false) {
 async function applyUpdate() {
   const btn = $('btn-apply-update');
   const progressPanel = $('update-progress-panel');
-  const progressBar = $('update-progress-bar');
-  const progressLabel = $('update-progress-label');
-  const progressPercent = $('update-progress-percent');
   const availablePanel = $('update-available-panel');
 
   if (btn) btn.disabled = true;
   if (availablePanel) availablePanel.style.display = 'none';
   if (progressPanel) progressPanel.style.display = 'flex';
+  renderUpdateStatus({phase:'checking',message:'Проверка обновления перед загрузкой…'});
 
   try {
     const res = await fetch('/api/update/apply', {
@@ -4553,45 +4600,101 @@ async function applyUpdate() {
     startUpdateStatusPolling();
   } catch (err) {
     toast('Ошибка: ' + err.message);
-    if (progressLabel) progressLabel.textContent = 'Ошибка: ' + err.message;
+    renderUpdateStatus({phase:'error',message:'Ошибка: ' + err.message});
     if (btn) btn.disabled = false;
     if (availablePanel) availablePanel.style.display = 'flex';
+  }
+}
+
+function renderUpdateStatus(status) {
+  const bar = $('update-progress-bar'), track = $('update-progress-track');
+  const percent = $('update-progress-percent'), label = $('update-progress-label');
+  const details = $('update-progress-details');
+  const downloading = status.phase === 'downloading';
+  const known = downloading && Number.isFinite(status.download_percent);
+  const processing = ['extracting','installing','restarting'].includes(status.phase);
+  const value = Math.max(0, Math.min(100, Number(status.download_percent) || 0));
+  if (bar) bar.style.width = `${processing ? 100 : value}%`;
+  if (track) {
+    track.classList.toggle('indeterminate', status.phase === 'checking' || (downloading && !known));
+    track.classList.toggle('failed', status.phase === 'error');
+    track.setAttribute('aria-label', status.message || 'Обновление SWCH');
+    if (known) track.setAttribute('aria-valuenow', String(value));
+    else track.removeAttribute('aria-valuenow');
+  }
+  const stage = {checking:'Проверка',extracting:'Распаковка',installing:'Установка',restarting:'Перезапуск',error:'Ошибка'};
+  if (percent) percent.textContent = known ? `${value.toLocaleString('ru-RU',{maximumFractionDigits:1})}%` : (stage[status.phase] || 'Загрузка');
+  if (label) label.textContent = status.message || 'Загрузка обновления…';
+  if (details) {
+    const parts = [];
+    const bytes = n => {
+      if (n < 1024) return `${n} Б`;
+      const unit = n < 1024 ** 2 ? 1 : n < 1024 ** 3 ? 2 : 3;
+      return `${(n / 1024 ** unit).toLocaleString('ru-RU',{maximumFractionDigits:1})} ${['Б','КиБ','МиБ','ГиБ'][unit]}`;
+    };
+    if (Number.isFinite(status.downloaded_bytes)) {
+      parts.push(status.total_bytes > 0 ? `${bytes(status.downloaded_bytes)} из ${bytes(status.total_bytes)}` : `${bytes(status.downloaded_bytes)} скачано`);
+      if (downloading && !status.total_bytes) parts.push('Размер файла не сообщён сервером');
+    }
+    if (downloading && status.bytes_per_second > 0) parts.push(`${bytes(status.bytes_per_second)}/с`);
+    if (downloading && status.eta_seconds > 0) {
+      const seconds = Math.ceil(status.eta_seconds);
+      parts.push(seconds < 60 ? `Осталось около ${seconds} с` : `Осталось около ${Math.ceil(seconds / 60)} мин`);
+    }
+    details.textContent = parts.join(' · ');
   }
 }
 
 function startUpdateStatusPolling() {
   if (updatePollingActive) return;
   updatePollingActive = true;
-
-  const timer = setInterval(async () => {
+  let failures = 0;
+  const poll = async () => {
     try {
-      const res = await fetch('/api/update/status');
-      if (!res.ok) return;
+      const res = await fetch('/api/update/status', {cache:'no-store',signal:AbortSignal.timeout(5000)});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const status = await res.json();
-
-      const progressBar = $('update-progress-bar');
-      const progressLabel = $('update-progress-label');
-      const progressPercent = $('update-progress-percent');
-
-      if (progressBar) progressBar.style.width = `${status.progress_percent}%`;
-      if (progressPercent) progressPercent.textContent = `${status.progress_percent}%`;
-      if (progressLabel) progressLabel.textContent = status.message;
+      failures = 0;
+      renderUpdateStatus(status);
 
       if (status.phase === 'restarting') {
-        clearInterval(timer);
         updatePollingActive = false;
         toast('Обновление установлено! Перезапуск SWCH...');
         pollForServerRestart();
       } else if (status.phase === 'error') {
-        clearInterval(timer);
         updatePollingActive = false;
         toast('Ошибка обновления: ' + (status.error || status.message));
         if ($('btn-apply-update')) $('btn-apply-update').disabled = false;
+        if ($('update-available-panel')) $('update-available-panel').style.display = 'flex';
+      } else if (status.phase === 'idle') {
+        updatePollingActive = false;
+        renderUpdateStatus({phase:'error',message:'Обновление прервано. Повторите загрузку.'});
+        if ($('btn-apply-update')) $('btn-apply-update').disabled = false;
+        if ($('update-available-panel')) $('update-available-panel').style.display = 'flex';
       }
     } catch {
-      // Server might already be restarting
+      if (++failures >= 2 && $('update-progress-label')) {
+        $('update-progress-label').textContent = 'Нет связи с SWCH. Ожидание восстановления соединения…';
+        if ($('update-progress-details')) $('update-progress-details').textContent = 'Текущее состояние загрузки недоступно';
+      }
     }
-  }, 500);
+    if (updatePollingActive) setTimeout(poll, 500);
+  };
+  void poll();
+}
+
+async function resumeUpdateStatus() {
+  try {
+    const res = await fetch('/api/update/status', {cache:'no-store',signal:AbortSignal.timeout(5000)});
+    if (!res.ok) return;
+    const status = await res.json();
+    if (updatePollingActive || !['downloading','extracting','installing','restarting'].includes(status.phase)) return;
+    if ($('update-progress-panel')) $('update-progress-panel').style.display = 'flex';
+    if ($('update-available-panel')) $('update-available-panel').style.display = 'none';
+    if ($('btn-apply-update')) $('btn-apply-update').disabled = true;
+    renderUpdateStatus(status);
+    startUpdateStatusPolling();
+  } catch { /* A later update attempt can reconnect. */ }
 }
 
 function pollForServerRestart() {
@@ -4616,6 +4719,7 @@ function pollForServerRestart() {
 
 $('btn-check-update')?.addEventListener('click', () => checkForUpdates(true));
 $('btn-apply-update')?.addEventListener('click', () => applyUpdate());
+if (!demo) void resumeUpdateStatus();
 
 
 document.addEventListener("swch-language-change",()=>{applyStyle();render();});

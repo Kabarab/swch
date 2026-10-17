@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-style="epic">
+<html lang="en" data-style="epic">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -24,12 +24,12 @@
       document.documentElement.classList.add('i18n-loading');
     }
   </script>
-  <link rel="stylesheet" href="/ui/launcher.css?v=ux-20261014-settings-switches">
+  <link rel="stylesheet" href="/ui/launcher.css?v=update-progress-20261015">
   <link rel="stylesheet" href="/ui/style.css">
-  <link rel="stylesheet" href="/ui/ux.css?v=ux-20261011-5">
-  <link rel="stylesheet" href="/ui/mods.css?v=mod-filters-1">
+  <link rel="stylesheet" href="/ui/ux.css?v=ux-20261016-ubisoft">
+  <link rel="stylesheet" href="/ui/mods.css?v=mod-covers-1">
   <link rel="stylesheet" href="/ui/i18n.css?v=1">
-  <script type="module" src="/ui/launcher.js?v=mod-filters-1"></script>
+  <script type="module" src="/ui/launcher.js?v=update-progress-20261015"></script>
 </head>
 <body>
 <div id="file-open-message">
@@ -229,9 +229,10 @@
             <span id="update-progress-label">Загрузка обновления...</span>
             <span id="update-progress-percent">0%</span>
           </div>
-          <div style="background:#2a2b30; height:6px; border-radius:3px; overflow:hidden;">
-            <div id="update-progress-bar" style="background:#22c55e; width:0%; height:100%; transition:width 0.2s ease;"></div>
+          <div id="update-progress-track" role="progressbar" aria-label="Загрузка обновления" aria-valuemin="0" aria-valuemax="100" style="background:#2a2b30; height:6px; border-radius:3px; overflow:hidden;">
+            <div id="update-progress-bar"></div>
           </div>
+          <small id="update-progress-details" class="muted" style="font-size:11px; overflow-wrap:anywhere;"></small>
         </div>
       </div>
     </section>
@@ -240,16 +241,31 @@
   </div>
   <p class="dialog-note"><i data-icon="check"></i>Все настройки сохраняются на этом устройстве.</p>
 </dialog>
-<dialog id="connect-dialog" aria-labelledby="connect-title">
+<dialog id="connect-dialog" aria-labelledby="connect-title" aria-describedby="connect-description">
   <div class="dialog-header">
     <div>
-      <h2 id="connect-title">Управление аккаунтами</h2>
-      <p class="muted">Единый хаб: переключение профилей, синхронизация и hot-swap сессий.</p>
+      <p class="connect-eyebrow">АККАУНТЫ SWCH</p>
+      <h2 id="connect-title">Добавить аккаунт</h2>
+      <p class="muted" id="connect-description">Выбери платформу и подключи свой профиль.</p>
     </div>
     <button class="icon-button" data-close aria-label="Закрыть"><i data-icon="close"></i></button>
   </div>
 
-  <nav class="connect-tabs-nav" aria-label="Лаунчеры">
+  <label class="connect-platform-picker">Платформа
+    <select id="connect-platform-select">
+      <option value="steam">Steam</option>
+      <option value="epic">Epic Games</option>
+      <option value="riot">Riot Games</option>
+      <option value="roblox">Roblox</option>
+      <option value="minecraft">Minecraft</option>
+      <option value="ubisoft">Ubisoft Connect</option>
+      <option value="gog">GOG GALAXY</option>
+      <option value="hoyoverse">HoYoverse</option>
+    </select>
+  </label>
+  <div class="connect-workspace">
+  <nav class="connect-tabs-nav" aria-label="Платформа аккаунта">
+    <p class="connect-nav-label">ПЛАТФОРМЫ</p>
     <button type="button" class="connect-tab-btn active" data-tab="steam">
       <span class="tab-label">Steam</span>
       <span class="tab-badge" id="steam-tab-badge">0</span>
@@ -355,31 +371,41 @@
     <!-- Steam Tab -->
     <div class="connect-tab-pane active" data-pane="steam">
       <div class="connect-status-card">
-        <span class="status-indicator-dot online"></span>
+        <span class="status-indicator-dot" id="steam-status-dot"></span>
         <div class="status-card-info">
-          <strong id="steam-status-title">Клиент Steam</strong>
-          <p class="muted small-text" id="steam-status-desc">Все найденные аккаунты сохраняются навсегда в базе данных swch.</p>
+          <strong id="steam-status-title">Аккаунты Steam</strong>
+          <p class="muted small-text" id="steam-status-desc">Сохранённые профили появятся после поиска на компьютере.</p>
         </div>
       </div>
-      <div class="connect-info-box">
-        <p class="small-text">💡 <strong>Как это работает:</strong> swch читает сохраненные на компьютере профили Steam и sentry-файлы (ssfn), позволяя переключаться между ними в один клик без повторного ввода паролей и подтверждений.</p>
-      </div>
+      <section class="connect-onboarding" aria-labelledby="steam-add-title">
+        <h3 id="steam-add-title">Подключи профиль из Steam</h3>
+        <p class="muted">SWCH найдёт аккаунты, в которые ты уже входил на этом компьютере.</p>
+        <ol class="connect-steps">
+          <li><span><strong>Войди в нужный аккаунт в Steam</strong><small>При входе включи «Запомнить меня».</small></span></li>
+          <li><span><strong>Нажми «Найти аккаунты»</strong><small>Профиль появится в SWCH для быстрого переключения.</small></span></li>
+        </ol>
+        <button class="primary" type="button" data-action="scan-steam-accounts"><i data-icon="refresh"></i>Найти аккаунты</button>
+        <p id="steam-scan-status" class="muted small-text" role="status" aria-live="polite"></p>
+      </section>
       <section class="steam-connect">
-        <h4>Синхронизация и Семейный доступ</h4>
+        <div class="connect-section-heading">
+          <h3>Библиотека и семейный доступ</h3>
+          <p class="muted small-text">Обнови игры уже подключённого аккаунта.</p>
+        </div>
         <form id="steam-sync-form">
           <label>Аккаунт
             <select id="steam-sync-account" required></select>
           </label>
-          <label>Steam Web API key
-            <input id="steam-api-key" type="password" autocomplete="off" placeholder="Ключ для собственной библиотеки (необязательно)">
-          </label>
-          <details>
-            <summary>Семейный доступ (Steam Families)</summary>
-            <label>Токен веб-сессии Steam
+          <details class="connect-advanced">
+            <summary>Дополнительные настройки <span>Необязательно</span></summary>
+            <label>Steam Web API key
+              <input id="steam-api-key" type="password" autocomplete="off" placeholder="Ключ для собственной библиотеки">
+            </label>
+            <label>Семейный доступ · токен веб-сессии Steam
               <input id="steam-access-token" type="password" autocomplete="off" placeholder="Токен доступа">
             </label>
+            <p class="muted small-text">Ключ и токен не сохраняются на сервере. Закрытые данные профиля могут быть недоступны без ключа.</p>
           </details>
-          <p class="muted small-text">Ключ и токен не сохраняются на сервере. Закрытые данные профиля могут быть недоступны без ключа.</p>
           <p class="error-text" id="steam-sync-error" role="alert"></p>
           <button class="primary" type="submit">Обновить игры и семейный доступ</button>
         </form>
@@ -511,6 +537,8 @@
       </section>
     </div>
   </div>
+  </div>
+  <div class="connect-footer"><span><i data-icon="check"></i>Подключение через выбранную платформу</span><button class="secondary" type="button" data-action="finish-connect">Готово</button></div>
 </dialog>
 <dialog id="roblox-place-dialog" aria-labelledby="roblox-place-title">
   <div class="dialog-header">

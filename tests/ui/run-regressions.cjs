@@ -2,10 +2,13 @@ const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../..');
 const jobs=[
+ ['tests/ui/connect-dialog-browser.cjs'],
+ ['tests/ui/update-progress-browser.cjs'],
  ['--test','tests/ui/library-cache.test.mjs'],
  ['tests/ui/library-cache-browser.cjs'],
  ['tests/ui/steam-download-cover.cjs'],
  ['--test','tests/ui/i18n.test.mjs'],
+ ['tests/ui/i18n-default-browser.cjs'],
  ['tests/ui/i18n-browser.cjs'],
  ['--test','tests/mod-sdk.test.mjs','tests/mod-jobs-sdk.test.mjs','tests/mod-runtime.test.mjs'],
  ['--test','tests/autoclaimer-mod.test.mjs'],

@@ -424,6 +424,8 @@ impl EpicClient {
                 "https://www.epicgames.com"
             } else if path.starts_with("/library/") && self.endpoints.account_base_url == EpicEndpoints::default().account_base_url {
                 "https://library-service.live.use1a.on.epicgames.com"
+            } else if path.starts_with("/launcher/") && self.endpoints.account_base_url == EpicEndpoints::default().account_base_url {
+                "https://launcher-public-service-prod06.ol.epicgames.com"
             } else if path.starts_with("/entitlement/") {
                 &self.endpoints.entitlement_base_url
             } else if path.starts_with("/catalog/") {
@@ -671,6 +673,32 @@ impl EpicClient {
             .await?;
 
         Self::parse_json(status, &text)
+    }
+
+    /// Compare the installed build with Epic's Live launcher assets before direct launch.
+    pub async fn check_installed_version(
+        &self,
+        access_token: &str,
+        manifest: &crate::parsers::epic_manifest::EpicManifestItem,
+    ) -> Result<(), EpicError> {
+        let local = manifest.app_version_string.as_deref().map(str::trim)
+            .filter(|version| !version.is_empty()).ok_or(EpicError::UpdateCheckUnavailable)?;
+        let platform = if cfg!(target_os = "macos") { "Mac" } else { "Windows" };
+        let headers = [(header::AUTHORIZATION.as_str(), format!("Bearer {access_token}"))];
+        let (status, text) = self.dispatch("GET",
+            &format!("/launcher/api/public/assets/{platform}?label=Live"), &headers, None)
+            .await.map_err(|_| EpicError::UpdateCheckUnavailable)?;
+        let assets: Vec<serde_json::Value> = Self::parse_json(status, &text)
+            .map_err(|_| EpicError::UpdateCheckUnavailable)?;
+        let remote = assets.iter().find(|asset|
+            asset["appName"].as_str() == Some(manifest.app_name.as_str())
+            && asset["namespace"].as_str() == Some(manifest.catalog_namespace.as_str())
+            && asset["catalogItemId"].as_str() == Some(manifest.catalog_item_id.as_str()))
+            .and_then(|asset| asset["buildVersion"].as_str())
+            .map(str::trim).filter(|version| !version.is_empty())
+            .ok_or(EpicError::UpdateCheckUnavailable)?;
+        if local != remote { return Err(EpicError::UpdateRequired); }
+        Ok(())
     }
 
     /// Retrieves a single-use exchange code (valid for 300s) for game CLI launching.

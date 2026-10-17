@@ -1052,10 +1052,6 @@ impl EpicAuthStore {
         // 2. Obtain Fresh Bearer Access Token
         let access_token = self.get_valid_access_token(&canonical_account_id).await?;
 
-        // 3. Obtain Single-Use Exchange Code (valid 300s)
-        let exchange_resp = self.client.get_exchange_code(&access_token).await?;
-        let exchange_code = exchange_resp.code;
-
         // 4. Resolve Game Metadata, Manifest, and Namespace
         let mut manifest_item: Option<EpicManifestItem> = None;
         for dir in resolve_default_manifest_dirs() {
@@ -1160,6 +1156,13 @@ impl EpicAuthStore {
             (ns, exe, work_dir)
         };
 
+        // Check the installed build before issuing a short-lived game login or spawning.
+        if !is_simulated {
+            let manifest = manifest_item.as_ref().ok_or(EpicError::UpdateCheckUnavailable)?;
+            self.client.check_installed_version(&access_token, manifest).await?;
+        }
+        let exchange_code = self.client.get_exchange_code(&access_token).await?.code;
+
         // 5. Construct CLI Launch Parameters
         let custom_args_slice = options.additional_args.as_deref();
         let raw_args = build_launch_parameters(
@@ -1249,7 +1252,6 @@ impl EpicAuthStore {
             .unwrap_or_else(|| account.username.clone());
 
         let access_token = self.get_valid_access_token(&account.id).await?;
-        let exchange = self.client.get_exchange_code(&access_token).await?;
 
         let manifest_dirs = resolve_default_manifest_dirs();
         let mut found_manifest: Option<EpicManifestItem> = None;
@@ -1273,6 +1275,9 @@ impl EpicAuthStore {
         let manifest = found_manifest.ok_or_else(|| {
             EpicError::Database(format!("Manifest not found for app '{}'", app_name))
         })?;
+
+        self.client.check_installed_version(&access_token, &manifest).await?;
+        let exchange = self.client.get_exchange_code(&access_token).await?;
 
         let cmd = crate::launchers::epic::launch::prepare_launch_command(
             &manifest,
