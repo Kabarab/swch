@@ -85,7 +85,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Synchronize native release versions
+        run: python scripts/sync-release-version.py
+
       - name: Build Backend (Rust Release)
+        # Cargo is the single version source for both native launchers.
         run: cargo build --release --bins
 
       - name: Build Native GUI Launcher (Swift)
@@ -153,6 +157,9 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      - name: Synchronize native release versions
+        run: python scripts/sync-release-version.py
 
       - name: Build Backend (Rust Release)
         run: cargo build --release --bins
