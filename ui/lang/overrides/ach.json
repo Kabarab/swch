@@ -1,0 +1,9 @@
+{
+  "DeviceAuth JSON serialization error: {0}": "Bal me keto DeviceAuth JSON: {0}",
+  "Epic API error ({0}): {1} (code: {2}, numeric: {3})": "Bal me Epic API ({0}): {1} (code: {2}, numeric: {3})",
+  "Rollback failed: {0}": "Dwoko cen obale: {0}",
+  "Лаунчер не найден (0 МБ ОЗУ)": "Launcher pe ki nongo (0 MB RAM)",
+  "Ошибка библиотеки GOG: {0}": "Bal me ot ma ki gwoko iye buk pa GOG: {0}",
+  "Ошибка файлов GOG: {0}": "Bal me karatac pa GOG: {0}",
+  "Ошибка файлов HoYoverse: {0}": "Bal me karatac pa HoYoverse: {0}"
+}

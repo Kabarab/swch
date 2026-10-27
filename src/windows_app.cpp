@@ -13,6 +13,7 @@
 #include "webview2/WebView2.h"
 #include "embedded_loader.h"
 #include "windows_startup.h"
+#include "windows_single_instance.h"
 #include "windows_resources.h"
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
@@ -25,7 +26,10 @@ DECLARE_HANDLE(DPI_AWARENESS_CONTEXT);
 #endif
 
 #define TIMER_HEALTH_ID 1001
+#define TIMER_KEEPALIVE_ID 1002
 #define MAX_HEALTH_RETRIES 50 // 50 * 200ms = 10 seconds
+#define WM_SERVER_START_FAILED (WM_USER + 1)
+#define WM_ENSURE_BACKEND (WM_USER + 2)
 
 using Microsoft::WRL::ComPtr;
 
@@ -341,15 +345,22 @@ DWORD WINAPI ServerWatcherThread(LPVOID lpParam) {
     }
 
     if (g_backendReady) {
-        // Backend was healthy and running, but exited (e.g. in-app updater restart)
-        PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        WCHAR exePath[MAX_PATH] = {};
+        GetModuleFileNameW(NULL, exePath, MAX_PATH);
+        PathRemoveFileSpecW(exePath);
+        WCHAR oldServerPath[MAX_PATH] = {};
+        PathCombineW(oldServerPath, exePath, L"swch-server.exe.old");
+        if (GetFileAttributesW(oldServerPath) != INVALID_FILE_ATTRIBUTES) {
+            // In-app updater replaced the server binary and scheduled a relaunch
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        } else {
+            // Backend stopped unexpectedly; ask UI thread to restart it
+            PostMessageW(hwnd, WM_ENSURE_BACKEND, 0, 0);
+        }
     } else {
         // Backend exited BEFORE becoming ready (startup failure, port blocked, crash).
-        // Do NOT close the window! Display the error screen so the user can see it.
-        KillTimer(hwnd, TIMER_HEALTH_ID);
-        if (g_webview) {
-            g_webview->NavigateToString(LocalStartupHtml(kErrorHtml, true).c_str());
-        }
+        // Do NOT close the window! Display the error screen on the UI thread.
+        PostMessageW(hwnd, WM_SERVER_START_FAILED, 0, 0);
     }
     return 0;
 }
@@ -508,6 +519,7 @@ void StartBackendAndPolling() {
 
     if (CheckBackendHealth()) {
         g_backendReady = true;
+        SetTimer(g_hWnd, TIMER_KEEPALIVE_ID, 3000, NULL);
         if (g_webview) {
             g_webview->Navigate(L"http://127.0.0.1:4242");
         }
@@ -537,6 +549,7 @@ void RetryLaunch() {
 
     if (CheckBackendHealth()) {
         g_backendReady = true;
+        SetTimer(g_hWnd, TIMER_KEEPALIVE_ID, 3000, NULL);
         if (g_webview) {
             g_webview->Navigate(L"http://127.0.0.1:4242");
         }
@@ -561,6 +574,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             if (CheckBackendHealth()) {
                 KillTimer(hwnd, TIMER_HEALTH_ID);
                 g_backendReady = true;
+                SetTimer(hwnd, TIMER_KEEPALIVE_ID, 3000, NULL);
                 if (g_webview) {
                     g_webview->Navigate(L"http://127.0.0.1:4242");
                 }
@@ -575,9 +589,59 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         }
+        if (wParam == TIMER_KEEPALIVE_ID) {
+            if (!g_isExiting && g_backendReady) {
+                bool needsRestart = false;
+                if (g_hServerProcess != NULL) {
+                    DWORD exitCode = 0;
+                    if (!GetExitCodeProcess(g_hServerProcess, &exitCode) || exitCode != STILL_ACTIVE) {
+                        CloseHandle(g_hServerProcess);
+                        g_hServerProcess = NULL;
+                        needsRestart = !CheckBackendHealth();
+                    }
+                } else {
+                    needsRestart = !CheckBackendHealth();
+                }
+                if (needsRestart) {
+                    LaunchServerProcess();
+                }
+            }
+            return 0;
+        }
         break;
 
+    case WM_ENSURE_BACKEND:
+        if (!g_isExiting) {
+            LaunchServerProcess();
+            if (!g_backendReady) {
+                if (CheckBackendHealth()) {
+                    KillTimer(hwnd, TIMER_HEALTH_ID);
+                    g_backendReady = true;
+                    SetTimer(hwnd, TIMER_KEEPALIVE_ID, 3000, NULL);
+                    if (g_webview) {
+                        g_webview->Navigate(L"http://127.0.0.1:4242");
+                    }
+                } else {
+                    g_retryCount = 0;
+                    SetTimer(hwnd, TIMER_HEALTH_ID, 200, NULL);
+                }
+            }
+        }
+        return 0;
+
+    case WM_SERVER_START_FAILED:
+        if (!g_isExiting && !g_backendReady) {
+            KillTimer(hwnd, TIMER_HEALTH_ID);
+            if (g_webview) {
+                g_webview->NavigateToString(LocalStartupHtml(kErrorHtml, true).c_str());
+            }
+        }
+        return 0;
+
     case WM_CLOSE:
+        g_isExiting = true;
+        KillTimer(hwnd, TIMER_HEALTH_ID);
+        KillTimer(hwnd, TIMER_KEEPALIVE_ID);
         CleanShutdownServer();
         DestroyWindow(hwnd);
         return 0;
@@ -601,6 +665,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     auto argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     const bool startMinimized = argv && swch_startup::HasMinimizedArgument(argc, argv);
     if (argv) LocalFree(argv);
+
+    swch_single_instance::InstanceLock singleInstance;
+    if (!singleInstance.IsFirstInstance()) {
+        HWND existingHwnd = swch_single_instance::WaitForExistingWindow();
+        if (existingHwnd) {
+            PostMessageW(existingHwnd, WM_ENSURE_BACKEND, 0, 0);
+            if (!startMinimized) {
+                swch_single_instance::ActivateExistingWindow(existingHwnd);
+            }
+        }
+        return 0;
+    }
 
     // Normalize working directory to application directory
     WCHAR appExePath[MAX_PATH];

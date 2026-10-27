@@ -14,13 +14,26 @@ const slice = (start, end) => source.slice(source.indexOf(start), source.indexOf
   let next = update('downloading', 25), installed = false, renders = 0;
   const context = vm.createContext({
     demo: false, busy: false, document: {hidden: false}, page: 'library', games: [game], steamRows: [row],
+    isModPlatform: () => false, modCapability: () => false,
+    gogStatus: {client_installed: true, launch_supported: true},
+    ubisoftStatus: {client_installed: true},
+    riotStatus: {client_installed: true, capabilities: {launch: true}},
     $: () => modal, gameKey: g => `${g.launcher}:${g.app_id}`, icon: () => '', esc: s => s,
-    format: new Intl.NumberFormat('ru-RU'), canRequestLaunch: () => true, hydrateIcons() {},
+    format: new Intl.NumberFormat('ru-RU'), hydrateIcons() {},
     renderLibrary() { renders++; },
     api: async () => ({games: {'730': {update: next, is_installed: installed}}}),
   });
+  vm.runInContext(slice('const canRequestLaunch =', 'async function launchRiot') + '\nglobalThis.canRequestLaunch = canRequestLaunch;', context);
   vm.runInContext(slice('function gameState(g)', 'let launchWarningResolver'), context);
   vm.runInContext(slice('let downloadPolling=false;', " document.addEventListener('click'"), context);
+  assert.equal(context.canRequestLaunch({launcher: 'steam', app_id: '620', is_installed: false, update: null}), true);
+  assert.equal(context.playLabel({launcher: 'steam', app_id: '620', is_installed: false, update: null}), 'Установить');
+  assert.equal(context.canRequestLaunch({launcher: 'epic', app_id: 'Fortnite', is_installed: false}), true);
+  assert.equal(context.playLabel({launcher: 'epic', app_id: 'Fortnite', is_installed: false}), 'Установить');
+  assert.equal(context.canRequestLaunch({launcher: 'gog', app_id: '101', is_installed: false}), true);
+  assert.equal(context.playLabel({launcher: 'gog', app_id: '101', is_installed: false}), 'Установить');
+  assert.equal(context.canRequestLaunch({launcher: 'ubisoft', app_id: '42', is_installed: false}), true);
+  assert.equal(context.playLabel({launcher: 'ubisoft', app_id: '42', is_installed: false}), 'Установить');
   await context.pollDownloads();
   assert.match(status.innerHTML, /value="25"/);
   assert.equal(row.update.downloaded, 25, 'All account rows receive progress');

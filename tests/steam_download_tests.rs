@@ -332,3 +332,122 @@ fn progress_scan_reads_all_library_roots_without_requiring_loginusers() {
         None
     );
 }
+
+#[tokio::test]
+async fn launch_endpoint_installs_uninstalled_owned_steam_game_and_switches_account() {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use http_body_util::BodyExt;
+    use serde_json::Value;
+    use swch::storage::Database;
+    use tower::ServiceExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let steam_dir = temp.path().join("Steam");
+    let config_dir = steam_dir.join("config");
+    let sessions_dir = temp.path().join("sessions");
+    let userdata_b = steam_dir.join("userdata/39671842/config");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&sessions_dir).unwrap();
+    fs::create_dir_all(&userdata_b).unwrap();
+    fs::create_dir_all(steam_dir.join("steamapps")).unwrap();
+    #[cfg(windows)]
+    fs::write(steam_dir.join("steam.exe"), b"fake").unwrap();
+
+    fs::write(
+        config_dir.join("loginusers.vdf"),
+        r#""users"
+{
+    "76561197960265729"
+    {
+        "AccountName" "user_one"
+        "PersonaName" "User One"
+        "MostRecent" "1"
+    }
+    "76561198000000002"
+    {
+        "AccountName" "user_two"
+        "PersonaName" "User Two"
+        "MostRecent" "0"
+    }
+}"#,
+    )
+    .unwrap();
+    fs::write(config_dir.join("config.vdf"), r#""InstallConfigStore" {}"#).unwrap();
+    fs::write(
+        userdata_b.join("localconfig.vdf"),
+        r#""UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps" { "620" { "Playtime" "45" } } } } } }"#,
+    )
+    .unwrap();
+
+    std::env::set_var("SWCH_STEAM_DIR", &steam_dir);
+    std::env::set_var("SWCH_SESSIONS_DIR", &sessions_dir);
+    std::env::set_var("SWCH_SKIP_PROCESS_TERMINATION", "1");
+
+    let db = Database::open_in_memory().unwrap();
+    db.run_migrations().await.unwrap();
+    let mut owned_game =
+        swch::launchers::steam::library::SteamGame::new("620", Some("76561198000000002".into()));
+    owned_game.access = "owned".into();
+    owned_game.game.is_installed = false;
+    db.steam_cache_put(
+        "owned:76561198000000002",
+        &serde_json::to_string(&vec![owned_game]).unwrap(),
+    )
+    .await
+    .unwrap();
+    let app = swch::server::create_app(db);
+
+    let dry_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/steam/launch")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"app_id":"620","account_id":"76561198000000002","update_only":false,"dry_run":true}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(dry_resp.status(), StatusCode::OK);
+    let dry_body: Value = serde_json::from_slice(
+        &dry_resp.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    assert_eq!(dry_body["status"], "dry_run");
+    assert_eq!(
+        dry_body["command"]["args"],
+        serde_json::json!(["-silent", "steam://install/620"])
+    );
+
+    let install_resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/steam/launch")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"app_id":"620","account_id":"76561198000000002","update_only":false}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(install_resp.status(), StatusCode::OK);
+    let install_body: Value = serde_json::from_slice(
+        &install_resp.into_body().collect().await.unwrap().to_bytes(),
+    )
+    .unwrap();
+    assert_eq!(install_body["status"], "requested");
+    assert_eq!(install_body["update_only"], true);
+    assert_eq!(install_body["account_id"], "76561198000000002");
+
+    std::env::remove_var("SWCH_STEAM_DIR");
+    std::env::remove_var("SWCH_SESSIONS_DIR");
+    std::env::remove_var("SWCH_SKIP_PROCESS_TERMINATION");
+}

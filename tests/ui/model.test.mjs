@@ -662,3 +662,20 @@ test('played games stay account scoped and reject zero, unknown, negative and no
  const rows=[{app_id:'1',account_id:'a',playtime_minutes:1},{app_id:'1',account_id:'a',playtime_minutes:2},{app_id:'2',account_id:'b',playtime_minutes:90},...[0,null,-1,NaN,Infinity].map((n,i)=>({app_id:String(10+i),account_id:'a',playtime_minutes:n}))];
  assert.deepEqual(accountPlayedGames({id:'a',launcher:'steam'},rows).map(g=>[g.app_id,g.playtime_minutes]),[['1',2]]);
 });
+
+import {DESIGNS, isMacPlatform, resolveDesign} from '../../ui/model.mjs';
+test('Apple macOS design is strictly restricted to Mac platforms and selectable on macOS', () => {
+  assert.equal(DESIGNS.apple.macOnly, true);
+  assert.equal(DESIGNS.standard.macOnly, false);
+  assert.equal(isMacPlatform({ navigator: { platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5)' } }), true);
+  assert.equal(isMacPlatform({ navigator: { platform: 'Win32', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }), false);
+  assert.equal(isMacPlatform({ __SWCH_PLATFORM: 'macos', navigator: { platform: 'Win32' } }), true);
+  assert.equal(isMacPlatform({ location: { search: '?mac=1' }, navigator: { platform: 'Win32' } }), true);
+  assert.equal(isMacPlatform({ location: { search: '?mac=0' }, navigator: { platform: 'MacIntel' } }), false);
+  assert.equal(resolveDesign(null, false), 'standard');
+  assert.equal(resolveDesign('apple', false), 'standard');
+  assert.equal(resolveDesign('standard', false), 'standard');
+  assert.equal(resolveDesign(null, true), 'apple');
+  assert.equal(resolveDesign('apple', true), 'apple');
+  assert.equal(resolveDesign('standard', true), 'standard');
+});

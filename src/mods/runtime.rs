@@ -73,7 +73,9 @@ pub fn node_path() -> Result<PathBuf> {
     Err("Bundled Node.js missing. Developers can set SWCH_NODE_PATH to Node.js 24.".into())
 }
 
-fn node_entry_path(path: &Path) -> PathBuf {
+// Node 24's realpath rejects verbatim Windows paths, including paths supplied
+// through cwd, environment variables and SDK calls rather than CLI entry points.
+pub(super) fn node_entry_path(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
         use std::path::{Component, Prefix};
@@ -137,23 +139,23 @@ impl Runtime {
         }
         let mut command = Command::new(node);
         // Games inherit a stable data directory rather than locking the package on Windows.
-        let data_directory = services.files.directory(&id, "data")?;
+        let data_directory = node_entry_path(&services.files.directory(&id, "data")?);
         command
             // Node's CLI realpath resolution rejects Windows verbatim entry paths.
             .arg(node_entry_path(&host.join("runtime.mjs")))
-            .arg(backend)
+            .arg(node_entry_path(backend))
             .current_dir(&data_directory)
             .env("SWCH_MOD_DATA_DIR", &data_directory)
             .env(
                 "SWCH_MOD_CACHE_DIR",
-                services.files.directory(&id, "cache")?,
+                node_entry_path(&services.files.directory(&id, "cache")?),
             )
-            .env("SWCH_MOD_TEMP_DIR", services.files.directory(&id, "temp")?)
+            .env("SWCH_MOD_TEMP_DIR", node_entry_path(&services.files.directory(&id, "temp")?))
             .env(
                 "SWCH_MOD_TOOLS_DIR",
-                services.files.directory(&id, "tools")?,
+                node_entry_path(&services.files.directory(&id, "tools")?),
             )
-            .env("SWCH_MOD_PACKAGE_DIR", package)
+            .env("SWCH_MOD_PACKAGE_DIR", node_entry_path(package))
             .env_remove("NODE_OPTIONS")
             .env_remove("NODE_PATH")
             .stdin(Stdio::piped())
@@ -165,7 +167,7 @@ impl Runtime {
         if let Some(path) = services.db.path() {
             command.env(
                 "SWCH_DB_PATH",
-                path.canonicalize().map_err(|e| e.to_string())?,
+                node_entry_path(&path.canonicalize().map_err(|e| e.to_string())?),
             );
         }
         super::process::configure(&mut command);

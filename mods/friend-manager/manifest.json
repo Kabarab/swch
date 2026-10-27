@@ -1,0 +1,14 @@
+{
+  "id": "swch.friend-manager",
+  "name": "Менеджер друзей (Cross-Account Friends)",
+  "version": "1.0.0",
+  "api": "^1.1.0",
+  "platforms": [
+    "windows-x64",
+    "macos-arm64"
+  ],
+  "description": "Быстрое взаимное добавление в друзья между зарегистрированными аккаунтами, массовая рассылка приглашений и пакетное удаление друзей.",
+  "backend": "backend.mjs",
+  "ui": "index.html",
+  "theme": "theme.json"
+}

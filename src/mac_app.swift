@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import Darwin
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
@@ -17,12 +18,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.09, blue: 0.10, alpha: 1.0)
+        if #available(macOS 11.0, *) {
+            let toolbar = NSToolbar(identifier: "SwchMainToolbar")
+            toolbar.showsBaselineSeparator = false
+            window.toolbar = toolbar
+            window.toolbarStyle = .unified
+        }
         window.title = "swch Hub"
         window.center()
         window.isMovableByWindowBackground = true
         window.delegate = self
         
         let config = WKWebViewConfiguration()
+        let macScript = WKUserScript(
+            source: "window.__SWCH_PLATFORM = 'macos'; document.documentElement.classList.add('platform-macos');",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        config.userContentController.addUserScript(macScript)
         webView = WKWebView(frame: rect, configuration: config)
         webView.autoresizingMask = [.width, .height]
         window.contentView = webView
@@ -228,6 +244,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
+}
+
+/// Ensures only one instance of SWCH runs per user session.
+/// Returns true if this is the primary instance, or false if an instance is already running.
+func acquireSingleInstanceLock() -> Bool {
+    let lockDir: URL
+    if let custom = ProcessInfo.processInfo.environment["SWCH_LOCK_DIR"] {
+        lockDir = URL(fileURLWithPath: custom)
+    } else if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+        lockDir = appSupport.appendingPathComponent("swch")
+    } else {
+        lockDir = URL(fileURLWithPath: NSTemporaryDirectory())
+    }
+    try? FileManager.default.createDirectory(at: lockDir, withIntermediateDirectories: true)
+    let lockPath = lockDir.appendingPathComponent("swch.lock").path
+    let fd = open(lockPath, O_CREAT | O_WRONLY, 0o600)
+    if fd < 0 { return true }
+    if flock(fd, LOCK_EX | LOCK_NB) != 0 {
+        close(fd)
+        return false
+    }
+    return true
+}
+
+func activateExistingInstance() {
+    let bundleID = Bundle.main.bundleIdentifier ?? "com.kabarab.swch"
+    let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+    if let existing = running.first(where: { $0 != NSRunningApplication.current }) {
+        existing.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+    }
+}
+
+if !acquireSingleInstanceLock() {
+    activateExistingInstance()
+    exit(0)
 }
 
 let app = NSApplication.shared

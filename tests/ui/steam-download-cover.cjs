@@ -10,8 +10,8 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
   const account={id:'76561197960265729',username:'player',display_name:'Player',launcher:'steam',is_active:true};
   let update={required:false,phase:'ready',downloaded:0,download_total:1024**3,staged:0,stage_total:2*1024**3};
   let intent=null;
-  let installed=true,fail=false;
-  const row=()=>({id:'steam_730',app_id:'730',name:'Counter-Strike 2',launcher:'steam',account_id:account.id,access:'owned',is_installed:installed,is_free:false,has_inventory:false,update});
+  let installed=true,installed620=false,update620=null,fail=false;
+  const row=()=>({id:'steam_730',app_id:'730',name:'Counter-Strike 2',launcher:'steam',account_id:account.id,access:'owned',is_installed:installed,is_free:false,has_inventory:false,update});const row620=()=>({id:'steam_620',app_id:'620',name:'Portal 2',launcher:'steam',account_id:account.id,access:'owned',is_installed:installed620,is_free:false,has_inventory:false,update:update620});
   const telemetry={download_bps:10*1024**2,stage_bps:20*1024**2,eta_seconds:60,steam_read_bps:40*1024**2,steam_write_bps:25*1024**2};
   await page.route('**/ui/launcher.js*',route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync(path.join(server.root,'ui/launcher.js'),'utf8')+'\nwindow.downloadTest={poll:pollDownloads,pending:pendingDownloads,busy:()=>downloadPolling};'}));
   await page.route('**/api/**',route=>{
@@ -19,12 +19,12 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
    if(endpoint==='/api/steam/artwork')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="#f55117"/><circle cx="200" cy="200" r="100" fill="#2d97ec"/></svg>'});
    if(request.method()==='POST'){
     writes.push([endpoint,request.postDataJSON()]);
-    if(endpoint==='/api/steam/launch')intent={app_id:'730',account_id:account.id,status:'watching'};
+    if(endpoint==='/api/steam/launch'&&!request.postDataJSON().update_only)intent={app_id:'730',account_id:account.id,status:'watching'};
     if(endpoint==='/api/steam/cancel-launch')intent=null;
     return route.fulfill({json:{status:'requested',message:'Steam запущен'}});
    }
-   if(endpoint==='/api/steam/library')return route.fulfill({json:{accounts:[account],games:[row()],warnings:[]}});
-   if(endpoint==='/api/steam/downloads')return route.fulfill(fail?{status:503,json:{error:'Steam unavailable'}}:{json:{games:{730:{update,is_installed:installed}},launch_after_update:intent}});
+   if(endpoint==='/api/steam/library')return route.fulfill({json:{accounts:[account],games:[row(),row620()],warnings:[]}});
+   if(endpoint==='/api/steam/downloads')return route.fulfill(fail?{status:503,json:{error:'Steam unavailable'}}:{json:{games:{730:{update,is_installed:installed},...(update620?{620:{update:update620,is_installed:installed620}}:{})},launch_after_update:intent}});
    return route.fulfill({json:emptyApi(endpoint)});
   });
   await page.goto(server.origin);
@@ -89,7 +89,7 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
   await card.locator('.poster-button').click();
   await modal.locator('[data-action="cancel-steam-launch"]').click();
   await page.waitForFunction(()=>!document.querySelector('#game-modal [data-action="cancel-steam-launch"]'));
-  assert(writes.some(([endpoint])=>endpoint==='/api/steam/cancel-launch'));
+  assert(writes.some(([endpoint])=>endpoint==='/api/steam/cancel-launch'));await modal.evaluate(e=>e.close());const card620=page.locator('[data-download-game="steam:620"]');assert.equal((await card620.locator('.card-play').innerText()).trim(),'Установить');assert.equal(await card620.locator('.card-play').isDisabled(),false);await card620.locator('.card-play').click();assert(writes.some(([endpoint,payload])=>endpoint==='/api/steam/launch'&&payload.app_id==='620'&&payload.update_only===true));update620={required:true,phase:'downloading',downloaded:512*1024**2,download_total:1024**3,staged:0,stage_total:1024**3,telemetry};await poll();assert.equal(await card620.locator('[data-download-cover]').evaluate(e=>e.style.getPropertyValue('--download-fill')),'50%');installed620=true;update620={required:false,phase:'ready',downloaded:1024**3,download_total:1024**3,staged:1024**3,stage_total:1024**3};await poll();assert.equal((await card620.locator('.card-play').innerText()).trim(),'Играть');
   assert.deepEqual(errors,[]);
   console.log('PASS: download cover, request, metrics, stable DOM, modal, pause, stale data, disk stages, completion and responsive layouts');
  }finally{await browser.close();await server.close();}

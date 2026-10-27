@@ -25,6 +25,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Clean up temporary update files from previous update runs
     cleanup_update_artifacts();
 
+    // Bind HTTP server port early to enforce a single backend instance and avoid DB collisions
+    let host = [127, 0, 0, 1];
+    let port = std::env::var("SWCH_PORT").ok().map(|v| v.parse::<u16>()).transpose()?.unwrap_or(4242);
+    let addr = SocketAddr::from((host, port));
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            info!("Another instance of swch backend is already running on http://{}. Exiting cleanly.", addr);
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
+    };
+
     // Initialize SQLite database
     let db_path = Database::default_path()?;
     info!("Database target: {}", db_path.display());
@@ -49,12 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .epic_store()
         .await
         .unwrap_or_else(|| Arc::new(EpicAuthStore::default_store(db.clone())));
-
-    // Bind HTTP server to 127.0.0.1:4242
-    let host = [127, 0, 0, 1];
-    let port = std::env::var("SWCH_PORT").ok().map(|v| v.parse::<u16>()).transpose()?.unwrap_or(4242);
-    let addr = SocketAddr::from((host, port));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
 
     info!("==================================================");
     info!("  swch2 Modular Backend Server is ready!");

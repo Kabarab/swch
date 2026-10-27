@@ -1,4 +1,46 @@
 import {getLocale} from './i18n.js';
+export const DESIGNS = {
+  apple: {
+    id: 'apple',
+    name: 'Apple (macOS)',
+    macOnly: true,
+    description: 'Нативный дизайн в стиле Apple HIG (Vibrancy, SF Pro, системные панели macOS)',
+  },
+  standard: {
+    id: 'standard',
+    name: 'Классический SWCH',
+    macOnly: false,
+    description: 'Фирменный игровой интерфейс SWCH',
+  },
+};
+export function isMacPlatform(env = null) {
+  const g = env || (typeof globalThis !== 'undefined' ? globalThis : {});
+  const search = typeof g.location?.search === 'string' ? g.location.search : '';
+  if (search) {
+    try {
+      const params = new URLSearchParams(search);
+      const macParam = params.get('mac') ?? params.get('platform');
+      if (macParam === '1' || macParam === 'true' || macParam === 'mac' || macParam === 'macos') return true;
+      if (macParam === '0' || macParam === 'false' || macParam === 'windows' || macParam === 'linux') return false;
+    } catch { /* ignore */ }
+  }
+  if (g.__SWCH_PLATFORM === 'macos' || g.__SWCH_PLATFORM === 'mac') return true;
+  if (g.__SWCH_PLATFORM === 'windows' || g.__SWCH_PLATFORM === 'linux') return false;
+  try {
+    const forced = g.localStorage?.getItem?.('swch-force-mac');
+    if (forced === '1' || forced === 'true') return true;
+    if (forced === '0' || forced === 'false') return false;
+  } catch { /* ignore */ }
+  const nav = g.navigator || {};
+  const uaPlatform = String(nav.userAgentData?.platform || nav.platform || '');
+  const ua = String(nav.userAgent || '');
+  return /^Mac/i.test(uaPlatform) || /Macintosh|Mac OS X/i.test(ua);
+}
+export function resolveDesign(savedDesign, isMac = isMacPlatform()) {
+  if (!isMac) return 'standard';
+  if (savedDesign && Object.hasOwn(DESIGNS, savedDesign)) return savedDesign;
+  return 'apple';
+}
 export const STYLES = {
   gog: { name: 'GOG GALAXY', layout: 'cards', color: '#c68eff', description: 'Библиотека GOG и аккаунты' },
   ubisoft: { name: 'Ubisoft Connect', layout: 'cards', color: '#65b7ff', description: 'Установленные игры и сохранённые сессии Ubisoft Connect' },

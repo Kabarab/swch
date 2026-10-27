@@ -48,17 +48,24 @@ def js_unescape(text):
         return {'n':'\n','r':'\r','t':'\t','b':'\b','f':'\f','v':'\v','0':'\0'}.get(value,value)
     return re.sub(r'\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)',replace,text)
 
-def scan_js(path):
+def scan_js(path, diagnostics_only=False):
     raw=path.read_bytes();parser=Parser(Language(tree_sitter_javascript.language()));tree=parser.parse(raw)
     if tree.root_node.has_error:raise ValueError(f'JavaScript parse failed: {path}')
     def walk(node):
-        if node.type=='string':display(js_unescape(raw[node.start_byte+1:node.end_byte-1].decode('utf-8')),path.relative_to(ROOT))
-        elif node.type=='template_string':
+        # Error constructors also contain English diagnostics outside the UI.
+        ancestor=node.parent
+        error_context=False
+        for _ in range(3):
+            if ancestor is None:break
+            if ancestor.type=='new_expression' and re.match(rb'new\s+(?:Error|TypeError|RangeError)\b',raw[ancestor.start_byte:ancestor.end_byte]):error_context=True;break
+            ancestor=ancestor.parent
+        if node.type=='string' and (not diagnostics_only or error_context):display(js_unescape(raw[node.start_byte+1:node.end_byte-1].decode('utf-8')),path.relative_to(ROOT),english=error_context)
+        elif node.type=='template_string' and (not diagnostics_only or error_context):
             parts=[];counter=0
             for child in node.named_children:
                 if child.type=='template_substitution':parts.append('{'+str(counter)+'}');counter+=1
                 else:parts.append(js_unescape(raw[child.start_byte:child.end_byte].decode('utf-8')))
-            display(''.join(parts),path.relative_to(ROOT))
+            display(''.join(parts),path.relative_to(ROOT),english=error_context)
         for child in node.named_children:walk(child)
     walk(tree.root_node)
 
@@ -71,7 +78,17 @@ def scan_rust(path):
             index=[0]
             def slot(m):value='{'+str(index[0])+'}';index[0]+=1;return value
             if node.parent and node.parent.type=='token_tree':text=re.sub(r'(?<!\{)\{[^{}]*\}(?!\})',slot,text)
-            display(text,path.relative_to(ROOT))
+            # Include every explicit error, not just messages beginning with a
+            # small English verb list. Keep protocol values and paths out.
+            ancestor=node.parent
+            error_context=False
+            for _ in range(5):
+                if ancestor is None:break
+                code=raw[ancestor.start_byte:ancestor.end_byte]
+                if ancestor.type in ('call_expression','macro_invocation') and re.match(rb'(?:Err\s*\(|[^\n]*\.ok_or(?:_else)?\s*\(|(?:bail|anyhow|warn|error)!\s*\()',code):error_context=True;break
+                if ancestor.type=='attribute_item' and re.match(rb'#\s*\[\s*error\s*\(',code):error_context=True;break
+                ancestor=ancestor.parent
+            display(text,path.relative_to(ROOT),english=error_context and bool(re.search(r'[A-Za-z]{3,} ',text)))
         for child in node.named_children:walk(child)
     walk(tree.root_node)
 
@@ -79,12 +96,17 @@ def run():
     for path in [ROOT/'index.html',*sorted((ROOT/'ui').glob('*.html'))]:Texts(path.relative_to(ROOT)).feed(path.read_text(encoding='utf-8'))
     for path in [*sorted((ROOT/'ui').glob('*.js')),*sorted((ROOT/'ui').glob('*.mjs'))]:
         if path.name not in ('i18n.js','i18n-core.mjs','mod-prompt.mjs'):scan_js(path)
+    for path in sorted((ROOT/'mod-sdk').glob('*.mjs')):
+        if path.name in ('index.mjs','runtime.mjs'):scan_js(path,diagnostics_only=True)
     for path in sorted((ROOT/'src').rglob('*.rs')):
         if 'webview2' not in path.parts and 'i18n' not in path.name:scan_rust(path)
     for path in [ROOT/'src/windows_app.cpp',ROOT/'src/mac_app.swift']:
         content=path.read_text(encoding='utf-8')
         for text in re.findall(r'LR"rawhtml\(([\s\S]*?)\)rawhtml"',content)+re.findall(r'"""([\s\S]*?)"""',content):
             if '<html' in text:Texts(path.relative_to(ROOT)).feed(text)
+    # Stable Node/libuv diagnostics. The operation and path remain opaque slots.
+    for text in ['EISDIR: illegal operation on a directory, {0}', 'ENOENT: no such file or directory, {0}', 'ENOTDIR: not a directory, {0}', 'EACCES: permission denied, {0}', 'EPERM: operation not permitted, {0}', 'EEXIST: file already exists, {0}', 'EBUSY: resource busy or locked, {0}', 'ENOSPC: no space left on device, {0}', 'ENOTEMPTY: directory not empty, {0}', 'EMFILE: too many open files, {0}', 'ECONNREFUSED: connection refused, {0}', 'ETIMEDOUT: connection timed out, {0}']:
+        add(text,'mod-sdk/runtime.mjs')
     # App-owned English labels and localization controls are explicitly included.
     for text in ['NEW','PLAY YOUR WAY','Library','Language','Search languages','Machine translation','Download language pack','Language pack is incomplete','Русский','Язык интерфейса','Найти язык','Скачать и применить','Машинный перевод','Пакет установлен','Пакет доступен для скачивания','Загрузка языкового пакета…','Не удалось загрузить язык. Текущий язык сохранён.','Языковой пакет неполный или повреждён.','Для первой загрузки нужен интернет. Затем перевод работает без интернета.','Перевод подготовлен автоматически. Возможны неточности.','Выберите язык интерфейса','Язык сохранён','Непереведённое сообщение сервиса','Языковые пакеты','Отмена']:
         if text in BRANDS:records.setdefault(text,set()).add('ui/i18n.js')

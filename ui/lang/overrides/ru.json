@@ -1,0 +1,8 @@
+{
+  "Installation rolled back: {0}": "Установка отменена: {0}",
+  "Mod operation failed:": "Ошибка при выполнении мода:",
+  "Mod operation failed: {0}": "Ошибка при выполнении мода: {0}",
+  "EISDIR: illegal operation on a directory, {0}": "EISDIR: недопустимая операция с папкой, {0}",
+  "Mod process exited; use Restart": "Процесс мода завершился. Нажми «Перезапустить».",
+  "Mod request failed": "Не удалось выполнить запрос мода"
+}

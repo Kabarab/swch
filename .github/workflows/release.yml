@@ -194,6 +194,18 @@ jobs:
           ./windows_startup_tests.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows startup tests failed' }
 
+      - name: Test Windows Single Instance
+        shell: pwsh
+        run: |
+          if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+            cl.exe /O2 /MT /EHsc /utf-8 /std:c++17 tests/windows_single_instance_tests.cpp /Fe:windows_single_instance_tests.exe /link user32.lib
+          } else {
+            g++ -O2 -std=c++17 tests/windows_single_instance_tests.cpp -o windows_single_instance_tests.exe -luser32
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Windows single instance test build failed' }
+          ./windows_single_instance_tests.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows single instance tests failed' }
+
       - name: Package Windows Application
         shell: pwsh
         run: |

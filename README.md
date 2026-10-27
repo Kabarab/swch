@@ -12,6 +12,7 @@ A desktop game library and account manager for Windows and macOS. Organize games
 - **Account management:** save and switch between your own supported accounts and sessions. Platform authentication and ownership requirements still apply.
 - **Game details:** view supported inventories, collections, statistics, and playtime. Available data varies by integration.
 - **Mods:** add themes, tabs, actions, and launcher integrations through ZIP packages or the mod catalog.
+- **Controller and gamepad navigation:** full gamepad support for Xbox, PlayStation DualSense/DualShock, Nintendo Switch, and Steam Deck controllers with 2D spatial navigation, quick launch, favorites, haptic rumble, and in-app button testing.
 - **Languages and updates:** select interface language packs and check for application updates from the settings screen.
 
 English is the app's base and fallback language. By default, SWCH selects your system language on startup; if a translation is unavailable, it uses English. You can choose a different language in settings, and that choice is preserved.

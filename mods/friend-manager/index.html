@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Менеджер друзей SWCH</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="header">
+    <div class="brand">
+      <h1>👥 Менеджер друзей</h1>
+      <p>Взаимное добавление между аккаунтами, массовые инвайты и пакетное удаление друзей</p>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-secondary btn-sm" id="btn-sync-all" title="Синхронизировать друзей всех аккаунтов">
+        🔄 Синхронизировать
+      </button>
+      <button class="btn btn-primary btn-sm" id="btn-quick-cross" title="Запустить взаимную дружбу всех аккаунтов">
+        ⚡ Взаимная дружба всех
+      </button>
+    </div>
+  </header>
+
+  <!-- Statistics Overview -->
+  <div class="stats-bar" role="region" aria-label="Статистика аккаунтов">
+    <div class="stat-card">
+      <span class="stat-label">Аккаунты</span>
+      <span class="stat-val" id="stat-accounts-count">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Взаимных пар</span>
+      <span class="stat-val" id="stat-mutual-count">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Друзей в кэше</span>
+      <span class="stat-val" id="stat-friends-count">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Активных заданий</span>
+      <span class="stat-val" id="stat-jobs-count">0</span>
+    </div>
+  </div>
+
+  <!-- Active Job Notification & Progress Tracker -->
+  <div id="active-job-banner" class="active-job-banner" hidden role="status" aria-live="polite">
+    <div class="job-banner-header">
+      <div class="job-banner-title">
+        <span class="badge badge-info">В процессе</span>
+        <span id="job-banner-desc">Выполняется фоновое задание...</span>
+      </div>
+      <button class="btn btn-danger btn-sm" id="btn-cancel-active-job">Отменить</button>
+    </div>
+    <div class="progress-track" aria-hidden="true">
+      <div class="progress-fill" id="job-banner-progress"></div>
+    </div>
+    <div class="job-banner-details">
+      <span id="job-banner-status-text">Шаг 0 из 0</span>
+      <span id="job-banner-percent">0%</span>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <nav class="tabs-nav" role="tablist" aria-label="Разделы менеджера друзей">
+    <button class="tab-btn" id="tab-btn-cross" role="tab" aria-selected="true" aria-controls="panel-cross">
+      👥 Кросс-дружба
+    </button>
+    <button class="tab-btn" id="tab-btn-batch" role="tab" aria-selected="false" aria-controls="panel-batch">
+      🗑️ Пакетное удаление
+    </button>
+    <button class="tab-btn" id="tab-btn-broadcast" role="tab" aria-selected="false" aria-controls="panel-broadcast">
+      🚀 Массовое добавление
+    </button>
+    <button class="tab-btn" id="tab-btn-lists" role="tab" aria-selected="false" aria-controls="panel-lists">
+      📋 Списки друзей
+    </button>
+    <button class="tab-btn" id="tab-btn-jobs" role="tab" aria-selected="false" aria-controls="panel-jobs">
+      ⚡ Фоновые задания
+    </button>
+    <button class="tab-btn" id="tab-btn-settings" role="tab" aria-selected="false" aria-controls="panel-settings">
+      ⚙️ Настройки
+    </button>
+  </nav>
+
+  <!-- TAB 1: CROSS FRIENDING (MUTUAL CONNECT) -->
+  <main>
+    <section id="panel-cross" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-cross">
+      <div class="section-card">
+        <h2 class="section-title">🤝 Взаимное добавление в друзья между аккаунтами</h2>
+        <p class="section-desc">
+          Автоматически связывает все зарегистрированные аккаунты SWCH между собой, отправляя взаимные приглашения и формируя общую сеть друзей в один клик.
+        </p>
+
+        <div class="toolbar">
+          <div class="form-row">
+            <button class="btn btn-primary" id="btn-run-cross-friend">
+              ⚡ Запустить взаимную дружбу выбранных
+            </button>
+            <button class="btn btn-secondary" id="btn-copy-cross-uris">
+              📋 Скопировать ссылки steam://
+            </button>
+          </div>
+          <span class="badge badge-info" id="cross-pairs-summary">0 пар</span>
+        </div>
+
+        <div class="table-container">
+          <table class="table" id="cross-matrix-table">
+            <thead>
+              <tr>
+                <th>Аккаунт A</th>
+                <th>Связь</th>
+                <th>Аккаунт B</th>
+                <th>Статус дружбы</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="cross-matrix-body">
+              <tr>
+                <td colspan="5" class="empty-box">Загрузка аккаунтов...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: BATCH REMOVE (BULK UNFRIEND) -->
+    <section id="panel-batch" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-batch" hidden>
+      <div class="section-card">
+        <h2 class="section-title">🗑️ Пакетное удаление друзей</h2>
+        <p class="section-desc">
+          Быстро удаляйте друзей пачками сразу по нескольку десятков. Фильтруйте неактивных пользователей или выбирайте вручную.
+        </p>
+
+        <div class="form-row" style="margin-bottom: 16px;">
+          <div style="flex: 1; min-width: 220px;">
+            <label class="form-label" for="batch-account-select">Выберите аккаунт:</label>
+            <select class="form-control" id="batch-account-select"></select>
+          </div>
+          <div style="flex: 2; min-width: 240px;">
+            <label class="form-label" for="batch-search-input">Поиск по никнейму или коду:</label>
+            <input type="search" class="form-control" id="batch-search-input" placeholder="Введите имя друга или SteamID...">
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="filter-group" role="group" aria-label="Быстрые фильтры друзей">
+            <button class="filter-btn active" data-filter="all">Все</button>
+            <button class="filter-btn" data-filter="inactive30">Не в сети > 30 дней</button>
+            <button class="filter-btn" data-filter="inactive90">Не в сети > 90 дней</button>
+            <button class="filter-btn" data-filter="non-swch">Внешние друзья</button>
+          </div>
+          <div class="form-row">
+            <button class="btn btn-secondary btn-sm" id="btn-batch-select-all">Выбрать всех</button>
+            <button class="btn btn-secondary btn-sm" id="btn-batch-invert">Инвертировать</button>
+            <button class="btn btn-danger btn-sm" id="btn-batch-delete-selected" disabled>
+              🗑️ Удалить выбранных (<span id="batch-selected-count">0</span>)
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 40px;"><input type="checkbox" id="batch-master-checkbox" aria-label="Выбрать всех на странице"></th>
+                <th>Друг</th>
+                <th>SteamID / Код</th>
+                <th>Отношение</th>
+                <th>Последний вход</th>
+                <th>Взаимный в SWCH</th>
+              </tr>
+            </thead>
+            <tbody id="batch-friends-body">
+              <tr>
+                <td colspan="6" class="empty-box">Выберите аккаунт для отображения друзей</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: BROADCAST ADD FRIEND -->
+    <section id="panel-broadcast" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-broadcast" hidden>
+      <div class="section-card">
+        <h2 class="section-title">🚀 Массовое добавление друга сразу со всех аккаунтов</h2>
+        <p class="section-desc">
+          Найдите друга с одного аккаунта или укажите код друга, чтобы отправить приглашение в друзья одновременно со всех ваших зарегистрированных аккаунтов.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Способ указания друга:</label>
+          <div class="form-row" style="margin-bottom: 12px;">
+            <label style="cursor: pointer;">
+              <input type="radio" name="broadcast-mode" value="input" checked> Ввести SteamID64, Код друга или ссылку
+            </label>
+            <label style="cursor: pointer; margin-left: 16px;">
+              <input type="radio" name="broadcast-mode" value="clone"> Выбрать из списка друзей другого аккаунта
+            </label>
+          </div>
+        </div>
+
+        <!-- Mode 1: Direct Input -->
+        <div id="broadcast-input-box" class="form-group">
+          <label class="form-label" for="broadcast-target-input">Код друга, SteamID64 или ссылка на профиль:</label>
+          <div class="form-row">
+            <input type="text" class="form-control" id="broadcast-target-input" style="flex: 2;" placeholder="Например: 12345678 или 76561198000000000 или https://s.team/p/...">
+            <input type="text" class="form-control" id="broadcast-target-name" style="flex: 1;" placeholder="Отображаемое имя (необязательно)">
+          </div>
+        </div>
+
+        <!-- Mode 2: Clone from another account -->
+        <div id="broadcast-clone-box" class="form-group" hidden>
+          <div class="form-row">
+            <div style="flex: 1;">
+              <label class="form-label" for="broadcast-source-account">Аккаунт-источник:</label>
+              <select class="form-control" id="broadcast-source-account"></select>
+            </div>
+            <div style="flex: 1;">
+              <label class="form-label" for="broadcast-source-friend">Выберите друга:</label>
+              <select class="form-control" id="broadcast-source-friend"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target accounts selection -->
+        <div class="form-group">
+          <label class="form-label">Отправить приглашение со следующих аккаунтов:</label>
+          <div id="broadcast-senders-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 8px;">
+            <!-- Rendered by app.mjs -->
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 20px;">
+          <button class="btn btn-primary" id="btn-run-broadcast">
+            🚀 Отправить приглашение со всех выбранных аккаунтов
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: LISTS & INSPECTOR -->
+    <section id="panel-lists" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-lists" hidden>
+      <div class="section-card">
+        <h2 class="section-title">📋 Списки друзей и резервные копии</h2>
+        <p class="section-desc">
+          Просматривайте списки друзей каждого аккаунта, экспортируйте резервные копии в JSON или восстанавливайте связи.
+        </p>
+
+        <div class="toolbar">
+          <div class="form-row">
+            <select class="form-control" id="lists-account-select" style="min-width: 200px;"></select>
+            <button class="btn btn-secondary btn-sm" id="btn-export-json">📥 Экспорт в JSON</button>
+            <button class="btn btn-secondary btn-sm" id="btn-copy-clipboard">📋 Скопировать в буфер</button>
+            <button class="btn btn-secondary btn-sm" id="btn-import-json">📤 Импорт из JSON</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Друг</th>
+                <th>Код / SteamID</th>
+                <th>Отношение</th>
+                <th>Добавлен</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="lists-friends-body">
+              <tr>
+                <td colspan="5" class="empty-box">Выберите аккаунт для просмотра</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: JOBS & LOGS -->
+    <section id="panel-jobs" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-jobs" hidden>
+      <div class="section-card">
+        <h2 class="section-title">⚡ Фоновые задания (Durable Background Jobs)</h2>
+        <p class="section-desc">
+          Все длительные операции (массовое добавление, взаимная дружба, пакетное удаление) выполняются в фоновом режиме через SDK Jobs, сохраняют контрольные точки и восстанавливаются после перезапуска.
+        </p>
+
+        <div class="table-container" style="margin-bottom: 24px;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Тип задания</th>
+                <th>Статус</th>
+                <th>Прогресс</th>
+                <th>Создано</th>
+                <th>Управление</th>
+              </tr>
+            </thead>
+            <tbody id="jobs-list-body">
+              <tr>
+                <td colspan="6" class="empty-box">Нет активных или недавних заданий</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" style="font-size: 14px;">📜 Журнал активности</h3>
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Время</th>
+                <th>Тип</th>
+                <th>Описание</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody id="activity-log-body">
+              <tr>
+                <td colspan="4" class="empty-box">Журнал пуст</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: SETTINGS -->
+    <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
+      <div class="section-card">
+        <h2 class="section-title">⚙️ Настройки и ключи доступа</h2>
+        <p class="section-desc">
+          Управляйте ключами доступа Steam Web API, параметрами задержки между запросами и данными на диске.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="setting-steam-api-key">Steam Web API Key (Хранится в защищенном Keyring/DPAPI):</label>
+          <div class="form-row">
+            <input type="password" class="form-control" id="setting-steam-api-key" style="flex: 1;" placeholder="Введите ваш Steam Web API Key...">
+            <button class="btn btn-secondary" id="btn-save-api-key">Сохранить ключ</button>
+            <span class="badge" id="badge-api-key-status">Не задан</span>
+          </div>
+          <small style="color: var(--muted); display: block; margin-top: 4px;">
+            Необходим для получения официального списка друзей через Steam Web API.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="setting-steam-session">Steam Community Session Cookie (Опционально):</label>
+          <div class="form-row">
+            <input type="password" class="form-control" id="setting-steam-session" style="flex: 1;" placeholder="sessionid=...; steamLoginSecure=...">
+            <button class="btn btn-secondary" id="btn-save-session">Сохранить сессию</button>
+            <span class="badge" id="badge-session-status">Не задан</span>
+          </div>
+          <small style="color: var(--muted); display: block; margin-top: 4px;">
+            Используется для отправки прямых HTTP запросов добавления и удаления друзей без открытия клиента Steam.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="setting-delay">Задержка между сетевыми запросами (мс):</label>
+          <div class="form-row">
+            <input type="number" class="form-control" id="setting-delay" min="300" max="10000" step="100" style="width: 160px;" value="1200">
+            <span style="color: var(--muted); font-size: 12px;">Предотвращает ограничения по частоте запросов (Rate Limit 429)</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Режим работы:</label>
+          <div class="form-row">
+            <label style="cursor: pointer;">
+              <input type="checkbox" id="setting-simulated-mode"> Включить режим эмуляции (без реальных HTTP запросов)
+            </label>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 16px;">
+          <button class="btn btn-primary" id="btn-save-general-settings">Сохранить настройки</button>
+        </div>
+      </div>
+
+      <!-- Storage & Diagnostics -->
+      <div class="section-card">
+        <h2 class="section-title">📁 Хранилище мода и диагностика</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+          <div class="stat-card">
+            <span class="stat-label">Данные (Data)</span>
+            <span class="stat-val" id="usage-data">0 B</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Кэш (Cache)</span>
+            <span class="stat-val" id="usage-cache">0 B</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Временные (Temp)</span>
+            <span class="stat-val" id="usage-temp">0 B</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-secondary btn-sm" id="btn-open-data-folder">📁 Открыть папку данных</button>
+          <button class="btn btn-secondary btn-sm" id="btn-clear-cache">🧹 Очистить кэш</button>
+          <button class="btn btn-secondary btn-sm" id="btn-add-mock-account">➕ Добавить тестовый аккаунт</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Confirmation Modal Dialog -->
+  <div id="confirm-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <h3 class="modal-title" id="modal-title">Подтверждение действия</h3>
+      <p class="modal-body" id="modal-message">Вы уверены?</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btn-modal-cancel">Отмена</button>
+        <button class="btn btn-danger" id="btn-modal-confirm">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Mod Frontend Application Module -->
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

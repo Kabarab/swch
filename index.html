@@ -24,12 +24,13 @@
       document.documentElement.classList.add('i18n-loading');
     }
   </script>
-  <link rel="stylesheet" href="/ui/launcher.css?v=update-progress-20261015">
-  <link rel="stylesheet" href="/ui/style.css">
-  <link rel="stylesheet" href="/ui/ux.css?v=ux-20261016-ubisoft">
+  <link rel="stylesheet" href="/ui/launcher.css?v=classic-20261027-1">
+  <link rel="stylesheet" href="/ui/style.css?v=classic-20261027-1">
+  <link rel="stylesheet" href="/ui/ux.css?v=classic-20261027-1">
   <link rel="stylesheet" href="/ui/mods.css?v=mod-covers-1">
   <link rel="stylesheet" href="/ui/i18n.css?v=1">
-  <script type="module" src="/ui/launcher.js?v=update-progress-20261015"></script>
+  <link rel="stylesheet" href="/ui/gamepad.css?v=gamepad-1">
+  <script type="module" src="/ui/launcher.js?v=update-progress-20261026-install-1"></script>
 </head>
 <body>
 <div id="file-open-message">
@@ -96,7 +97,7 @@
       <section id="inventory-view" aria-label="Инвентарь" hidden></section>
       <section id="mods-view" aria-label="Моды" hidden></section>
     </main>
-    <footer class="statusbar"><span><i id="footer-dot" class="status-dot"></i><span id="footer-status">Подключаем библиотеку…</span></span><span>Все твои игры. Одно место. &nbsp; SWCH / 01</span></footer>
+    <footer class="statusbar"><span><i id="footer-dot" class="status-dot"></i><span id="footer-status">Подключаем библиотеку…</span><span id="footer-gamepad" class="footer-gamepad" hidden title="Настройки геймпада" data-action="settings"><i data-icon="game"></i><span id="footer-gamepad-name">Геймпад</span></span></span><span>Все твои игры. Одно место. &nbsp; SWCH / 01</span></footer>
   </div>
 </div>
 <dialog id="styles-dialog" class="settings-dialog" aria-labelledby="styles-title">
@@ -141,6 +142,88 @@
     <section class="settings-group">
       <h4>Цвет интерфейса</h4>
       <div id="color-options" class="color-options-grid"></div>
+    </section>
+    <section class="settings-group">
+      <div class="settings-group-head">
+        <h4>Стиль оформления</h4>
+        <span id="design-platform-badge" class="badge design-platform-badge">Только для Mac</span>
+      </div>
+      <div class="mode-options-grid design-options-grid">
+        <button type="button" class="mode-option-btn design-option-btn" data-design-choice="apple">
+          <div class="mode-preview-box preview-design-apple" aria-hidden="true">
+            <span class="preview-mac-dots"><i></i><i></i><i></i></span>
+            <span class="preview-mac-sidebar"></span>
+            <span class="preview-mac-glass"></span>
+          </div>
+          <div class="design-option-title-row">
+            <strong>Apple macOS</strong>
+            <span class="design-mac-pill">macOS HIG</span>
+          </div>
+          <small>Стеклянный полупрозрачный дизайн в стиле macOS Sequoia</small>
+        </button>
+        <button type="button" class="mode-option-btn design-option-btn" data-design-choice="standard">
+          <div class="mode-preview-box preview-design-standard" aria-hidden="true">
+            <span class="preview-swch-bar"></span>
+            <span class="preview-swch-card"></span>
+            <span class="preview-swch-card"></span>
+          </div>
+          <div class="design-option-title-row">
+            <strong>Классический SWCH</strong>
+          </div>
+          <small>Строгий тёмный игровой интерфейс с боковой панелью</small>
+        </button>
+      </div>
+      <small id="design-mac-note" class="muted settings-currency-note" role="status">Дизайн в стиле Apple доступен только на компьютерах Mac (macOS).</small>
+    </section>
+    <section class="settings-group" id="settings-gamepad-group">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h4 style="margin:0;">Управление геймпадом / контроллером</h4>
+        <span id="gamepad-status-badge" class="badge" style="font-size:11px; padding:3px 8px; border-radius:6px; background:#23242a; color:#858793;">Не подключен</span>
+      </div>
+      <label class="settings-switch-row">
+        <input class="settings-switch" type="checkbox" role="switch" id="gamepad-enabled-toggle" checked>
+        <span>Включить навигацию с геймпада (Xbox / PlayStation / Switch)</span>
+      </label>
+      <label class="settings-switch-row" style="margin-top:10px;">
+        <input class="settings-switch" type="checkbox" role="switch" id="gamepad-vibration-toggle" checked>
+        <span>Тактильная отдача (вибрация)</span>
+      </label>
+      <div class="settings-currency-row" style="margin-top:14px;">
+        <label>Отображение кнопок в интерфейсе
+          <select id="gamepad-layout-select" aria-label="Отображение кнопок геймпада">
+            <option value="auto">Авто (по модели геймпада)</option>
+            <option value="xbox">Xbox (A / B / X / Y)</option>
+            <option value="playstation">PlayStation (✕ / ○ / □ / △)</option>
+            <option value="switch">Nintendo Switch (B / A / Y / X)</option>
+          </select>
+        </label>
+      </div>
+      <div id="gamepad-devices-list" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="gamepad-tester" class="gamepad-tester-box" style="margin-top:16px;">
+        <div style="font-size:11px; font-weight:700; color:var(--accent); margin-bottom:8px;">Индикатор нажатий в реальном времени:</div>
+        <div class="gamepad-tester-grid" id="gamepad-tester-grid">
+          <span class="tester-btn" data-tester-btn="0">A</span>
+          <span class="tester-btn" data-tester-btn="1">B</span>
+          <span class="tester-btn" data-tester-btn="2">X</span>
+          <span class="tester-btn" data-tester-btn="3">Y</span>
+          <span class="tester-btn" data-tester-btn="4">LB</span>
+          <span class="tester-btn" data-tester-btn="5">RB</span>
+          <span class="tester-btn" data-tester-btn="6">LT</span>
+          <span class="tester-btn" data-tester-btn="7">RT</span>
+          <span class="tester-btn" data-tester-btn="8">Back</span>
+          <span class="tester-btn" data-tester-btn="9">Start</span>
+          <span class="tester-btn" data-tester-btn="10">L3</span>
+          <span class="tester-btn" data-tester-btn="11">R3</span>
+          <span class="tester-btn" data-tester-btn="12">↑</span>
+          <span class="tester-btn" data-tester-btn="13">↓</span>
+          <span class="tester-btn" data-tester-btn="14">←</span>
+          <span class="tester-btn" data-tester-btn="15">→</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:#858793; font-family:var(--mono, monospace);">
+          <span id="tester-left-stick">L-Stick: 0.00, 0.00</span>
+          <span id="tester-right-stick">R-Stick: 0.00, 0.00</span>
+        </div>
+      </div>
     </section>
     <section class="settings-group">
       <h4>Валюта цен</h4>
@@ -672,6 +755,7 @@
     <button type="button" class="secondary back-btn" data-close aria-label="Назад к библиотеке">
       <i data-icon="arrow"></i> Назад к библиотеке
     </button>
+    <div id="game-modal-header-title" class="game-modal-header-title"></div>
     <button type="button" class="icon-button modal-close-btn" data-close aria-label="Закрыть">
       <i data-icon="close"></i>
     </button>
@@ -786,6 +870,16 @@
     </div>
   </form>
 </dialog>
+<div id="gamepad-hud" class="gamepad-hud" aria-live="polite">
+  <div class="hud-content">
+    <div class="hud-device">
+      <span class="hud-gamepad-icon">🎮</span>
+      <span id="hud-gamepad-name">Геймпад</span>
+    </div>
+    <div class="hud-divider"></div>
+    <div id="hud-actions" class="hud-actions"></div>
+  </div>
+</div>
 <div id="toast" role="status" hidden></div>
 </body>
 </html>

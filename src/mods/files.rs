@@ -86,7 +86,7 @@ impl FileStore {
     fn paths(&self, id: &str) -> Result<Value> {
         let mut paths = json!({});
         for kind in KINDS {
-            paths[kind] = json!(self.directory(id, kind)?);
+            paths[kind] = json!(super::runtime::node_entry_path(&self.directory(id, kind)?));
         }
         Ok(paths)
     }
@@ -272,6 +272,8 @@ mod tests {
         assert_eq!(
             reopened.directory("alice.mod", "data").unwrap(),
             PathBuf::from(paths["data"].as_str().unwrap())
+                .canonicalize()
+                .unwrap()
         );
     }
 }

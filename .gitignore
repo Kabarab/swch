@@ -24,3 +24,14 @@ swch_steam_key
 # Local Graphify runtime and generated knowledge graph
 /.graphify-tools/
 /graphify-out/
+/runtime/
+*.exe
+*.obj
+*.res
+dump_lab*.txt
+full_paragraph_map.txt
+pdf_structure.txt
+real_images_user.txt
+user_doc_elements.txt
+*LAB*.txt
+/package/

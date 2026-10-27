@@ -280,20 +280,28 @@ pub async fn launch(
             )));
         }
     }
-    let game = installations()
+    let installed = installations()
         .await
         .map_err(error)?
         .into_iter()
-        .find(|g| g.app_id == request.app_id)
-        .ok_or_else(|| {
-            error(GogError::Invalid(
-                "Игра GOG не установлена. Обнови библиотеку.".into(),
-            ))
-        })?;
+        .find(|g| g.app_id == request.app_id);
+    if installed.is_none()
+        && request.account_id.is_none()
+        && !db
+            .get_games()
+            .await
+            .map_err(|e| error(e.into()))?
+            .iter()
+            .any(|g| g.launcher == "gog" && g.app_id == request.app_id)
+    {
+        return Err(error(GogError::Invalid(
+            "Игра GOG не установлена. Обнови библиотеку.".into(),
+        )));
+    }
     if let Some(id) = request.account_id.as_deref() {
         store.activate_launcher(&db, id).await.map_err(error)?;
     }
-    tokio::task::spawn_blocking(move || local::open_client(Some(&game)))
+    tokio::task::spawn_blocking(move || local::open_client(installed.as_ref()))
         .await
         .map_err(|_| error(GogError::Response))?
         .map_err(error)?;

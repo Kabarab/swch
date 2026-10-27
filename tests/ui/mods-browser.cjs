@@ -65,7 +65,7 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
       if(url.pathname==='/api/mods/theme'){theme={bg:'#123456',accent:'#abcdef'};json=theme;}
       if(url.pathname.endsWith('/settings')){if(request.method()==='POST')settings=request.postDataJSON();json=settings;}
       if(url.pathname.endsWith('/logs'))json={logs:['activation log']};
-      if(url.pathname.endsWith('/ui'))json={html:'<link rel="stylesheet" href="./style.css"><h1>SDK iframe</h1><img id="resource-image" src="../images/icon.svg"><button id="increment">Count</button><p id="value"></p><script type="module" src="./app.mjs"></script>'};
+      if(url.pathname.endsWith('/ui'))json={html:'<link rel="stylesheet" href="./style.css"><h1>SDK iframe</h1><a id=hash-link href=#library><span>Library section</span></a><a id=home-link href=#>Home section</a><output id=route></output><script>window.frameInstance={};addEventListener("hashchange",()=>{document.getElementById("route").textContent=location.hash;});</script><img id="resource-image" src="../images/icon.svg"><button id="increment">Count</button><p id="value"></p><script type="module" src="./app.mjs"></script>'};
       if(url.pathname.endsWith('/sdk')){
         const {method,params={}}=request.postDataJSON();
         if(method==='files.paths')json=filePaths;
@@ -148,6 +148,16 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
     assert.equal(await frame.locator('h1').evaluate(()=>{try{return !!parent.document.body;}catch{return false;}}),false,'mod iframe must not access the main DOM');
     assert.equal(await frame.locator('h1').evaluate(()=>{try{swch.assets.url('../outside');return false;}catch{return true;}}),true);
     assert.equal(await frame.locator('#value').evaluate(()=>window.modTimerProbe),true);
+    const navigationRequests=[];page.on('request',request=>{if(request.isNavigationRequest())navigationRequests.push(request.url());});
+    await frame.locator('h1').evaluate(()=>{window.initialFrameInstance=window.frameInstance;});
+    await frame.locator('#hash-link span').click();
+    await frame.locator('#route').getByText('#library',{exact:true}).waitFor();
+    assert.equal(await frame.locator('h1').evaluate(()=>window.frameInstance===window.initialFrameInstance),true);
+    await frame.getByRole('button',{name:'Count'}).click();await frame.locator('#value').getByText('2',{exact:true}).waitFor();
+    await frame.locator('#home-link').click();
+    await frame.locator('#route').getByText('#library',{exact:true}).waitFor({state:'hidden'});
+    assert.equal(await frame.locator('h1').evaluate(()=>location.hash),'');
+    assert.deepEqual(navigationRequests,[],'fragment links must stay in the srcdoc document without requesting the SWCH shell');
     const requests=await page.evaluate(()=>window.modRequests);
     assert.ok(requests.some(r=>r.pathname.endsWith('/sdk')));
     assert.ok(requests.some(r=>r.pathname==='/api/mods/install-file'&&r.isFile));

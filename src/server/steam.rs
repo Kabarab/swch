@@ -558,14 +558,15 @@ pub async fn launch(
                 "Доступ этого аккаунта к игре не подтверждён. Обнови библиотеку Steam.",
             )
         })?;
-    if !query.update_only && !game.game.is_installed && game.update.is_none() {
+    if false && !query.update_only && !game.game.is_installed && game.update.is_none() {
         return Err(error(StatusCode::CONFLICT, "Сначала установи игру."));
     }
+    let install_only = query.update_only || (!game.game.is_installed && game.update.is_none());
     let paths = SteamPaths::detect().map_err(internal)?;
     let command = crate::launchers::steam::client_launch::command(
         &paths,
         &query.app_id,
-        query.update_only,
+        install_only,
         &query.args,
     )
     .map_err(|m| error(StatusCode::BAD_REQUEST, m))?;
@@ -596,13 +597,13 @@ pub async fn launch(
             .dispatch()
             .await
             .map_err(|m| error(StatusCode::BAD_GATEWAY, m))?;
-        if !query.update_only {
+        if !install_only {
             crate::launchers::steam::launch_watch::start(paths, query.app_id.clone(), account.id.clone(), query.args.clone());
         }
     }
     Ok(Json(
-        serde_json::json!({"status":"requested","account_id":account.id,"update_only":query.update_only,
-        "message":if query.update_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Проверяем запуск в Steam. Если обнаружится обновление, SWCH дождётся завершения и повторит запуск, если Steam не запустит игру сам. Если Steam запросит вход, подтверди его."}}),
+        serde_json::json!({"status":"requested","account_id":account.id,"update_only":install_only,
+        "message":if install_only {"Запрос установки / обновления передан Steam. Прогресс появится после начала загрузки. Steam может запросить подтверждение."} else {"Проверяем запуск в Steam. Если обнаружится обновление, SWCH дождётся завершения и повторит запуск, если Steam не запустит игру сам. Если Steam запросит вход, подтверди его."}}),
     ))
 }
 

@@ -1,14 +1,15 @@
-import {initI18n, t, getLocale, numberFormat, localizedConfirm} from './i18n.js';
+import {initI18n, t, getLocale, numberFormat, localizedConfirm} from './i18n.js?v=install-1';
 import {gamePlaytime, timeLabel, timeScopeLabel} from './playtime.mjs?v=time-20261011-1';
 import {PLATFORMS, PLATFORM_IDS, inventoryPlatforms} from './platforms.mjs?v=mods-1';
-import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation,renderGameModsButton} from './mods.js?v=mod-covers-1';
+import {setupMods,loadModLibrary,modPageTitle,renderModPage,applyModTheme,isModPlatform,modCapability,modOperation,renderGameModsButton} from './mods.js?v=sff-navigation-20261018-2';
 import {riotKinds, riotKindLabel, riotInventoryData} from './riot-inventory.mjs?v=inventory-20261011-2';
 import {DEADLOCK_HEROES} from './deadlock-heroes.mjs?v=stats-20261011-1';
 import {deadlockOverview,deadlockHeroAccess,deadlockHeroName,deadlockRankLabel} from './deadlock-stats.mjs?v=stats-20261011-1';
 import {platformLogo, hydratePlatformLogos, renderPlatformNavigation, simplifyInventory, simplifyRiotInventory} from './ux.js?v=mods-1';
-import { accountPlayedGames, STYLES, gameKey, metricKey, filterGames, normalizeEpic, normalizeMetrics, safeImage, mergeLibraries, normalizeSteam, steamStats, inventoryKey, appendInventory, eligibleSteamAccounts, aggregateSteamStats, filterInventory, priceKey, inventoryValue, CURRENCIES, convertUsdCents, accountLibraryValue, accountHasGameBan, accountRestrictionsSummary, isItemUnsellable, isIgnoredSteamApp, KNOWN_STEAM_APP_NAMES, KNOWN_GAME_SHORTS, getDota2HeroIconUrl, getInventoryGamesWithItems, DOTA2_LOGO_SVG, inventoryHeroItems, inventoryTagCounts, csInventoryCategories } from './model.mjs';
+import { accountPlayedGames, DESIGNS, isMacPlatform, resolveDesign, STYLES, gameKey, metricKey, filterGames, normalizeEpic, normalizeMetrics, safeImage, mergeLibraries, normalizeSteam, steamStats, inventoryKey, appendInventory, eligibleSteamAccounts, aggregateSteamStats, filterInventory, priceKey, inventoryValue, CURRENCIES, convertUsdCents, accountLibraryValue, accountHasGameBan, accountRestrictionsSummary, isItemUnsellable, isIgnoredSteamApp, KNOWN_STEAM_APP_NAMES, KNOWN_GAME_SHORTS, getDota2HeroIconUrl, getInventoryGamesWithItems, DOTA2_LOGO_SVG, inventoryHeroItems, inventoryTagCounts, csInventoryCategories } from './model.mjs';
 import { initStartup } from './startup.js?v=startup-20261014-switches';
 import {readLibraryCache, writeLibraryCache} from './library-cache.mjs';
+import {GamepadManager, detectControllerType} from './gamepad.mjs?v=gamepad-1';
 void initI18n();
 const confirm = localizedConfirm;
 const $ = (id) => document.getElementById(id);
@@ -17,6 +18,7 @@ const paths = {
 };
 const ACCENT_COLORS = [
   { id: 'orange', name: 'Оранжевый', hex: '#f05a22', rgb: '240, 90, 34' },
+  { id: 'apple-blue', name: 'Синий Apple', hex: '#0a84ff', rgb: '10, 132, 255' },
   { id: 'blue', name: 'Синий', hex: '#3b82f6', rgb: '59, 130, 246' },
   { id: 'emerald', name: 'Изумрудный', hex: '#10b981', rgb: '16, 185, 129' },
   { id: 'purple', name: 'Фиолетовый', hex: '#a855f7', rgb: '168, 85, 247' },
@@ -37,6 +39,9 @@ function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 const namespace = demo ? 'swch-demo' : 'swch';
 let style = read('swch-style', 'epic'); if (!STYLES[style]) style = 'epic';
+let savedDesign = read('swch-design', null);
+let design = resolveDesign(savedDesign, isMacPlatform());
+let hasSavedAccent = read('swch-accent-color', null) !== null;
 let layout = read('swch-layout',STYLES[style].layout); if(!['cards','detail'].includes(layout))layout=STYLES[style].layout;
 let currency=read('swch-currency','USD');if(!Object.hasOwn(CURRENCIES,currency))currency='USD';
 let excludeUnsellableBanned = read('swch-exclude-unsellable-banned', true);
@@ -132,7 +137,7 @@ let riotSyncBusy=false, riotSyncProgress='';
 const riotProfileErrors=new Map();
 let robloxStatus = null, robloxAccounts = [];
 let minecraftStatus = null, minecraftAccounts = [], minecraftProfiles = [], minecraftServers = [], minecraftWorlds = [];
-const canRequestLaunch = g => isModPlatform(g.launcher) ? modCapability(g.launcher,'launch') : g.launcher==='gog' ? Boolean(g.is_installed&&gogStatus?.client_installed&&gogStatus?.launch_supported) : g.launcher==='riot' ? Boolean(riotStatus?.capabilities?.launch) : (g.launcher==='roblox'||g.launcher==='minecraft'||g.launcher==='hoyoverse') ? true : Boolean(g.is_installed||g.update);
+const canRequestLaunch = g => isModPlatform(g.launcher) ? modCapability(g.launcher,'launch') : g.launcher==='gog' ? Boolean(gogStatus?.client_installed&&gogStatus?.launch_supported) : g.launcher==='ubisoft' ? Boolean(g.is_installed||ubisoftStatus?.client_installed) : g.launcher==='riot' ? Boolean(riotStatus?.capabilities?.launch) : (g.launcher==='roblox'||g.launcher==='minecraft'||g.launcher==='hoyoverse'||g.launcher==='steam'||g.launcher==='epic') ? true : Boolean(g.is_installed||g.update);
 async function launchRiot(appId=null,accountId=null) {
  if(demo){toast('Демо: реальные приложения не запускаются.');return;}
  if(busy)return;busy=true;render();
@@ -398,16 +403,60 @@ async function refresh(force = false) {
  } catch { notice('Не удалось прочитать библиотеку. Проверь локальный сервис и повтори загрузку.'); }
  finally { busy=false;loading=false;document.querySelector('[data-action="refresh"]').disabled=false;render();if($('game-modal')?.open&&$('game-modal').dataset.game)openGameModal($('game-modal').dataset.game);void hydratePlaytime(force); }
 }
+function getEffectiveAccentId() {
+  return (!hasSavedAccent && accentColor === 'orange' && design === 'apple') ? 'apple-blue' : accentColor;
+}
+function renderDesignOptions() {
+  const isMac = isMacPlatform();
+  design = resolveDesign(savedDesign, isMac);
+  document.querySelectorAll('[data-design-choice]').forEach(b => {
+    const choice = b.dataset.designChoice;
+    const isSelected = choice === design;
+    const locked = Boolean(DESIGNS[choice]?.macOnly && !isMac);
+    b.classList.toggle('selected', isSelected);
+    b.classList.toggle('mac-locked', locked);
+    b.disabled = locked;
+    b.setAttribute('aria-pressed', String(isSelected));
+    if (locked) b.setAttribute('aria-disabled', 'true');
+    else b.removeAttribute('aria-disabled');
+  });
+  const badgeEl = $('design-platform-badge');
+  if (badgeEl) {
+    badgeEl.textContent = t(isMac ? 'macOS HIG' : 'Только для Mac');
+    badgeEl.classList.toggle('is-mac', isMac);
+  }
+  const noteEl = $('design-mac-note');
+  if (noteEl) {
+    noteEl.textContent = t(
+      isMac
+        ? 'На ваш Mac можно применить нативный дизайн в стиле Apple или классический интерфейс SWCH.'
+        : 'Дизайн в стиле Apple доступен только на компьютерах Mac (macOS).'
+    );
+  }
+}
 function applyStyle() {
+ const isMac = isMacPlatform();
+ design = resolveDesign(savedDesign, isMac);
+ document.documentElement.dataset.style=style;
+ document.documentElement.dataset.design=design;
+ document.documentElement.classList.toggle('platform-macos', isMac);
+ document.documentElement.classList.toggle('apple-design', design === 'apple');
+ const effectiveAccent = getEffectiveAccentId();
+ const activeColor = effectiveAccent === 'custom'
+   ? {hex: customAccentColor, rgb: customAccentColor.slice(1).match(/.{2}/g).map(channel => parseInt(channel, 16)).join(', ')}
+   : ACCENT_COLORS.find(c => c.id === effectiveAccent) || ACCENT_COLORS[0];
+ if (false) {
  document.documentElement.dataset.style=style;
  const activeColor = accentColor === 'custom'
    ? {hex: customAccentColor, rgb: customAccentColor.slice(1).match(/.{2}/g).map(channel => parseInt(channel, 16)).join(', ')}
    : ACCENT_COLORS.find(c => c.id === accentColor) || ACCENT_COLORS[0];
+ }
  document.documentElement.style.setProperty('--accent', activeColor.hex);
  document.documentElement.style.setProperty('--accent-rgb', activeColor.rgb);
  const modeName = t(layout === 'cards' ? 'Карточки' : 'Список');
  const labelEl = $('style-label');
  if (labelEl) labelEl.textContent = `Настройки (${modeName})`;
+ renderDesignOptions();
  document.querySelectorAll('[data-layout]').forEach(b=> { b.classList.toggle('active',b.dataset.layout===layout);b.setAttribute('aria-pressed',String(b.dataset.layout===layout)); });
  document.querySelectorAll('[data-layout-choice]').forEach(b=> {
    const isSelected = b.dataset.layoutChoice === layout;
@@ -979,16 +1028,21 @@ function openGameModal(key) {
     const body = $('game-modal-body');
     if (!modal || !body) return;
     modal.dataset.game = key;
+    const headerTitle = $('game-modal-header-title');
+    if (headerTitle) headerTitle.textContent = g.name;
 
     const a = chosenAccount(g);
     const priceInfo = getGamePriceInfo(g, a);
     const m = displayedMetrics(g, a);
     const isFortnite = Boolean(g.name?.toLowerCase().includes('fortnite') || g.app_id?.toLowerCase().includes('fortnite'));
+    const isDownloading = downloadInProgress(g);
     const desc = g.description || (g.is_installed
       ? 'Игра установлена на этом устройстве. Выбирай активный аккаунт и запускай игру.'
-      : (isFortnite
-        ? 'Fortnite привязан к твоему аккаунту Epic Games. Ты можешь просмотреть шкафчик, V-Bucks и скины онлайн прямо в SWCH или установить клиент через Epic Games.'
-        : 'Игра находится в твоей библиотеке. Установи её для запуска.'));
+      : (isDownloading
+        ? (g.update?.phase === 'paused' ? 'Загрузка приостановлена. Нажми кнопку для продолжения.' : 'Идёт загрузка и обновление в Steam. Игра запустится после завершения.')
+        : (isFortnite
+          ? 'Fortnite привязан к твоему аккаунту Epic Games. Ты можешь просмотреть шкафчик, V-Bucks и скины онлайн прямо в SWCH или установить клиент через Epic Games.'
+          : 'Игра находится в твоей библиотеке. Установи её для запуска.')));
 
     body.innerHTML = `
       <div class="game-modal-hero playnite-style">
@@ -1076,6 +1130,7 @@ function render() {
  renderModPage(page);
  if(page==='accounts') renderAccounts(); else if(page==='inventory') renderInventory(); else if(['library','favorites'].includes(page)) renderLibrary();
  hydrateIcons();hydratePlatformLogos();
+ if(gamepadManager?.isActive) gamepadManager.updateHUD();
 }
 function renderLibrary() {
  const container=$('library-content');
@@ -1373,12 +1428,13 @@ function openRiotCollection(accountId,appId) {
 
 function renderColorOptions() {
   const colorContainer = $('color-options');
+  const activeAccent = getEffectiveAccentId();
   if (colorContainer) {
     colorContainer.innerHTML = ACCENT_COLORS.map(c => `
-      <button type="button" class="color-swatch-btn ${c.id === accentColor ? 'selected' : ''}" data-color-choice="${c.id}" aria-pressed="${c.id === accentColor}">
+      <button type="button" class="color-swatch-btn ${c.id === activeAccent ? 'selected' : ''}" data-color-choice="${c.id}" aria-pressed="${c.id === activeAccent}">
         <span class="color-dot" style="background:${c.hex}"></span>
         <span class="color-name">${c.name}</span>
-        ${c.id === accentColor ? '<span class="color-check">✓</span>' : ''}
+        ${c.id === activeAccent ? '<span class="color-check">✓</span>' : ''}
       </button>
     `).join('') + `
       <label class="color-swatch-btn custom-color-swatch ${accentColor === 'custom' ? 'selected' : ''}">
@@ -1392,6 +1448,7 @@ function renderColorOptions() {
 function updateCustomAccentColor(value) {
  customAccentColor = normalizeAccentHex(value);
  accentColor = 'custom';
+ hasSavedAccent = true;
  save('swch-custom-accent-color', customAccentColor);
  save('swch-accent-color', accentColor);
  applyStyle();
@@ -1407,6 +1464,7 @@ function updateCustomAccentColor(value) {
  swatch.querySelector('.color-check').hidden = false;
 }
 function showStyles() {
+  renderDesignOptions();
   renderColorOptions();
   document.querySelectorAll('[data-layout-choice]').forEach(b => {
     const isSelected = b.dataset.layoutChoice === layout;
@@ -1415,6 +1473,10 @@ function showStyles() {
   });
   renderCurrency();
   refreshStartup();
+  if (gamepadManager) {
+    gamepadManager.updateConnectedList();
+    gamepadManager.renderSettingsDevices();
+  }
   const dlg = $('styles-dialog');
   if (dlg) dlg.showModal();
 }
@@ -1926,7 +1988,8 @@ function downloadProgress(g){
  if(!u)return {percent:null,done:0,total:0,stage:false};
  const stage=['installing','verifying'].includes(u.phase);
  const done=Number(stage?u.staged:u.downloaded)||0,total=Number(stage?u.stage_total:u.download_total)||0;
- return {percent:!u.telemetry?.progress_stale&&total>0&&!((stage||u.phase==='downloading')&&done===0)?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
+ const indeterminate=(stage||u.phase==='downloading')&&done===0;
+ return {percent:!indeterminate&&total>0?Math.max(0,Math.min(100,done/total*100)):null,done,total,stage};
 }
 function coverProgress(g){
  const u=downloadState(g),p=downloadProgress(g);
@@ -1952,12 +2015,12 @@ function downloadEta(g){
 function downloadMetrics(g,compact=false){
  const u=downloadState(g),t=u?.telemetry||{},p=downloadProgress(g);
  const clientRate=!(t.download_bps>0)&&Number.isFinite(t.steam_download_bps);
- const rate=clientRate?t.steam_download_bps:t.progress_stale||t.download_bps===0?null:t.download_bps;
- const rateLabel=clientRate?'Скачивание Steam':'Скачивание';
+ const rate=clientRate?t.steam_download_bps:t.download_bps>0?t.download_bps:(Number.isFinite(t.steam_download_bps)?t.steam_download_bps:(t.progress_stale||t.download_bps===0?null:t.download_bps));
+ const rateLabel=(clientRate||(!t.download_bps&&Number.isFinite(t.steam_download_bps)))?'Скачивание Steam':'Скачивание';
  if(compact)return `<div class="card-download" role="status"><div><strong>${p.percent==null?'—':format.format(p.percent)+'%'}</strong><span>${p.percent==null?'—':downloadBytes(p.done)} / ${p.total>0?downloadBytes(p.total):'—'}${p.stage?' на диске':''}</span></div><small>${rateLabel}: ${downloadRate(rate)} · ${downloadEta(g)}</small><small>Диск Steam: ↓ ${downloadRate(t.steam_read_bps)} · ↑ ${downloadRate(t.steam_write_bps)}</small>${downloadsStale?'<small class="error-text">Связь со Steam потеряна. Показаны последние данные.</small>':''}</div>`;
  return `<dl class="download-metrics"><div><dt>${rateLabel}</dt><dd>${downloadRate(rate)}</dd></div><div><dt>${p.stage?'Осталось на установку':'Осталось на скачивание'}</dt><dd>${downloadEta(g)}</dd></div><div><dt>Чтение диска · Steam</dt><dd>${downloadRate(t.steam_read_bps)}</dd></div><div><dt>Запись диска · Steam</dt><dd>${downloadRate(t.steam_write_bps)}</dd></div></dl>`;
 }
-function playLabel(g){if(g.launcher==='gog')return !g.is_installed?'Не установлена':!gogStatus?.launch_supported?'Запуск на Windows':!gogStatus?.client_installed?'Нужен GALAXY':'Играть';if(g.launcher==='riot')return !riotStatus?.client_installed?'Нужен Riot Client':g.is_installed?'Играть':'Установить / открыть';if(g.launcher==='roblox')return 'Играть в Roblox';if(g.launcher==='minecraft')return g.id.startsWith('minecraft_server_') ? 'Войти на сервер' : 'Играть в Minecraft';return downloadState(g)?.phase==='requested'?'Ожидаем Steam':downloadInProgress(g)&&g.update?.phase!=='paused'?'Играть после обновления':g.update?.required?'Обновить и играть':g.is_installed?'Играть':'Не установлена';}
+function playLabel(g){if(g.launcher==='gog')return !gogStatus?.launch_supported?'Запуск на Windows':!gogStatus?.client_installed?'Нужен GALAXY':g.is_installed?'Играть':'Установить';if(g.launcher==='riot')return !riotStatus?.client_installed?'Нужен Riot Client':g.is_installed?'Играть':'Установить / открыть';if(g.launcher==='roblox')return 'Играть в Roblox';if(g.launcher==='minecraft')return g.id.startsWith('minecraft_server_') ? 'Войти на сервер' : 'Играть в Minecraft';return downloadState(g)?.phase==='requested'?'Ожидаем Steam':downloadInProgress(g)&&g.update?.phase!=='paused'?'Играть после обновления':g.update?.required?'Обновить и играть':g.is_installed?'Играть':'Установить';}
 function renderUpdate(g){
  if(g.launcher!=='steam')return '';
  const u=downloadState(g);
@@ -1991,7 +2054,7 @@ function chooseLaunchAccount(key,updateOnly=false){
  const launchList=unbanned.length?unbanned:list;
  if(launchList.length<=1){void launch(key,launchList[0]?.id,updateOnly);return;}
  let dialog=$('launch-account-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='launch-account-dialog';document.body.append(dialog);}
- dialog.innerHTML=`<div class="dialog-heading"><h2>${updateOnly?'Обновить':'Играть'} · ${esc(g.name)}</h2><button class="icon-button" data-close aria-label="Закрыть">${icon('close')}</button></div><p class="muted">${g.launcher==='gog'?'SWCH войдёт в выбранный аккаунт GALAXY перед запуском игры. Перед переключением заверши игру.':'Выбери аккаунт — SWCH автоматически сделает его активным.'}</p><div class="launch-account-options">${launchList.map(a=>{
+ dialog.innerHTML=`<div class="dialog-heading"><h2>${updateOnly?'Обновить':!g.is_installed?'Установить':'Играть'} · ${esc(g.name)}</h2><button class="icon-button" data-close aria-label="Закрыть">${icon('close')}</button></div><p class="muted">${g.launcher==='gog'?'SWCH войдёт в выбранный аккаунт GALAXY перед запуском игры. Перед переключением заверши игру.':'Выбери аккаунт — SWCH автоматически сделает его активным.'}</p><div class="launch-account-options">${launchList.map(a=>{
    const isBanned = accountHasGameBan(a, g.app_id, g.name, accountRestrictions);
    return `<button class="account-chip ${isBanned?'is-banned':''}" data-action="launch-account" data-game="${esc(key)}" data-account="${esc(a.id)}" data-update="${updateOnly}">${accountAvatar(a)}<span>${esc(a.display_name||a.username)}${isBanned?'<span class="chip-ban-badge">⚠️ Бан в игре</span>':''}<small>${g.launcher==='ubisoft'?'Доступ проверит клиент':g.launcher==='steam'?esc(g.is_free&&!steamStats(steamRows,g.app_id,a.id)?'Бесплатная игра':accessLabel(steamStats(steamRows,g.app_id,a.id)?.access)):'Своя игра'}${(g.launcher==='gog'?a.launcher_active:a.is_active)?(g.launcher==='gog'?' · В GALAXY':' · Активен'):''}</small></span></button>`;
  }).join('')}</div>`;
@@ -2009,7 +2072,7 @@ async function launch(key,accountId=null,updateOnly=false) {
    return;
  }
  if(g.launcher==='roblox'){const placeId=g.app_id==='roblox'?null:g.app_id;await launchRoblox(placeId,accountId);return;}
- if(g.launcher==='ubisoft'){await launchUbisoft(g.app_id,accountId||chosenAccount(g)?.id||null);return;}
+ if(g.launcher==='ubisoft'){await launchUbisoft(g.is_installed?g.app_id:null,accountId||chosenAccount(g)?.id||null);return;}
  if(g.launcher==='gog'){await launchGog(g.app_id,accountId||chosenAccount(g)?.id||null);return;}
  if(g.launcher==='hoyoverse'){await launchHoyoverse(g.app_id, accountId || chosenAccount(g)?.id || null);return;}
  if(g.launcher==='minecraft'){
@@ -2017,8 +2080,8 @@ async function launch(key,accountId=null,updateOnly=false) {
    openMinecraftLaunchModal(serverIp, accountId);
    return;
  }
- const a=accountId?availableAccounts(g).find(a=>a.id===accountId):chosenAccount(g);if(!a){toast('Сначала подключи аккаунт с доступом к игре.');return;}
- if(!updateOnly && accountHasGameBan(a, g.app_id, g.name, accountRestrictions)) {
+ const a=accountId?availableAccounts(g).find(a=>a.id===accountId):chosenAccount(g);if(!a){toast('Сначала подключи аккаунт с доступом к игре.');return;}const installOrUpdate=updateOnly||(!g.is_installed&&!g.update);
+ if(!installOrUpdate && accountHasGameBan(a, g.app_id, g.name, accountRestrictions)) {
   const confirmed = await confirmLaunchWithBan(g, a);
   if(!confirmed) return;
  }
@@ -2028,8 +2091,8 @@ async function launch(key,accountId=null,updateOnly=false) {
  busy=true;render();refreshGameModalDownload();refreshDownloadVisuals();
  try {
   let result;
-  if(g.launcher==='steam')result=await api('/api/steam/launch',{app_id:g.app_id,account_id:a.id,update_only:updateOnly});
-  else {if(!a.is_active)await api('/api/epic/switch',{account_id:a.id});result=await api('/api/epic/launch',{app_name:g.app_id,account_id:a.id});}
+  if(g.launcher==='steam')result=await api('/api/steam/launch',{app_id:g.app_id,account_id:a.id,update_only:installOrUpdate});
+  else if(!g.is_installed){try{result=await api('/api/epic/open-launcher',{account_id:a.id});}catch(e){if(e.message&&(e.message.includes('404')||e.message.includes('405')))result=await api('/api/epic/switch',{account_id:a.id});else throw e;}}else {if(!a.is_active)await api('/api/epic/switch',{account_id:a.id});result=await api('/api/epic/launch',{app_name:g.app_id,account_id:a.id});}
   accounts.forEach(acc=>{if(acc.launcher===a.launcher)acc.is_active=acc.id===a.id;});
   if(pendingDownloads.has(key))pendingDownloads.set(key,Date.now()+60000);
   toast(result.message||'Запрос на запуск передан.');
@@ -2135,7 +2198,19 @@ async function cancelSteamLaunch(key){
     }
     return;
   }
+  if(b.dataset.designChoice){
+   const requested=b.dataset.designChoice;
+   const isMac=isMacPlatform();
+   if(DESIGNS[requested]?.macOnly && !isMac){
+     toast('Дизайн в стиле Apple доступен только на macOS');return;
+   }
+   savedDesign=requested;design=resolveDesign(savedDesign,isMac);
+   save('swch-design',savedDesign);
+   applyStyle();renderColorOptions();showStyles();render();
+   toast(design==='apple'?'Дизайн Apple (macOS) применён':'Классический дизайн SWCH применён');return;
+  }
   if(b.dataset.colorChoice){
+   hasSavedAccent=true;
    accentColor=b.dataset.colorChoice;save('swch-accent-color',accentColor);
    applyStyle();renderColorOptions();toast('Цвет интерфейса обновлён');return;
  }
@@ -4355,7 +4430,81 @@ async function estimateLibrary(accountId='all'){
  }finally{job.active=false;update();}
 }
 
+let gamepadManager = null;
+function initGamepadIntegration() {
+  const enabledToggle = $('gamepad-enabled-toggle');
+  const vibrationToggle = $('gamepad-vibration-toggle');
+  const layoutSelect = $('gamepad-layout-select');
+
+  gamepadManager = new GamepadManager({
+    toast,
+    onPageChange: (newPage) => {
+      page = newPage;
+      render();
+    },
+    onPlatformChange: (newPlatform) => {
+      platform = newPlatform;
+      gogAccountFilter = 'all';
+      if (page !== 'accounts') page = 'library';
+      render();
+    },
+    onSettingsToggle: () => {
+      const dlg = $('styles-dialog');
+      if (dlg?.open) dlg.close();
+      else showStyles();
+    },
+    onLayoutToggle: () => {
+      layout = layout === 'cards' ? 'detail' : 'cards';
+      save('swch-layout', layout);
+      render();
+    },
+  });
+
+  if (enabledToggle) {
+    enabledToggle.checked = gamepadManager.enabled;
+    enabledToggle.addEventListener('change', () => {
+      gamepadManager.enabled = enabledToggle.checked;
+      gamepadManager.saveStorage('swch-gamepad-enabled', gamepadManager.enabled);
+      gamepadManager.updateFooterIndicator();
+      if (!gamepadManager.enabled) gamepadManager.deactivateGamepadMode();
+    });
+  }
+
+  if (vibrationToggle) {
+    vibrationToggle.checked = gamepadManager.vibration;
+    vibrationToggle.addEventListener('change', () => {
+      gamepadManager.vibration = vibrationToggle.checked;
+      gamepadManager.saveStorage('swch-gamepad-vibration', gamepadManager.vibration);
+      if (gamepadManager.vibration) gamepadManager.vibrate('confirm');
+    });
+  }
+
+  if (layoutSelect) {
+    layoutSelect.value = gamepadManager.layoutPreference;
+    layoutSelect.addEventListener('change', () => {
+      gamepadManager.layoutPreference = layoutSelect.value;
+      gamepadManager.saveStorage('swch-gamepad-layout', gamepadManager.layoutPreference);
+      gamepadManager.detectedStyle = gamepadManager.layoutPreference === 'auto'
+        ? (gamepadManager.activeGamepadName ? detectControllerType(gamepadManager.activeGamepadName) : 'xbox')
+        : gamepadManager.layoutPreference;
+      gamepadManager.updateHUD();
+      gamepadManager.renderSettingsDevices();
+    });
+  }
+
+  const footerGamepad = $('footer-gamepad');
+  if (footerGamepad) {
+    footerGamepad.addEventListener('click', () => {
+      showStyles();
+      $('settings-gamepad-group')?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  gamepadManager.updateFooterIndicator();
+}
+
 const refreshStartup = initStartup({toast, demo});
+initGamepadIntegration();
 $('mobile-platform').addEventListener('change',e=>{platform=e.target.value;gogAccountFilter='all';if(page!=='accounts')page='library';render();});
 setupMods({api,toast,demo,changed:()=>refresh(true),render,gameKey,games:()=>games,accountForGame:chosenAccount,navigate:next=>{const modal=$('game-modal');if(modal?.open)modal.close();page=next;render();},openGame:key=>{page='library';render();openGameModal(key);}});
 restoreLibraryCache();hydrateIcons();await refresh();void syncModules();setInterval(syncModules, 10000);void loadCurrencies();if(!demo){void refreshSteamRestrictions();setInterval(refreshSteamRestrictions,15*60*1000);void hydrateInventoryCache();void hydrateGamePrices();void hydrateMissingSteamNames();void pollDownloads();setInterval(pollDownloads,2000);setInterval(pollUbisoftAccounts,3000);setInterval(pollUbisoftAutoLogin,1000);setTimeout(() => void checkForUpdates(false), 1500);}

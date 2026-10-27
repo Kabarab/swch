@@ -1,0 +1,27 @@
+name: Release SWCH mod
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/checkout@v4
+        with:
+          repository: Kabarab/swch
+          path: .swch-sdk
+          sparse-checkout: mod-sdk
+      # Only the author's release workflow executes their optional build step.
+      - name: Pack mod
+        run: |
+          node .swch-sdk/mod-sdk/cli.mjs check .
+          node .swch-sdk/mod-sdk/cli.mjs pack . dist/mod.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/mod.zip

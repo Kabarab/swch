@@ -193,7 +193,8 @@ fn log_timestamp(line: &str) -> Option<i64> {
         chrono::NaiveDateTime::parse_from_str(line.get(1..20)?, "%Y-%m-%d %H:%M:%S").ok()?;
     chrono::Local
         .from_local_datetime(&stamp)
-        .single()
+        .earliest()
+        .or_else(|| chrono::Local.from_local_datetime(&stamp).latest())
         .map(|t| t.timestamp())
 }
 
@@ -254,12 +255,15 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
     let mut steam_download_bps = None;
     for line in log.lines() {
         if let Some((_, rate)) = line.split_once("Current download rate: ") {
-            steam_download_bps = log_timestamp(line)
-                .filter(|stamp| (0..=75).contains(&(chrono::Utc::now().timestamp() - stamp)))
+            if let Some(bps) = log_timestamp(line)
+                .filter(|stamp| (-30..=180).contains(&(chrono::Utc::now().timestamp() - stamp)))
                 .and_then(|_| rate.strip_suffix(" Mbps"))
                 .and_then(|s| s.parse::<f64>().ok())
                 .filter(|n| n.is_finite() && *n >= 0.0)
-                .map(|mbps| mbps * 1_000_000.0 / 8.0);
+                .map(|mbps| mbps * 1_000_000.0 / 8.0)
+            {
+                steam_download_bps = Some(bps);
+            }
         }
     }
     let mut games = BTreeMap::new();
@@ -338,23 +342,30 @@ pub fn snapshot(paths: &SteamPaths) -> BTreeMap<String, DownloadSnapshot> {
                         telemetry.download_bps =
                             counter_rate(prev.downloaded, update.downloaded, seconds);
                         telemetry.stage_bps = counter_rate(prev.staged, update.staged, seconds);
-                        telemetry.eta_seconds = if update.phase == "downloading" {
-                            remaining_seconds(
-                                update.downloaded,
-                                update.download_total,
-                                telemetry.download_bps,
-                            )
-                        } else if update.phase == "installing" {
-                            remaining_seconds(
-                                update.staged,
-                                update.stage_total,
-                                telemetry.stage_bps,
-                            )
-                        } else {
-                            None
-                        };
                     }
                 }
+                let active_rate = if update.phase == "downloading" {
+                    telemetry.download_bps.or(telemetry.steam_download_bps)
+                } else if update.phase == "installing" {
+                    telemetry.stage_bps.or(telemetry.steam_write_bps)
+                } else {
+                    None
+                };
+                telemetry.eta_seconds = if update.phase == "downloading" {
+                    remaining_seconds(
+                        update.downloaded,
+                        update.download_total,
+                        active_rate,
+                    )
+                } else if update.phase == "installing" {
+                    remaining_seconds(
+                        update.staged,
+                        update.stage_total,
+                        active_rate,
+                    )
+                } else {
+                    None
+                };
             }
             update.telemetry = Some(telemetry);
             games.insert(

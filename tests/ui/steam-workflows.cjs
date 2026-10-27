@@ -23,7 +23,7 @@ const assert=require('node:assert/strict');
  });
  await page.goto(process.env.SWCH_UI_URL||'http://127.0.0.1:4245/');await page.locator('.game-card').first().waitFor();
  assert.equal(await page.locator('[data-action="quick-launch"]').count(),3);
- assert(await page.locator('[data-action="quick-launch"][data-game="steam:620"]').isDisabled());assert((await page.locator('.game-card').filter({hasText:'Portal 2'}).innerText()).includes('Не установлена'));
+ assert(!await page.locator('[data-action="quick-launch"][data-game="steam:620"]').isDisabled());assert((await page.locator('.game-card').filter({hasText:'Portal 2'}).innerText()).includes('Не установлена'));assert((await page.locator('[data-action="quick-launch"][data-game="steam:620"]').innerText()).includes('Установить'));
  await page.locator('[data-action="quick-launch"][data-game="steam:730"]').click();await page.locator('#launch-account-dialog').waitFor();assert.equal(writes.length,0);assert((await page.locator('#launch-account-dialog').innerText()).includes('Семейный доступ'));
  await page.locator(`[data-action="launch-account"][data-account="${b}"]`).click();await page.waitForFunction(()=>!document.querySelector('#launch-account-dialog').open);assert.deepEqual(writes[0],['/api/steam/launch',{app_id:'730',account_id:b,update_only:false}]);assert.equal(await page.locator('.game-card').count(),3,'quick launch keeps card view');
  await page.locator('[data-action="styles"]').first().click();await page.locator('[data-style-choice="steam"]').click();assert.equal(await page.locator('.game-list').count(),1);assert.equal(await page.locator('.detail-panel').count(),1);

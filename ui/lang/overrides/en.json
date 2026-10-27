@@ -84,5 +84,13 @@
   "Очистить кэш мода? Постоянные данные сохранятся.": "Clear the mod cache? Persistent data will be kept.",
   "Файлы и место на диске": "Files and disk space",
   "Файлы и место на диске · {0}": "Files and disk space · {0}",
-  "байт": "bytes"
+  "байт": "bytes",
+  "Запись диска · Steam": "Steam Disk Write",
+  "Чтение диска · Steam": "Steam Disk Read",
+  "Обновляется": "Updating",
+  "Рассчитываем…": "Calculating…",
+  "Осталось на скачивание": "Time remaining (download)",
+  "Осталось на установку": "Time remaining (install)",
+  "Диск Steam: ↓ {7} · ↑ {8}": "Steam disk: ↓ {7} · ↑ {8}",
+  "Скачивание Steam": "Steam Download"
 }

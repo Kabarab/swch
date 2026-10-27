@@ -132,6 +132,36 @@ async fn fixture() -> (tempfile::TempDir, Database, Arc<ModManager>) {
     ));
     (dir, db, manager)
 }
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_mod_installation_exposes_paths_usable_by_node_realpath() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(&dir.path().join("paths.db")).unwrap();
+    db.run_migrations().await.unwrap();
+    let root = dir.path().canonicalize().unwrap().join("mods with spaces Юникод");
+    let manager = ModManager::with_dir(db, root, Some(node()));
+    let bytes = backend("1.0.0", r#"
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+export default async s => {
+  const paths = await s.files.paths();
+  const values = [process.cwd(), process.argv[2], ...Object.values(paths),
+    ...['DATA','CACHE','TEMP','TOOLS','PACKAGE'].map(kind => process.env['SWCH_MOD_'+kind+'_DIR']),
+    process.env.SWCH_DB_PATH];
+  for (const value of values) {
+    assert.ok(value && !value.startsWith('\\\\?\\'), value);
+    assert.ok(fs.realpathSync(value));
+  }
+  s.registerAction({id:'paths',name:'Paths'}, () => values.length);
+}
+"#);
+    manager.install_bytes(&bytes, &package::digest(&bytes), None).await.unwrap();
+    assert_eq!(manager.action("test.mod", "paths", json!({})).await.unwrap(), 12);
+    manager.reload("test.mod").await.unwrap();
+    assert_eq!(manager.action("test.mod", "paths", json!({})).await.unwrap(), 12);
+    manager.shutdown().await;
+}
 const PROVIDER: &str = r#"
 export default async function(s){
  const accounts=async()=>await s.storage.get('accounts')||[];

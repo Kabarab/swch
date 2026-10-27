@@ -41,6 +41,17 @@ export async function loadModLibrary() {
   return {games:data.games||[],accounts:data.accounts||[]};
 }
 export function modPageTitle(page) {if(page==='mods')return ['Моды','Новые возможности от сообщества.','Моды'];if(page.startsWith('mod-tab:')){const [,id,tab]=page.split(':');const name=mods.find(m=>m.manifest.id===id)?.contributions?.tabs?.find(t=>t.id===tab)?.name||'Мод';return [name,frameContext?.game?.name||'Расширение SWCH','Мод'];}return null;}
+// Injected into srcdoc: the resource <base> must not turn fragment links into
+// requests for the package directory, which the server resolves to the hub UI.
+function modHashNavigation(event) {
+  if(event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+  const link=event.target instanceof Element?event.target.closest('a[href],area[href]'):null;
+  const href=link?.getAttribute('href')?.trim();
+  const target=link?.getAttribute('target')||document.querySelector('base[target]')?.getAttribute('target')||'_self';
+  if(!href?.startsWith('#')||link.hasAttribute('download')||target.toLowerCase()!=='_self')return;
+  event.preventDefault();
+  location.hash=href;
+}
 export function renderModPage(page) {
   const view=document.getElementById('mods-view');view.hidden=page!=='mods'&&!page.startsWith('mod-tab:');
   if(view.hidden){++renderGeneration;if(frameKey||view.querySelector('.mod-frame')){view.replaceChildren();frameKey='';}return;}
@@ -54,7 +65,7 @@ export function renderModPage(page) {
     const uiPath=mods.find(mod=>mod.manifest.id===id)?.manifest.ui||'index.html';
     const uiDirectory=uiPath.split('/').slice(0,-1).map(enc).join('/');
     const base=assetRoot+(uiDirectory?uiDirectory+'/':'');
-    const bootstrap=`<base href="${esc(base)}"><script>const assetRoot=${bridgeJSON(assetRoot)},pending=new Map(),listeners=new Map();let sequence=0;window.swch={assets:{url:path=>{if(typeof path!=='string'||!path||path.includes(':')||path.includes(String.fromCharCode(92))||path.split('/').some(part=>!part||part==='.'||part==='..'))throw new Error('Expected a package-relative resource path');return assetRoot+path.split('/').map(encodeURIComponent).join('/');}},call:(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});parent.postMessage({swch:1,id,method,params},'*');}),on:(event,fn)=>{if(!listeners.has(event))listeners.set(event,new Set());listeners.get(event).add(fn);return ()=>listeners.get(event)?.delete(fn);},tab:${bridgeJSON(tab)},game:${bridgeJSON(frameContext?.game||null)},account:${bridgeJSON(frameContext?.account||null)}};addEventListener('message',e=>{if(e.source!==parent||e.data?.swch!==1)return;const d=e.data;if(d.event){for(const fn of listeners.get(d.event)||[])fn(d.data);return;}const p=pending.get(d.id);if(p){pending.delete(d.id);d.error?p.reject(new Error(d.error)):p.resolve(d.result);}});<\/script>`;
+    const bootstrap=`<base href="${esc(base)}"><script>addEventListener('click',${modHashNavigation.toString()});const assetRoot=${bridgeJSON(assetRoot)},pending=new Map(),listeners=new Map();let sequence=0;window.swch={assets:{url:path=>{if(typeof path!=='string'||!path||path.includes(':')||path.includes(String.fromCharCode(92))||path.split('/').some(part=>!part||part==='.'||part==='..'))throw new Error('Expected a package-relative resource path');return assetRoot+path.split('/').map(encodeURIComponent).join('/');}},call:(method,params={})=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});parent.postMessage({swch:1,id,method,params},'*');}),on:(event,fn)=>{if(!listeners.has(event))listeners.set(event,new Set());listeners.get(event).add(fn);return ()=>listeners.get(event)?.delete(fn);},tab:${bridgeJSON(tab)},game:${bridgeJSON(frameContext?.game||null)},account:${bridgeJSON(frameContext?.account||null)}};addEventListener('message',e=>{if(e.source!==parent||e.data?.swch!==1)return;const d=e.data;if(d.event){for(const fn of listeners.get(d.event)||[])fn(d.data);return;}const p=pending.get(d.id);if(p){pending.delete(d.id);d.error?p.reject(new Error(d.error)):p.resolve(d.result);}});<\/script>`;
     frame.srcdoc=bootstrap+html;view.replaceChildren(frame);
     if(frameContext?.game){const controls=document.createElement('div');controls.className='mod-actions';controls.innerHTML=button('back-mods','Моды этой игры','')+button('back-game','Вернуться к игре','');view.prepend(controls);}
     frame.dataset.modId=id;

@@ -83,6 +83,27 @@ const {emptyApi,staticServer,launchOptions}=require('./harness.cjs');
    await page.locator('.cs-advanced-filters > summary').click();
   }
   await page.screenshot({path:path.join(output,'inventory-mobile.png'),fullPage:true});
+  // Verify non-Mac design restriction and Settings design selector
+  await page.setViewportSize({width:1440,height:1000});
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.design),'standard');
+  await page.locator('.sidebar [data-action="settings"]').click();
+  assert.equal(await page.locator('[data-design-choice="apple"]').isDisabled(),true);
+  assert.equal(await page.locator('[data-design-choice="standard"]').getAttribute('aria-pressed'),'true');
+  await page.evaluate(()=>document.getElementById('styles-dialog').close());
+  // Verify macOS Apple HIG design and Settings design switching
+  await page.goto(`${server.url}/?mac=1`);
+  await page.waitForSelector('.game-card');
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.design),'apple');
+  assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('platform-macos')),true);
+  await page.locator('.sidebar [data-action="settings"]').click();
+  assert.equal(await page.locator('[data-design-choice="apple"]').isDisabled(),false);
+  assert.equal(await page.locator('[data-design-choice="apple"]').getAttribute('aria-pressed'),'true');
+  await page.locator('[data-design-choice="standard"]').click();
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.design),'standard');
+  await page.locator('[data-design-choice="apple"]').click();
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.design),'apple');
+  await page.evaluate(()=>document.getElementById('styles-dialog').close());
+  await page.screenshot({path:path.join(output,'apple-macos-desktop.png'),fullPage:true});
   assert.equal(writes.filter(([endpoint])=>/switch|\/launch|open-launcher|sessions\/save|accounts\/save/.test(endpoint)).length,0,'Browsing never changes a launcher session');
   assert.deepEqual(errors,[]);
   console.log('PASS: eight-platform directory, context navigation, empty account, update fallback, local logos, disclosures and five viewport widths.');

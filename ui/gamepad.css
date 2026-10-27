@@ -1,0 +1,223 @@
+/* SWCH Gamepad / Controller Styles */
+
+/* 1. Controller Focus Ring */
+body.gamepad-active .gamepad-focused {
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--accent), 0 0 24px rgba(var(--accent-rgb), 0.55) !important;
+  transform: translateY(-3px) scale(1.02);
+  transition: transform 0.15s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.15s ease;
+  z-index: 10;
+}
+
+body.gamepad-active .poster-button.gamepad-focused,
+body.gamepad-active .game-card.gamepad-focused .poster-button {
+  border-color: var(--accent) !important;
+  transform: translateY(-4px) scale(1.025);
+}
+
+body.gamepad-active .card-play.gamepad-focused {
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 3px white, 0 4px 16px rgba(var(--accent-rgb), 0.6) !important;
+}
+
+/* 2. Floating Gamepad HUD */
+.gamepad-hud {
+  position: fixed;
+  bottom: 46px;
+  left: 50%;
+  transform: translate(-50%, 20px);
+  background: rgba(18, 19, 23, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 7px 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.2);
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.gamepad-hud.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.hud-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud-device {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.hud-gamepad-icon {
+  font-size: 14px;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.hud-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c9cbd5;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 3. Button Badges */
+.gp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.gp-badge.gp-bumper {
+  width: auto;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: #32343d;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 9px;
+}
+
+/* Xbox Badges */
+.gp-xbox-a { background: #10b981; color: #042718; }
+.gp-xbox-b { background: #ef4444; color: #fff; }
+.gp-xbox-x { background: #3b82f6; color: #fff; }
+.gp-xbox-y { background: #f59e0b; color: #3a2200; }
+
+/* PlayStation Badges */
+.gp-ps-cross { background: #2563eb; color: #fff; }
+.gp-ps-circle { background: #ef4444; color: #fff; }
+.gp-ps-square { background: #ec4899; color: #fff; }
+.gp-ps-triangle { background: #10b981; color: #fff; }
+
+/* Nintendo Badges */
+.gp-nintendo-b { background: #f59e0b; color: #3a2200; }
+.gp-nintendo-a { background: #ef4444; color: #fff; }
+.gp-nintendo-y { background: #10b981; color: #fff; }
+.gp-nintendo-x { background: #3b82f6; color: #fff; }
+
+/* 4. Footer Gamepad Indicator */
+.footer-gamepad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-left: 10px;
+  cursor: pointer;
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
+  transition: background 0.15s ease;
+}
+
+.footer-gamepad:hover {
+  background: rgba(var(--accent-rgb), 0.22);
+}
+
+.footer-gamepad svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 5. Gamepad Tester in Settings */
+.gamepad-tester-box {
+  padding: 14px;
+  border-radius: 10px;
+  background: #141519;
+  border: 1px solid #282a32;
+}
+
+.gamepad-tester-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tester-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #20222a;
+  border: 1px solid #333644;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7b7e8d;
+  transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease;
+}
+
+.tester-btn.active {
+  background: var(--accent);
+  color: #121316;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.7);
+  transform: scale(1.08);
+}
+
+.tester-stick {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #1b1c22;
+  border: 1px solid #2c2e39;
+  font-size: 10px;
+  font-family: monospace;
+  color: #a4a7b7;
+}
+
+@media (max-width: 768px) {
+  .gamepad-hud {
+    bottom: 50px;
+    padding: 6px 12px;
+    font-size: 10px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+  }
+  .hud-actions {
+    gap: 8px;
+  }
+}
