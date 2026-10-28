@@ -87,6 +87,12 @@ const els = {
   btnSyncAll: document.getElementById('btn-sync-all'),
 
   // Batch Unfriend
+  batchSessionBanner: document.getElementById('batch-session-banner'),
+  batchStatusIcon: document.getElementById('batch-status-icon'),
+  batchStatusTitle: document.getElementById('batch-status-title'),
+  batchStatusDesc: document.getElementById('batch-status-desc'),
+  btnBatchOpenSteamManage: document.getElementById('btn-batch-open-steam-manage'),
+  btnBatchSetupSession: document.getElementById('btn-batch-setup-session'),
   batchAccountSelect: document.getElementById('batch-account-select'),
   batchSearchInput: document.getElementById('batch-search-input'),
   batchFilterBtns: document.querySelectorAll('[data-filter]'),
@@ -129,6 +135,9 @@ const els = {
   btnSaveSettings: document.getElementById('btn-save-general-settings'),
   badgeApiKey: document.getElementById('badge-api-key-status'),
   badgeSession: document.getElementById('badge-session-status'),
+  btnTestSession: document.getElementById('btn-test-session'),
+  sessionTestResult: document.getElementById('session-test-result'),
+  btnCopyCookieSnippet: document.getElementById('btn-copy-cookie-snippet'),
 
   // File management
   usageData: document.getElementById('usage-data'),
@@ -149,72 +158,68 @@ const els = {
   toastContainer: document.getElementById('toast-container')
 };
 
-// Utilities
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i] || 'B'}`;
+// Formatting Utilities
+function formatBytes(bytes = 0) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
-function formatDate(timestamp) {
-  if (!timestamp) return '—';
-  const d = new Date(typeof timestamp === 'number' && timestamp < 1e11 ? timestamp * 1000 : timestamp);
-  return d.toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+function formatDate(epochSec) {
+  if (!epochSec) return '—';
+  const d = new Date(Number(epochSec) * 1000);
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function formatRelativeTime(timestamp) {
-  if (!timestamp) return 'Неизвестно';
-  const ms = typeof timestamp === 'number' && timestamp < 1e11 ? timestamp * 1000 : timestamp;
-  const diffMs = Date.now() - ms;
-  const diffHours = Math.floor(diffMs / 3600000);
-  if (diffHours < 2) return 'В сети недавно';
-  if (diffHours < 24) return `${diffHours} ч. назад`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays === 1) return 'Вчера';
-  if (diffDays < 30) return `${diffDays} дн. назад`;
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths} мес. назад`;
-  return `${Math.floor(diffMonths / 12)} г. назад`;
+function formatRelativeTime(ms) {
+  if (!ms) return 'Неизвестно';
+  const diff = Date.now() - ms;
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return 'В сети только что';
+  if (hours < 24) return `${hours} ч. назад`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Вчера';
+  if (days < 30) return `${days} дн. назад`;
+  const months = Math.floor(days / 30);
+  return `${months} мес. назад`;
 }
 
-// Generate styled avatar: image if available, otherwise stylized initial letter badge
+function getAvatarColor(name = '') {
+  const colors = [
+    'linear-gradient(135deg, #ff784f, #ff4500)',
+    'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+    'linear-gradient(135deg, #10b981, #047857)',
+    'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+    'linear-gradient(135deg, #ec4899, #be185d)',
+    'linear-gradient(135deg, #f59e0b, #b45309)'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 function createAvatarElement(friend) {
-  const container = document.createElement('div');
-  container.className = 'avatar';
+  const avatar = document.createElement('div');
+  avatar.className = 'friend-avatar';
 
-  const nameStr = (friend?.name || friend?.username || '?').trim();
-  const firstLetter = nameStr.charAt(0).toUpperCase();
-
-  // If avatar is the default valve placeholder, show the letter badge instead
-  const isDefaultValvePlaceholder = friend?.avatar_hash === 'fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb';
-
-  if (friend?.avatar && !isDefaultValvePlaceholder) {
+  if (friend?.avatar) {
     const img = document.createElement('img');
     img.src = friend.avatar;
-    img.alt = '';
+    img.alt = friend.name || 'Friend';
     img.loading = 'lazy';
     img.onerror = () => {
       img.remove();
-      const span = document.createElement('span');
-      span.className = 'avatar-letter';
-      span.textContent = firstLetter;
-      container.appendChild(span);
+      avatar.style.background = getAvatarColor(friend.name || 'F');
+      avatar.textContent = (friend.name || 'F').charAt(0).toUpperCase();
     };
-    container.appendChild(img);
+    avatar.appendChild(img);
   } else {
-    const span = document.createElement('span');
-    span.className = 'avatar-letter';
-    span.textContent = firstLetter;
-    container.appendChild(span);
+    avatar.style.background = getAvatarColor(friend?.name || 'F');
+    avatar.textContent = (friend?.name || 'F').charAt(0).toUpperCase();
   }
-  return container;
+  return avatar;
 }
 
 // Toast Notifications
@@ -298,11 +303,11 @@ async function refreshState() {
       else if (activeTab === 'settings') renderSettings();
     }
   } catch (err) {
-    showToast(`Ошибка загрузки данных: ${err.message}`, 'error');
+    console.error('Failed to refresh state:', err);
   }
 }
 
-// 3. Render Overview Stats
+// 3. Render Overview Statistics
 function renderOverviewStats() {
   const accountsCount = appState.accounts.length;
   els.statAccounts.textContent = accountsCount.toString();
@@ -398,11 +403,12 @@ async function renderCrossMatrix() {
       itemA.appendChild(metaA);
       tdA.appendChild(itemA);
 
-      // Link direction icon
+      // Link Icon
       const tdLink = document.createElement('td');
       tdLink.style.textAlign = 'center';
-      tdLink.style.color = 'var(--muted)';
       tdLink.textContent = pair.status === 'mutual' ? '⇄' : '→';
+      tdLink.style.color = pair.status === 'mutual' ? '#4ade80' : 'var(--muted)';
+      tdLink.style.fontSize = '18px';
 
       // Account B
       const tdB = document.createElement('td');
@@ -420,42 +426,69 @@ async function renderCrossMatrix() {
       itemB.appendChild(metaB);
       tdB.appendChild(itemB);
 
-      // Status
+      // Friendship Status Badge
       const tdStatus = document.createElement('td');
       const badge = document.createElement('span');
       if (pair.status === 'mutual') {
         badge.className = 'badge badge-success';
-        badge.textContent = 'В друзьях';
+        badge.textContent = 'Взаимно в друзьях';
       } else if (pair.status === 'one_way') {
         badge.className = 'badge badge-warning';
-        badge.textContent = 'Ожидает ответа';
+        badge.textContent = 'Односторонняя связь';
       } else {
-        badge.className = 'badge badge-info';
+        badge.className = 'badge badge-danger';
         badge.textContent = 'Не связаны';
       }
       tdStatus.appendChild(badge);
 
-      // Actions
-      const tdActions = document.createElement('td');
-      const btnLink = document.createElement('button');
-      btnLink.className = 'btn btn-secondary btn-sm';
-      btnLink.textContent = '📋 steam://';
-      btnLink.title = 'Скопировать steam:// protocol команду';
-      btnLink.onclick = async () => {
-        await swch.call('clipboard.writeText', { text: pair.protocol_uris[0] });
-        showToast('Ссылка steam:// скопирована в буфер', 'success');
+      // Action Button
+      const tdAction = document.createElement('td');
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.textContent = pair.status === 'mutual' ? '✓ Связаны' : '🔗 Связать пару';
+      btn.disabled = pair.status === 'mutual';
+      btn.onclick = async () => {
+        try {
+          const job = await swch.call('jobs.start', {
+            type: 'cross_friend',
+            input: { account_ids: [pair.account_a.id, pair.account_b.id] }
+          });
+          showToast(`Задание связи #${job.id} запущено`, 'success');
+          await refreshState();
+        } catch (e) {
+          showToast(`Ошибка запуска: ${e.message}`, 'error');
+        }
       };
-      tdActions.appendChild(btnLink);
+      tdAction.appendChild(btn);
 
-      tr.append(tdA, tdLink, tdB, tdStatus, tdActions);
+      tr.append(tdA, tdLink, tdB, tdStatus, tdAction);
       els.crossMatrixBody.appendChild(tr);
     }
   } catch (err) {
-    showToast(`Ошибка формирования матрицы: ${err.message}`, 'error');
+    console.error('Failed to render cross matrix:', err);
   }
 }
 
-// 6. Render Tab 2: Batch Unfriend
+// 6. Render Tab 2: Batch Unfriend (Bulk Remove)
+function renderBatchSessionStatus() {
+  if (!els.batchStatusIcon) return;
+  if (appState.has_session_cookie) {
+    els.batchStatusIcon.textContent = '🟢';
+    els.batchStatusTitle.textContent = 'Автоматическое удаление: АКТИВНО (Steam Web API)';
+    els.batchStatusDesc.textContent = 'Выбранные друзья будут удалены из Steam автоматически в фоновом режиме.';
+    els.batchSessionBanner.style.background = 'rgba(34, 197, 94, 0.08)';
+    els.batchSessionBanner.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+    if (els.btnBatchSetupSession) els.btnBatchSetupSession.style.display = 'none';
+  } else {
+    els.batchStatusIcon.textContent = '🟡';
+    els.batchStatusTitle.textContent = 'Автоматическое удаление: Требуется сессия Steam';
+    els.batchStatusDesc.textContent = 'Для прямого удаления без участия пользователя сохраните сессию в Настройках, либо используйте удаление в клиенте Steam.';
+    els.batchSessionBanner.style.background = 'rgba(255, 120, 79, 0.08)';
+    els.batchSessionBanner.style.borderColor = 'rgba(255, 120, 79, 0.3)';
+    if (els.btnBatchSetupSession) els.btnBatchSetupSession.style.display = 'inline-flex';
+  }
+}
+
 function renderBatchAccountSelect() {
   const current = els.batchAccountSelect.value;
   els.batchAccountSelect.replaceChildren();
@@ -474,6 +507,7 @@ function renderBatchAccountSelect() {
 }
 
 function renderBatchFriends() {
+  renderBatchSessionStatus();
   renderBatchAccountSelect();
   const accountId = els.batchAccountSelect.value;
   els.batchFriendsBody.replaceChildren();
@@ -501,12 +535,10 @@ function renderBatchFriends() {
       if (!matchName && !matchId) return false;
     }
     if (batchFilter === 'inactive30') {
-      const days = (now - (f.last_online || now)) / 86400000;
-      return days >= 30;
+      return (now - (f.last_online || 0)) > 30 * 86400 * 1000;
     }
     if (batchFilter === 'inactive90') {
-      const days = (now - (f.last_online || now)) / 86400000;
-      return days >= 90;
+      return (now - (f.last_online || 0)) > 90 * 86400 * 1000;
     }
     if (batchFilter === 'non-swch') {
       return !f.is_mutual;
@@ -516,36 +548,45 @@ function renderBatchFriends() {
 
   if (filtered.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="6" class="empty-box">Нет друзей, удовлетворяющих условиям фильтра</td>';
+    tr.innerHTML = '<td colspan="6" class="empty-box">Нет друзей, соответствующих выбранному фильтру</td>';
     els.batchFriendsBody.appendChild(tr);
+    updateBatchSelectedCount();
     return;
   }
 
   for (const f of filtered) {
     const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
 
     // Checkbox
     const tdCheck = document.createElement('td');
     const chk = document.createElement('input');
     chk.type = 'checkbox';
+    chk.value = f.steamid;
     chk.checked = selectedBatchFriendIds.has(f.steamid);
-    chk.setAttribute('aria-label', `Выбрать ${f.name}`);
-    chk.onchange = () => {
+    chk.addEventListener('change', (e) => {
+      e.stopPropagation();
       if (chk.checked) selectedBatchFriendIds.add(f.steamid);
       else selectedBatchFriendIds.delete(f.steamid);
       updateBatchSelectedCount();
-    };
+    });
     tdCheck.appendChild(chk);
 
-    // Friend Info
+    // Row click toggles checkbox
+    tr.addEventListener('click', (e) => {
+      if (e.target !== chk) {
+        chk.checked = !chk.checked;
+        chk.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // Friend Name & Avatar
     const tdFriend = document.createElement('td');
     const item = document.createElement('div');
     item.className = 'friend-item';
-
     const avatar = createAvatarElement(f);
     const meta = document.createElement('div');
     meta.className = 'friend-meta';
-
     const name = document.createElement('span');
     name.className = 'friend-name';
     name.textContent = f.name || 'Пользователь Steam';
@@ -749,53 +790,55 @@ function renderJobsView() {
       const tdProgress = document.createElement('td');
       tdProgress.textContent = `${j.progress?.percent || (j.status === 'completed' ? 100 : 0)}%`;
 
-      const tdCreated = document.createElement('td');
-      tdCreated.textContent = formatDate(j.created_at);
+      const tdDate = document.createElement('td');
+      tdDate.textContent = new Date(j.created_at).toLocaleTimeString('ru-RU');
 
       const tdActions = document.createElement('td');
       if (['queued', 'running'].includes(j.status)) {
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'btn btn-danger btn-sm';
-        cancelBtn.textContent = 'Отменить';
-        cancelBtn.onclick = async () => {
+        const btnCancel = document.createElement('button');
+        btnCancel.className = 'btn btn-danger btn-sm';
+        btnCancel.textContent = 'Отменить';
+        btnCancel.onclick = async () => {
           await swch.call('jobs.cancel', { id: j.id });
           showToast(`Задание #${j.id} отменено`, 'warning');
           await refreshState();
         };
-        tdActions.appendChild(cancelBtn);
+        tdActions.appendChild(btnCancel);
       } else {
         tdActions.textContent = '—';
       }
 
-      tr.append(tdId, tdType, tdStatus, tdProgress, tdCreated, tdActions);
+      tr.append(tdId, tdType, tdStatus, tdProgress, tdDate, tdActions);
       els.jobsListBody.appendChild(tr);
     }
   }
 
   // Render Activity Log
   els.activityLogBody.replaceChildren();
-  if (appState.activity.length === 0) {
+  const logs = appState.activity || [];
+
+  if (logs.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = '<td colspan="4" class="empty-box">Журнал активности пуст</td>';
     els.activityLogBody.appendChild(tr);
   } else {
-    for (const act of appState.activity) {
+    for (const l of logs) {
       const tr = document.createElement('tr');
 
       const tdTime = document.createElement('td');
-      tdTime.textContent = formatDate(act.timestamp);
+      tdTime.textContent = new Date(l.timestamp).toLocaleTimeString('ru-RU');
 
       const tdType = document.createElement('td');
-      tdType.textContent = act.type;
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'badge badge-info';
+      typeBadge.textContent = l.type;
+      tdType.appendChild(typeBadge);
 
       const tdDesc = document.createElement('td');
-      tdDesc.textContent = act.description;
+      tdDesc.textContent = l.description;
 
       const tdStatus = document.createElement('td');
-      const badge = document.createElement('span');
-      badge.className = act.status === 'success' ? 'badge badge-success' : 'badge badge-danger';
-      badge.textContent = act.status;
-      tdStatus.appendChild(badge);
+      tdStatus.textContent = l.status === 'success' ? '✅' : '⚠️';
 
       tr.append(tdTime, tdType, tdDesc, tdStatus);
       els.activityLogBody.appendChild(tr);
@@ -818,10 +861,10 @@ function renderSettings() {
 
   if (appState.has_session_cookie) {
     els.badgeSession.className = 'badge badge-success';
-    els.badgeSession.textContent = '🔒 Сохранён';
+    els.badgeSession.textContent = '🔒 Активна';
   } else {
     els.badgeSession.className = 'badge badge-warning';
-    els.badgeSession.textContent = 'Не задан';
+    els.badgeSession.textContent = 'Не задана';
   }
 
   els.usageData.textContent = formatBytes(appState.files_usage.data);
@@ -910,6 +953,24 @@ function initEventListeners() {
   });
 
   // Batch Unfriend Panel
+  if (els.btnBatchOpenSteamManage) {
+    els.btnBatchOpenSteamManage.addEventListener('click', async () => {
+      try {
+        await swch.call('method', { id: 'open-steam-manage', input: {} });
+        showToast('Открыто управление друзьями в клиенте Steam', 'success');
+      } catch (e) {
+        showToast(`Ошибка: ${e.message}`, 'error');
+      }
+    });
+  }
+
+  if (els.btnBatchSetupSession) {
+    els.btnBatchSetupSession.addEventListener('click', () => {
+      switchTab('settings');
+      setTimeout(() => els.sessionInput?.focus(), 150);
+    });
+  }
+
   els.batchAccountSelect.addEventListener('change', () => {
     selectedBatchFriendIds.clear();
     renderBatchFriends();
@@ -1087,7 +1148,7 @@ function initEventListeners() {
     }
   });
 
-  // Settings
+  // Settings: API Key & Session
   els.btnSaveApiKey.addEventListener('click', async () => {
     const val = els.apiKeyInput.value.trim();
     try {
@@ -1111,6 +1172,51 @@ function initEventListeners() {
       showToast(`Ошибка сохранения: ${e.message}`, 'error');
     }
   });
+
+  if (els.btnTestSession) {
+    els.btnTestSession.addEventListener('click', async () => {
+      const inputVal = els.sessionInput.value.trim();
+      els.sessionTestResult.style.display = 'block';
+      els.sessionTestResult.style.background = 'rgba(255, 255, 255, 0.05)';
+      els.sessionTestResult.style.color = 'var(--color-text)';
+      els.sessionTestResult.textContent = '⏳ Проверка соединения со Steam Community...';
+
+      try {
+        const res = await swch.call('method', {
+          id: 'test-steam-session',
+          input: { session_cookie: inputVal || undefined }
+        });
+
+        if (res?.valid) {
+          els.sessionTestResult.style.background = 'rgba(34, 197, 94, 0.15)';
+          els.sessionTestResult.style.color = '#4ade80';
+          els.sessionTestResult.textContent = `✅ Сессия Steam активна! Вы вошли как: ${res.persona_name || 'Steam User'}`;
+          showToast('Сессия Steam успешно проверена и активна', 'success');
+        } else {
+          els.sessionTestResult.style.background = 'rgba(239, 68, 68, 0.15)';
+          els.sessionTestResult.style.color = '#f87171';
+          els.sessionTestResult.textContent = `❌ ${res?.error || 'Сессия недействительна или истёк срок действия'}`;
+          showToast('Сессия Steam недействительна', 'error');
+        }
+      } catch (err) {
+        els.sessionTestResult.style.background = 'rgba(239, 68, 68, 0.15)';
+        els.sessionTestResult.style.color = '#f87171';
+        els.sessionTestResult.textContent = `❌ Ошибка проверки: ${err.message}`;
+      }
+    });
+  }
+
+  if (els.btnCopyCookieSnippet) {
+    els.btnCopyCookieSnippet.addEventListener('click', async () => {
+      const code = `navigator.clipboard.writeText(document.cookie); alert("Cookie скопированы в буфер обмена!");`;
+      try {
+        await swch.call('clipboard.writeText', { text: code });
+        showToast('Скрипт скопирован! Вставьте его в консоль (F12) на steamcommunity.com', 'success');
+      } catch {
+        prompt('Скопируйте скрипт и выполните в консоли браузера на steamcommunity.com:', code);
+      }
+    });
+  }
 
   els.btnSaveSettings.addEventListener('click', async () => {
     try {

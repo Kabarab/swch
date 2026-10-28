@@ -1,20 +1,19 @@
 /**
  * SWCH Friend Manager Mod - Server Entry Point
  * Implements SDK 1.1 Activate contract:
- * - Reads REAL local Steam friends from localconfig.vdf and loginusers.vdf
- * - Registers tab 'friends'
- * - Registers card actions 'cross-friend-all', 'sync-all-friends', 'clear-friend-cache'
- * - Registers durable background jobs: 'cross_friend', 'batch_remove_friends', 'broadcast_add_friend', 'sync_friends'
- * - Registers internal methods for sandboxed UI bridge
- * - Manages storage, settings, secrets, and activity logging
- * - Provides protocol URIs and Steam Web API / Community integrations
+ * - Real local Steam friends reader (localconfig.vdf & loginusers.vdf)
+ * - Real automated friend removal via Steam Community Web API (RemoveFriendAjax)
+ * - Real automated friend addition via Steam Client protocol (steam://friends/add/) and Steam Web API (AddFriendAjax)
+ * - Automatic Windows Credential Manager session discovery (*.swch:steam-store)
+ * - Full Sandboxed UI Bridge with durable jobs, secrets, storage and activity logging
  *
  * @param {import('../../mod-sdk/index.d.ts').SDK} swch
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import { exec, execSync, spawn } from 'node:child_process';
 
 const STEAM_BASE_ID = 76561197960265728n;
 const STORAGE_FRIENDS_CACHE = 'friends_cache';
@@ -37,7 +36,10 @@ function sleep(ms, signal) {
 function findSteamPath() {
   if (process.platform === 'win32') {
     try {
-      const reg = execSync('reg query HKCU\\Software\\Valve\\Steam /v SteamPath', { stdio: ['pipe', 'pipe', 'ignore'] }).toString();
+      const reg = execSync('reg query HKCU\\Software\\Valve\\Steam /v SteamPath', {
+        stdio: ['pipe', 'pipe', 'ignore'],
+        timeout: 2000
+      }).toString();
       const match = reg.match(/SteamPath\s+REG_SZ\s+(.+)/i);
       if (match && match[1]) {
         const p = match[1].trim().replace(/\//g, '\\');
@@ -68,6 +70,125 @@ function findSteamPath() {
       if (fs.existsSync(p)) return p;
     }
   }
+  return null;
+}
+
+// Launch native Steam protocol commands (e.g. steam://friends/add/<steamid>)
+function launchSteamProtocol(steamPath, uri) {
+  if (!uri || !uri.startsWith('steam://')) return false;
+  try {
+    if (process.platform === 'win32') {
+      const steamExe = steamPath ? path.join(steamPath, 'steam.exe') : null;
+      if (steamExe && fs.existsSync(steamExe)) {
+        const child = spawn(steamExe, [uri], { detached: true, stdio: 'ignore' });
+        child.unref();
+        return true;
+      }
+      exec(`start "" "${uri}"`, { stdio: 'ignore' });
+      return true;
+    } else if (process.platform === 'darwin') {
+      exec(`open "${uri}"`, { stdio: 'ignore' });
+      return true;
+    } else {
+      exec(`xdg-open "${uri}"`, { stdio: 'ignore' });
+      return true;
+    }
+  } catch {
+    return false;
+  }
+}
+
+// Parse raw cookie string or steamLoginSecure into normalized session object
+function parseSteamSession(rawCookie) {
+  if (!rawCookie || typeof rawCookie !== 'string') return null;
+  const str = rawCookie.trim();
+  let steamLoginSecure = null;
+  let sessionId = null;
+
+  // Extract steamLoginSecure
+  const loginMatch = str.match(/steamLoginSecure=([^\s;]+)/i);
+  if (loginMatch) {
+    steamLoginSecure = decodeURIComponent(loginMatch[1]);
+  } else if (str.includes('%7C%7C') || str.includes('||')) {
+    steamLoginSecure = str.split(';')[0].trim();
+  }
+
+  // Extract sessionid
+  const sessionMatch = str.match(/sessionid=([^\s;]+)/i);
+  if (sessionMatch) {
+    sessionId = sessionMatch[1].trim();
+  }
+
+  if (!steamLoginSecure && !sessionId) {
+    return null;
+  }
+
+  // If sessionid is omitted, generate a standard 24-char hex token
+  if (!sessionId) {
+    sessionId = crypto.randomBytes(12).toString('hex');
+  }
+
+  const encodedLogin = encodeURIComponent(steamLoginSecure || '');
+  const cookieHeader = `sessionid=${sessionId}; steamLoginSecure=${encodedLogin}; clientsessionid=${sessionId.slice(0, 16)}; Steam_Language=russian`;
+
+  return {
+    steamLoginSecure,
+    sessionId,
+    cookieHeader
+  };
+}
+
+// Check Windows Credential Manager for stored SWCH Steam store sessions
+function readCredentialSession(steamid64) {
+  if (process.platform !== 'win32' || !steamid64) return null;
+  try {
+    const psCmd = `& { Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class WCred {
+    [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool CredRead(string target, int type, int reserved, out IntPtr credential);
+    [DllImport("Advapi32.dll")] public static extern void CredFree(IntPtr cred);
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct CR {
+        public int Flags, Type;
+        public string TargetName, Comment;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+        public int CredentialBlobSize;
+        public IntPtr CredentialBlob;
+        public int Persist, AttributeCount;
+        public IntPtr Attributes;
+        public string TargetAlias, UserName;
+    }
+    public static string Get(string t) {
+        IntPtr p;
+        if (CredRead(t, 1, 0, out p)) {
+            CR c = (CR)Marshal.PtrToStructure(p, typeof(CR));
+            byte[] b = new byte[c.CredentialBlobSize];
+            Marshal.Copy(c.CredentialBlob, b, 0, c.CredentialBlobSize);
+            CredFree(p);
+            string s = System.Text.Encoding.UTF8.GetString(b);
+            if (s.Contains("account_id")) return s;
+            return System.Text.Encoding.Unicode.GetString(b);
+        }
+        return null;
+    }
+}
+'@
+    $r = [WCred]::Get('${steamid64}.swch:steam-store'); if ($r) { [Console]::Out.Write($r) } }`;
+
+    const out = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psCmd}"`, {
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 3000
+    }).toString().trim();
+
+    if (out) {
+      const obj = JSON.parse(out);
+      if (obj.login_secure && obj.session_id) {
+        return parseSteamSession(`sessionid=${obj.session_id}; steamLoginSecure=${obj.login_secure}`);
+      }
+    }
+  } catch {}
   return null;
 }
 
@@ -421,6 +542,9 @@ export default async function activate(swch) {
     const results = [];
     const cache = await getFriendsCache();
 
+    // Session resolution
+    const session = parseSteamSession(await swch.secrets.get('steam_session_cookie'));
+
     for (let i = startIndex; i < pairs.length; i++) {
       job.signal.throwIfAborted();
       const { from, to } = pairs[i];
@@ -432,16 +556,42 @@ export default async function activate(swch) {
         status_text: `Связывание: ${from.display_name || from.username} → ${to.display_name || to.username}`
       });
 
-      const sessionCookie = await swch.secrets.get('steam_session_cookie');
       let actionStatus = 'success';
-      let note = 'Протокольная привязка steam://friends/add/';
+      let note = 'Приглашение зарегистрировано';
 
-      if (sessionCookie && !settings.simulated_mode) {
+      // 1. If session exists and not simulated, send AddFriendAjax
+      if (session && !settings.simulated_mode) {
         try {
-          note = 'Отправлен HTTP-запрос в Steam Community';
+          const params = new URLSearchParams({
+            sessionID: session.sessionId,
+            steamid: to.steamid64,
+            accept_invite: '0'
+          });
+          const res = await fetch('https://steamcommunity.com/actions/AddFriendAjax', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'Cookie': session.cookieHeader,
+              'Referer': `https://steamcommunity.com/profiles/${to.steamid64}`,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+            },
+            body: params.toString(),
+            signal: AbortSignal.timeout(7000)
+          });
+          if (res.ok) {
+            note = 'Отправлен HTTP-запрос в Steam Community';
+          }
         } catch (err) {
           actionStatus = 'warning';
-          note = `Ошибка сети: ${err.message}`;
+          note = `Сетевая ошибка: ${err.message}`;
+        }
+      }
+
+      // 2. If 'from' is the currently active desktop Steam account, dispatch protocol command
+      if (from.is_active && settings.protocol_enabled && !settings.simulated_mode) {
+        const launched = launchSteamProtocol(localSteamPath, `steam://friends/add/${to.steamid64}`);
+        if (launched) {
+          note = (note.includes('Steam Community') ? note + ' + ' : '') + 'Отправлено через клиент Steam';
         }
       }
 
@@ -502,9 +652,9 @@ export default async function activate(swch) {
     };
   });
 
-  // Job 2: Batch Remove Friends (Mass unfriend with checkboxes)
+  // Job 2: Batch Remove Friends (Mass unfriend with real Steam Community execution)
   swch.jobs.register('batch_remove_friends', async (input, job) => {
-    swch.log('[Friend Manager Job] Starting batch_remove_friends', input);
+    swch.log('[Friend Manager Job] Starting real batch_remove_friends', input);
     const { account_id, friend_ids } = input || {};
     if (!account_id || !Array.isArray(friend_ids) || friend_ids.length === 0) {
       throw new Error('Не указан аккаунт или список друзей для удаления');
@@ -513,6 +663,16 @@ export default async function activate(swch) {
     const settings = await getSettings();
     const delay = Number(input?.delay_ms) || settings.request_delay_ms || 800;
     const startIndex = Number(job.savedCheckpoint?.completed_index || 0);
+
+    const accounts = await getAllAccounts();
+    const targetAccount = accounts.find(a => a.id === account_id);
+    const steamid64 = targetAccount?.steamid64;
+
+    // Resolve Steam Community session
+    let session = parseSteamSession(await swch.secrets.get('steam_session_cookie'));
+    if (!session && steamid64) {
+      session = readCredentialSession(steamid64);
+    }
 
     const cache = await getFriendsCache();
     const accountData = cache[account_id] || { friends: [] };
@@ -531,8 +691,56 @@ export default async function activate(swch) {
         status_text: `Удаление друга ${i + 1}/${friend_ids.length}: ${friendName}`
       });
 
+      let removedInSteam = false;
+      let note = 'Удалён из локального списка';
+
+      if (session && !settings.simulated_mode) {
+        try {
+          const params = new URLSearchParams({
+            sessionID: session.sessionId,
+            steamid: steamId
+          });
+          const res = await fetch('https://steamcommunity.com/actions/RemoveFriendAjax', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'Cookie': session.cookieHeader,
+              'Referer': 'https://steamcommunity.com/my/friends',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+            },
+            body: params.toString(),
+            signal: AbortSignal.timeout(7000)
+          });
+
+          if (res.ok) {
+            const body = await res.text();
+            if (body === 'true' || body.includes('success":1') || body.includes('"success":true')) {
+              removedInSteam = true;
+              note = 'Успешно удалён из Steam';
+            } else {
+              note = `Ответ Steam: ${body.substring(0, 40)}`;
+            }
+          } else {
+            note = `Ошибка HTTP ${res.status}`;
+          }
+        } catch (netErr) {
+          note = `Ошибка сети: ${netErr.message}`;
+        }
+      } else if (settings.simulated_mode) {
+        removedInSteam = true;
+        note = 'Удалено в тестовом режиме';
+      } else {
+        note = 'Удалено локально (требуется сессия для Steam Web API)';
+      }
+
+      // Filter from account friends list
       accountData.friends = accountData.friends.filter(f => f.steamid !== steamId);
-      removed.push({ steamid: steamId, name: friendName });
+      removed.push({
+        steamid: steamId,
+        name: friendName,
+        steam_deleted: removedInSteam,
+        note
+      });
 
       await job.checkpoint({
         completed_index: i + 1,
@@ -549,7 +757,7 @@ export default async function activate(swch) {
 
     await logActivity({
       type: 'batch_remove',
-      description: `Удалено ${removed.length} друзей из аккаунта ${accountData.display_name || accountData.username || account_id}`,
+      description: `Удалено ${removed.length} друзей из аккаунта ${accountData.display_name || accountData.username || account_id} (${removed.filter(r => r.steam_deleted).length} удалено в Steam)`,
       status: 'success',
       details: { account_id, removed_friends: removed }
     });
@@ -559,6 +767,8 @@ export default async function activate(swch) {
       success: true,
       account_id,
       removed_count: removed.length,
+      steam_deleted_count: removed.filter(r => r.steam_deleted).length,
+      session_active: Boolean(session),
       removed
     };
   });
@@ -587,6 +797,9 @@ export default async function activate(swch) {
     const cache = await getFriendsCache();
     const dispatched = [];
 
+    // Session resolution
+    const session = parseSteamSession(await swch.secrets.get('steam_session_cookie'));
+
     for (let i = startIndex; i < senders.length; i++) {
       job.signal.throwIfAborted();
       const sender = senders[i];
@@ -597,6 +810,49 @@ export default async function activate(swch) {
         percent: Math.round(((i + 1) / senders.length) * 100),
         status_text: `Отправка инвайта с аккаунта ${sender.display_name || sender.username} (${i + 1}/${senders.length})`
       });
+
+      let invitedInSteam = false;
+      let note = 'Приглашение поставлено в очередь';
+
+      // 1. If session available and not simulated, send AddFriendAjax
+      if (session && !settings.simulated_mode) {
+        try {
+          const params = new URLSearchParams({
+            sessionID: session.sessionId,
+            steamid: targetSteamId,
+            accept_invite: '0'
+          });
+          const res = await fetch('https://steamcommunity.com/actions/AddFriendAjax', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'Cookie': session.cookieHeader,
+              'Referer': `https://steamcommunity.com/profiles/${targetSteamId}`,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+            },
+            body: params.toString(),
+            signal: AbortSignal.timeout(7000)
+          });
+          if (res.ok) {
+            const body = await res.text();
+            if (body === 'true' || body.includes('success":1') || body.includes('"success":true')) {
+              invitedInSteam = true;
+              note = 'Приглашение отправлено через Steam Web API';
+            }
+          }
+        } catch (err) {
+          note = `Ошибка Web API: ${err.message}`;
+        }
+      }
+
+      // 2. If this account is the active Steam account, execute native steam:// protocol
+      if (sender.is_active && settings.protocol_enabled && !settings.simulated_mode) {
+        const launched = launchSteamProtocol(localSteamPath, `steam://friends/add/${targetSteamId}`);
+        if (launched) {
+          invitedInSteam = true;
+          note = (note.includes('Steam Web API') ? note + ' + ' : '') + 'Отправлено через клиент Steam';
+        }
+      }
 
       if (!cache[sender.id]) {
         cache[sender.id] = { account_id: sender.id, friends: [], last_synced: Date.now() };
@@ -619,7 +875,9 @@ export default async function activate(swch) {
         sender_id: sender.id,
         sender_username: sender.display_name || sender.username,
         target_steamid: targetSteamId,
-        protocol_uri: `steam://friends/add/${targetSteamId}`
+        protocol_uri: `steam://friends/add/${targetSteamId}`,
+        steam_invited: invitedInSteam,
+        note
       });
 
       await job.checkpoint({
@@ -786,7 +1044,8 @@ export default async function activate(swch) {
     const jobsList = (await swch.jobs.list()) || [];
 
     const hasApiKey = Boolean(await swch.secrets.get('steam_api_key'));
-    const hasSession = Boolean(await swch.secrets.get('steam_session_cookie'));
+    const rawSession = await swch.secrets.get('steam_session_cookie');
+    const hasSession = Boolean(rawSession || (accounts[0] && readCredentialSession(accounts[0].steamid64)));
 
     let filesUsage = { data: 0, cache: 0, temp: 0, tools: 0 };
     try {
@@ -834,6 +1093,57 @@ export default async function activate(swch) {
       has_steam_api_key: Boolean(await swch.secrets.get('steam_api_key')),
       has_steam_session_cookie: Boolean(await swch.secrets.get('steam_session_cookie'))
     };
+  });
+
+  swch.registerMethod('test-steam-session', async (input) => {
+    const rawCookie = input?.session_cookie || (await swch.secrets.get('steam_session_cookie'));
+    const session = parseSteamSession(rawCookie);
+    if (!session) {
+      return { valid: false, error: 'Куки не содержат steamLoginSecure или sessionid' };
+    }
+
+    try {
+      const res = await fetch('https://steamcommunity.com/my/profile', {
+        headers: {
+          'Cookie': session.cookieHeader,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+        },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(8000)
+      });
+
+      if (res.status === 302) {
+        const loc = res.headers.get('location') || '';
+        if (loc.includes('/login/')) {
+          return { valid: false, error: 'Steam отклонил сессию (истёк срок действия или неверный токен)' };
+        }
+      }
+
+      const html = await res.text();
+      const nameM = html.match(/<span class="actual_persona_name">([^<]+)<\/span>/i)
+        || html.match(/<title>Steam Community :: ([^<]+)<\/title>/i);
+      const personaName = nameM ? nameM[1].trim() : 'Авторизованный аккаунт Steam';
+
+      return {
+        valid: true,
+        persona_name: personaName,
+        status: 'active'
+      };
+    } catch (err) {
+      return { valid: false, error: `Ошибка соединения: ${err.message}` };
+    }
+  });
+
+  swch.registerMethod('open-steam-manage', async () => {
+    const ok = launchSteamProtocol(localSteamPath, 'steam://openurl/https://steamcommunity.com/my/friends/manage');
+    return { success: ok };
+  });
+
+  swch.registerMethod('open-steam-add', async (input) => {
+    const targetSteamId = normalizeSteamId(input?.steamid);
+    if (!targetSteamId) throw new Error('Некорректный SteamID');
+    const ok = launchSteamProtocol(localSteamPath, `steam://friends/add/${targetSteamId}`);
+    return { success: ok, steamid: targetSteamId };
   });
 
   swch.registerMethod('get-friend-matrix', async () => {
