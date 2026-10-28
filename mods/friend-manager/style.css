@@ -31,6 +31,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--bg);
@@ -601,6 +605,12 @@ code {
   align-items: center;
   justify-content: center;
   z-index: 200;
+}
+
+.modal-overlay[hidden],
+.active-job-banner[hidden],
+.tab-panel[hidden] {
+  display: none !important;
 }
 
 .modal,

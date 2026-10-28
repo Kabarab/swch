@@ -235,29 +235,27 @@ function showToast(message, type = 'info') {
 }
 
 // Modal Dialog Confirmation
+let activeConfirmResolve = null;
+
+function hideConfirmModal(result = false) {
+  if (els.confirmModal) {
+    els.confirmModal.hidden = true;
+    els.confirmModal.style.display = 'none';
+  }
+  if (activeConfirmResolve) {
+    const resolve = activeConfirmResolve;
+    activeConfirmResolve = null;
+    resolve(result);
+  }
+}
+
 function showConfirm(title, message) {
   return new Promise((resolve) => {
+    activeConfirmResolve = resolve;
     els.modalTitle.textContent = title;
     els.modalMessage.textContent = message;
     els.confirmModal.hidden = false;
-
-    const onConfirm = () => {
-      cleanup();
-      resolve(true);
-    };
-    const onCancel = () => {
-      cleanup();
-      resolve(false);
-    };
-
-    function cleanup() {
-      els.btnModalConfirm.removeEventListener('click', onConfirm);
-      els.btnModalCancel.removeEventListener('click', onCancel);
-      els.confirmModal.hidden = true;
-    }
-
-    els.btnModalConfirm.addEventListener('click', onConfirm, { once: true });
-    els.btnModalCancel.addEventListener('click', onCancel, { once: true });
+    els.confirmModal.style.display = 'flex';
   });
 }
 
@@ -270,7 +268,9 @@ function switchTab(tabId) {
     btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
   });
   els.tabPanels.forEach(panel => {
-    panel.hidden = panel.id !== `panel-${tabId}`;
+    const isTarget = panel.id === `panel-${tabId}`;
+    panel.hidden = !isTarget;
+    panel.style.display = isTarget ? 'block' : 'none';
   });
 
   if (tabId === 'cross') renderCrossMatrix();
@@ -332,12 +332,14 @@ function renderActiveJob() {
   const running = appState.jobs.find(j => j.status === 'running' || j.status === 'queued');
   if (!running) {
     els.jobBanner.hidden = true;
+    els.jobBanner.style.display = 'none';
     activeJobId = null;
     return;
   }
 
   activeJobId = running.id;
   els.jobBanner.hidden = false;
+  els.jobBanner.style.display = 'flex';
 
   const typeLabels = {
     cross_friend: 'Взаимная дружба аккаунтов',
@@ -1160,6 +1162,20 @@ function initEventListeners() {
     }
   });
 
+  // Modal dialog buttons and dismissal
+  els.btnModalConfirm.addEventListener('click', () => hideConfirmModal(true));
+  els.btnModalCancel.addEventListener('click', () => hideConfirmModal(false));
+  els.confirmModal.addEventListener('click', (e) => {
+    if (e.target === els.confirmModal) {
+      hideConfirmModal(false);
+    }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.confirmModal.hidden) {
+      hideConfirmModal(false);
+    }
+  });
+
   // System & Mod Events
   swch.on('jobs.changed', (job) => {
     const idx = appState.jobs.findIndex(j => j.id === job.id);
@@ -1181,6 +1197,7 @@ function initEventListeners() {
 
 // Startup
 async function init() {
+  hideConfirmModal(false);
   initEventListeners();
   await refreshState();
 }
