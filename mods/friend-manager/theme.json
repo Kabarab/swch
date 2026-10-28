@@ -1,10 +1,10 @@
 {
-  "bg": "#0c101d",
-  "panel": "#141c30",
-  "panel-hover": "#1d2946",
-  "line": "#253457",
-  "text": "#f1f5f9",
-  "muted": "#94a3b8",
-  "accent": "#38bdf8",
+  "bg": "#111214",
+  "panel": "#191a1e",
+  "panel-hover": "#222429",
+  "line": "#2a2b30",
+  "text": "#f4f4f6",
+  "muted": "#96979f",
+  "accent": "#ff784f",
   "radius": "10px"
 }

@@ -4,7 +4,7 @@
  * broadcast friend invites, durable background job monitoring, and settings.
  */
 
-// Fallback bridge for standalone browser testing/debugging outside SWCH iframe
+// Fallback bridge for standalone browser testing outside SWCH iframe
 const swch = window.swch || {
   tab: 'friends',
   call: async (method, params) => {
@@ -18,8 +18,8 @@ const swch = window.swch || {
         friends_cache: {
           mock_1: {
             friends: [
-              { steamid: '76561198000000002', name: 'SmurfAccount', friend_code: '39734274', relationship: 'friend', last_online: Date.now(), is_mutual: true },
-              { steamid: '76561198000000099', name: 'InactiveBuddy', friend_code: '39734371', relationship: 'friend', last_online: Date.now() - 40 * 86400 * 1000, is_mutual: false }
+              { steamid: '76561198000000002', name: 'SmurfOne', friend_code: '39734274', relationship: 'friend', last_online: Date.now(), is_mutual: true },
+              { steamid: '76561198000000099', name: 'артем', friend_code: '337700012', relationship: 'friend', last_online: Date.now() - 40 * 86400 * 1000, is_mutual: false }
             ]
           }
         },
@@ -159,22 +159,82 @@ function formatBytes(bytes) {
 
 function formatDate(timestamp) {
   if (!timestamp) return '—';
-  return new Date(timestamp).toLocaleString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
+  const d = new Date(typeof timestamp === 'number' && timestamp < 1e11 ? timestamp * 1000 : timestamp);
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   });
 }
 
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return 'Неизвестно';
+  const ms = typeof timestamp === 'number' && timestamp < 1e11 ? timestamp * 1000 : timestamp;
+  const diffMs = Date.now() - ms;
+  const diffHours = Math.floor(diffMs / 3600000);
+  if (diffHours < 2) return 'В сети недавно';
+  if (diffHours < 24) return `${diffHours} ч. назад`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Вчера';
+  if (diffDays < 30) return `${diffDays} дн. назад`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} мес. назад`;
+  return `${Math.floor(diffMonths / 12)} г. назад`;
+}
+
+// Generate styled avatar: image if available, otherwise stylized initial letter badge
+function createAvatarElement(friend) {
+  const container = document.createElement('div');
+  container.className = 'avatar';
+
+  const nameStr = (friend?.name || friend?.username || '?').trim();
+  const firstLetter = nameStr.charAt(0).toUpperCase();
+
+  // If avatar is the default valve placeholder, show the letter badge instead
+  const isDefaultValvePlaceholder = friend?.avatar_hash === 'fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb';
+
+  if (friend?.avatar && !isDefaultValvePlaceholder) {
+    const img = document.createElement('img');
+    img.src = friend.avatar;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.onerror = () => {
+      img.remove();
+      const span = document.createElement('span');
+      span.className = 'avatar-letter';
+      span.textContent = firstLetter;
+      container.appendChild(span);
+    };
+    container.appendChild(img);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'avatar-letter';
+    span.textContent = firstLetter;
+    container.appendChild(span);
+  }
+  return container;
+}
+
+// Toast Notifications
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
+
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+  toast.textContent = `${icon} ${message}`;
+
   els.toastContainer.appendChild(toast);
   setTimeout(() => {
-    toast.remove();
+    toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
+// Modal Dialog Confirmation
 function showConfirm(title, message) {
   return new Promise((resolve) => {
     els.modalTitle.textContent = title;
@@ -189,14 +249,15 @@ function showConfirm(title, message) {
       cleanup();
       resolve(false);
     };
-    const cleanup = () => {
-      els.confirmModal.hidden = true;
+
+    function cleanup() {
       els.btnModalConfirm.removeEventListener('click', onConfirm);
       els.btnModalCancel.removeEventListener('click', onCancel);
-    };
+      els.confirmModal.hidden = true;
+    }
 
-    els.btnModalConfirm.addEventListener('click', onConfirm);
-    els.btnModalCancel.addEventListener('click', onCancel);
+    els.btnModalConfirm.addEventListener('click', onConfirm, { once: true });
+    els.btnModalCancel.addEventListener('click', onCancel, { once: true });
   });
 }
 
@@ -205,6 +266,7 @@ function switchTab(tabId) {
   activeTab = tabId;
   els.tabBtns.forEach(btn => {
     const isTarget = btn.id === `tab-btn-${tabId}`;
+    btn.classList.toggle('active', isTarget);
     btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
   });
   els.tabPanels.forEach(panel => {
@@ -308,7 +370,7 @@ async function renderCrossMatrix() {
       td.colSpan = 5;
       td.className = 'empty-box';
       td.textContent = accounts.length < 2
-        ? 'Требуется минимум 2 зарегистрированных аккаунта в SWCH. Вы можете добавить тестовый аккаунт в Настройках.'
+        ? 'Требуется минимум 2 зарегистрированных аккаунта в SWCH для взаимной дружбы.'
         : 'Нет доступных пар аккаунтов.';
       tr.appendChild(td);
       els.crossMatrixBody.appendChild(tr);
@@ -320,29 +382,54 @@ async function renderCrossMatrix() {
 
       // Account A
       const tdA = document.createElement('td');
-      tdA.innerHTML = `<strong>${escapeHtml(pair.account_a.username)}</strong><br><small style="color:var(--muted)">${pair.account_a.steamid}</small>`;
+      const itemA = document.createElement('div');
+      itemA.className = 'friend-item';
+      itemA.appendChild(createAvatarElement({ name: pair.account_a.username }));
+      const metaA = document.createElement('div');
+      metaA.className = 'friend-meta';
+      const strongA = document.createElement('span');
+      strongA.className = 'friend-name';
+      strongA.textContent = pair.account_a.username;
+      const smallA = document.createElement('small');
+      smallA.textContent = pair.account_a.steamid;
+      metaA.append(strongA, smallA);
+      itemA.appendChild(metaA);
+      tdA.appendChild(itemA);
 
       // Link direction icon
       const tdLink = document.createElement('td');
       tdLink.style.textAlign = 'center';
-      tdLink.textContent = pair.status === 'mutual' ? '⇄ Взаимно' : '→ Односторонне';
+      tdLink.style.color = 'var(--muted)';
+      tdLink.textContent = pair.status === 'mutual' ? '⇄' : '→';
 
       // Account B
       const tdB = document.createElement('td');
-      tdB.innerHTML = `<strong>${escapeHtml(pair.account_b.username)}</strong><br><small style="color:var(--muted)">${pair.account_b.steamid}</small>`;
+      const itemB = document.createElement('div');
+      itemB.className = 'friend-item';
+      itemB.appendChild(createAvatarElement({ name: pair.account_b.username }));
+      const metaB = document.createElement('div');
+      metaB.className = 'friend-meta';
+      const strongB = document.createElement('span');
+      strongB.className = 'friend-name';
+      strongB.textContent = pair.account_b.username;
+      const smallB = document.createElement('small');
+      smallB.textContent = pair.account_b.steamid;
+      metaB.append(strongB, smallB);
+      itemB.appendChild(metaB);
+      tdB.appendChild(itemB);
 
       // Status
       const tdStatus = document.createElement('td');
       const badge = document.createElement('span');
       if (pair.status === 'mutual') {
         badge.className = 'badge badge-success';
-        badge.textContent = '✅ В друзьях';
+        badge.textContent = 'В друзьях';
       } else if (pair.status === 'one_way') {
         badge.className = 'badge badge-warning';
-        badge.textContent = '⏳ Ожидает ответа';
+        badge.textContent = 'Ожидает ответа';
       } else {
-        badge.className = 'badge badge-danger';
-        badge.textContent = '❌ Не связаны';
+        badge.className = 'badge badge-info';
+        badge.textContent = 'Не связаны';
       }
       tdStatus.appendChild(badge);
 
@@ -350,7 +437,7 @@ async function renderCrossMatrix() {
       const tdActions = document.createElement('td');
       const btnLink = document.createElement('button');
       btnLink.className = 'btn btn-secondary btn-sm';
-      btnLink.textContent = '📋 Ссылка';
+      btnLink.textContent = '📋 steam://';
       btnLink.title = 'Скопировать steam:// protocol команду';
       btnLink.onclick = async () => {
         await swch.call('clipboard.writeText', { text: pair.protocol_uris[0] });
@@ -374,7 +461,9 @@ function renderBatchAccountSelect() {
   for (const acc of appState.accounts) {
     const opt = document.createElement('option');
     opt.value = acc.id;
-    opt.textContent = `${acc.display_name || acc.username} (${acc.launcher})`;
+    const count = appState.friends_cache[acc.id]?.friends?.length || 0;
+    const activeMark = acc.is_active ? ' • Активен' : '';
+    opt.textContent = `${acc.display_name || acc.username}${activeMark} (${acc.launcher.toUpperCase()}, ${count} друзей)`;
     els.batchAccountSelect.appendChild(opt);
   }
   if (current && appState.accounts.some(a => a.id === current)) {
@@ -396,17 +485,19 @@ function renderBatchFriends() {
 
   const accountFriends = appState.friends_cache[accountId]?.friends || [];
 
+  // Update filter buttons labels with counts
+  const allBtn = document.querySelector('[data-filter="all"]');
+  if (allBtn) allBtn.textContent = `Все (${accountFriends.length})`;
+
   // Filter friends
   const now = Date.now();
   const filtered = accountFriends.filter(f => {
-    // Search query
     if (batchSearchQuery) {
       const q = batchSearchQuery.toLowerCase();
       const matchName = f.name?.toLowerCase().includes(q);
       const matchId = f.steamid?.includes(q) || f.friend_code?.includes(q);
       if (!matchName && !matchId) return false;
     }
-    // Filter tags
     if (batchFilter === 'inactive30') {
       const days = (now - (f.last_online || now)) / 86400000;
       return days >= 30;
@@ -449,11 +540,7 @@ function renderBatchFriends() {
     const item = document.createElement('div');
     item.className = 'friend-item';
 
-    const avatar = document.createElement('img');
-    avatar.className = 'avatar';
-    avatar.src = f.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg';
-    avatar.alt = '';
-
+    const avatar = createAvatarElement(f);
     const meta = document.createElement('div');
     meta.className = 'friend-meta';
 
@@ -467,25 +554,27 @@ function renderBatchFriends() {
 
     // SteamID / Friend Code
     const tdId = document.createElement('td');
-    tdId.innerHTML = `<code>${f.friend_code || '—'}</code><br><small style="color:var(--muted)">${f.steamid}</small>`;
+    const codeEl = document.createElement('code');
+    codeEl.textContent = f.friend_code || f.steamid;
+    tdId.appendChild(codeEl);
 
     // Relationship
     const tdRel = document.createElement('td');
-    tdRel.textContent = f.relationship || 'friend';
+    tdRel.textContent = f.relationship === 'friend' ? 'Друг' : (f.relationship || 'Друг');
 
     // Last Online
     const tdOnline = document.createElement('td');
-    tdOnline.textContent = formatDate(f.last_online);
+    tdOnline.textContent = formatRelativeTime(f.last_online);
 
     // Is Mutual in SWCH
     const tdMutual = document.createElement('td');
     const mutualBadge = document.createElement('span');
     if (f.is_mutual) {
       mutualBadge.className = 'badge badge-success';
-      mutualBadge.textContent = 'Взаимный';
+      mutualBadge.textContent = 'Взаимный (SWCH)';
     } else {
       mutualBadge.className = 'badge badge-info';
-      mutualBadge.textContent = 'Внешний';
+      mutualBadge.textContent = 'Обычный друг';
     }
     tdMutual.appendChild(mutualBadge);
 
@@ -504,12 +593,12 @@ function updateBatchSelectedCount() {
 
 // 7. Render Tab 3: Broadcast Add Friend
 function renderBroadcastOptions() {
-  // Update Source Account Dropdown
   els.broadcastSourceAccount.replaceChildren();
   for (const acc of appState.accounts) {
     const opt = document.createElement('option');
     opt.value = acc.id;
-    opt.textContent = `${acc.display_name || acc.username} (${acc.launcher})`;
+    const count = appState.friends_cache[acc.id]?.friends?.length || 0;
+    opt.textContent = `${acc.display_name || acc.username} (${acc.launcher.toUpperCase()}, ${count} друзей)`;
     els.broadcastSourceAccount.appendChild(opt);
   }
 
@@ -519,10 +608,7 @@ function renderBroadcastOptions() {
   els.broadcastSendersList.replaceChildren();
   for (const acc of appState.accounts) {
     const label = document.createElement('label');
-    label.className = 'stat-card';
-    label.style.flexDirection = 'row';
-    label.style.alignItems = 'center';
-    label.style.cursor = 'pointer';
+    label.className = 'account-pick-card';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
@@ -532,7 +618,8 @@ function renderBroadcastOptions() {
 
     const span = document.createElement('span');
     span.style.fontSize = '12px';
-    span.textContent = `${acc.display_name || acc.username}`;
+    span.style.fontWeight = '600';
+    span.textContent = `${acc.display_name || acc.username} (${acc.launcher.toUpperCase()})`;
 
     label.append(chk, span);
     els.broadcastSendersList.appendChild(label);
@@ -554,12 +641,18 @@ function updateBroadcastSourceFriends() {
 
 // 8. Render Tab 4: Lists & Inspector
 function renderListsView() {
+  const current = els.listsAccountSelect.value;
   els.listsAccountSelect.replaceChildren();
+
   for (const acc of appState.accounts) {
     const opt = document.createElement('option');
     opt.value = acc.id;
-    opt.textContent = `${acc.display_name || acc.username}`;
+    opt.textContent = `${acc.display_name || acc.username} (${acc.launcher.toUpperCase()})`;
     els.listsAccountSelect.appendChild(opt);
+  }
+
+  if (current && appState.accounts.some(a => a.id === current)) {
+    els.listsAccountSelect.value = current;
   }
 
   updateListsTable();
@@ -568,8 +661,15 @@ function renderListsView() {
 function updateListsTable() {
   const accountId = els.listsAccountSelect.value;
   els.listsFriendsBody.replaceChildren();
-  const friends = appState.friends_cache[accountId]?.friends || [];
 
+  if (!accountId) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="5" class="empty-box">Выберите аккаунт для просмотра</td>';
+    els.listsFriendsBody.appendChild(tr);
+    return;
+  }
+
+  const friends = appState.friends_cache[accountId]?.friends || [];
   if (friends.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = '<td colspan="5" class="empty-box">Список друзей пуст</td>';
@@ -581,16 +681,25 @@ function updateListsTable() {
     const tr = document.createElement('tr');
 
     const tdName = document.createElement('td');
-    tdName.innerHTML = `<strong>${escapeHtml(f.name)}</strong>`;
+    const item = document.createElement('div');
+    item.className = 'friend-item';
+    item.appendChild(createAvatarElement(f));
+    const span = document.createElement('span');
+    span.className = 'friend-name';
+    span.textContent = f.name;
+    item.appendChild(span);
+    tdName.appendChild(item);
 
     const tdCode = document.createElement('td');
-    tdCode.innerHTML = `<code>${f.friend_code || f.steamid}</code>`;
+    const code = document.createElement('code');
+    code.textContent = f.friend_code || f.steamid;
+    tdCode.appendChild(code);
 
     const tdRel = document.createElement('td');
-    tdRel.textContent = f.relationship || 'friend';
+    tdRel.textContent = f.relationship === 'friend' ? 'Друг' : (f.relationship || 'Друг');
 
     const tdDate = document.createElement('td');
-    tdDate.textContent = formatDate(f.friend_since ? f.friend_since * 1000 : null);
+    tdDate.textContent = formatDate(f.friend_since);
 
     const tdActions = document.createElement('td');
     const btn = document.createElement('button');
@@ -716,15 +825,6 @@ function renderSettings() {
   els.usageData.textContent = formatBytes(appState.files_usage.data);
   els.usageCache.textContent = formatBytes(appState.files_usage.cache);
   els.usageTemp.textContent = formatBytes(appState.files_usage.temp);
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 // Event Listeners Initialization
@@ -1062,7 +1162,6 @@ function initEventListeners() {
 
   // System & Mod Events
   swch.on('jobs.changed', (job) => {
-    // Update active job status immediately
     const idx = appState.jobs.findIndex(j => j.id === job.id);
     if (idx >= 0) appState.jobs[idx] = job;
     else appState.jobs.push(job);

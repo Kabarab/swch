@@ -1,6 +1,7 @@
 /**
  * SWCH Friend Manager Mod - Server Entry Point
  * Implements SDK 1.1 Activate contract:
+ * - Reads REAL local Steam friends from localconfig.vdf and loginusers.vdf
  * - Registers tab 'friends'
  * - Registers card actions 'cross-friend-all', 'sync-all-friends', 'clear-friend-cache'
  * - Registers durable background jobs: 'cross_friend', 'batch_remove_friends', 'broadcast_add_friend', 'sync_friends'
@@ -10,6 +11,10 @@
  *
  * @param {import('../../mod-sdk/index.d.ts').SDK} swch
  */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 const STEAM_BASE_ID = 76561197960265728n;
 const STORAGE_FRIENDS_CACHE = 'friends_cache';
@@ -26,6 +31,138 @@ function sleep(ms, signal) {
       reject(new Error('Operation cancelled'));
     }, { once: true });
   });
+}
+
+// Locate local Steam installation directory across OSes
+function findSteamPath() {
+  if (process.platform === 'win32') {
+    try {
+      const reg = execSync('reg query HKCU\\Software\\Valve\\Steam /v SteamPath', { stdio: ['pipe', 'pipe', 'ignore'] }).toString();
+      const match = reg.match(/SteamPath\s+REG_SZ\s+(.+)/i);
+      if (match && match[1]) {
+        const p = match[1].trim().replace(/\//g, '\\');
+        if (fs.existsSync(p)) return p;
+      }
+    } catch {}
+
+    const defaults = [
+      'C:\\Program Files (x86)\\Steam',
+      'C:\\Program Files\\Steam',
+      'D:\\Steam',
+      'E:\\Steam'
+    ];
+    for (const d of defaults) {
+      if (fs.existsSync(d)) return d;
+    }
+  } else if (process.platform === 'darwin') {
+    const home = process.env.HOME || '';
+    const macPath = path.join(home, 'Library', 'Application Support', 'Steam');
+    if (fs.existsSync(macPath)) return macPath;
+  } else {
+    const home = process.env.HOME || '';
+    const linuxPaths = [
+      path.join(home, '.local', 'share', 'Steam'),
+      path.join(home, '.steam', 'steam')
+    ];
+    for (const p of linuxPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return null;
+}
+
+// Read loginusers.vdf to map AccountName / PersonaName to real SteamID64 and 32-bit ID
+function readSteamLoginUsers(steamPath) {
+  if (!steamPath) return new Map();
+  const loginPath = path.join(steamPath, 'config', 'loginusers.vdf');
+  if (!fs.existsSync(loginPath)) return new Map();
+
+  try {
+    const text = fs.readFileSync(loginPath, 'utf8');
+    const map = new Map();
+    const userBlocks = [...text.matchAll(/"(7656119\d{10})"\s*\{([^}]+)\}/gs)];
+
+    for (const match of userBlocks) {
+      const steamid64 = match[1];
+      const block = match[2];
+      const accMatch = block.match(/"AccountName"\s+"([^"]+)"/i);
+      const personaMatch = block.match(/"PersonaName"\s+"([^"]+)"/i);
+      const accountName = accMatch ? accMatch[1].trim() : '';
+      const personaName = personaMatch ? personaMatch[1].trim() : '';
+      const id32 = (BigInt(steamid64) - STEAM_BASE_ID).toString();
+      const entry = { steamid64, id32, accountName, personaName };
+
+      if (accountName) map.set(accountName.toLowerCase(), entry);
+      if (personaName) map.set(personaName.toLowerCase(), entry);
+      map.set(steamid64, entry);
+      map.set(id32, entry);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+// Parse real friends list from userdata/<id32>/config/localconfig.vdf
+function readSteamLocalFriends(steamPath, id32) {
+  if (!steamPath || !id32) return [];
+  const localConfig = path.join(steamPath, 'userdata', id32, 'config', 'localconfig.vdf');
+  if (!fs.existsSync(localConfig)) return [];
+
+  try {
+    const content = fs.readFileSync(localConfig, 'utf8');
+    const friendsIdx = content.indexOf('"friends"');
+    if (friendsIdx === -1) return [];
+
+    let braceCount = 0;
+    let startIdx = content.indexOf('{', friendsIdx);
+    let endIdx = -1;
+    for (let i = startIdx; i < content.length; i++) {
+      if (content[i] === '{') braceCount++;
+      else if (content[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          endIdx = i;
+          break;
+        }
+      }
+    }
+    if (endIdx === -1) return [];
+
+    const block = content.substring(startIdx + 1, endIdx);
+    const friendMatches = [...block.matchAll(/"(\d+)"\s*\{([^}]+)\}/g)];
+    const friends = [];
+
+    for (const fm of friendMatches) {
+      const friendId32 = fm[1];
+      if (friendId32 === id32) continue; // Skip own user account
+
+      const fbody = fm[2];
+      const nameM = fbody.match(/"name"\s+"([^"]+)"/);
+      const histM = fbody.match(/"0"\s+"([^"]+)"/);
+      const avatarM = fbody.match(/"avatar"\s+"([^"]+)"/);
+
+      const friendName = (nameM ? nameM[1] : (histM ? histM[1] : `SteamUser_${friendId32}`)).trim();
+      const avatarHash = avatarM ? avatarM[1].trim() : null;
+      const steamid64 = (STEAM_BASE_ID + BigInt(friendId32)).toString();
+
+      friends.push({
+        steamid: steamid64,
+        friend_code: friendId32,
+        name: friendName,
+        avatar: avatarHash ? `https://avatars.steamstatic.com/${avatarHash}_medium.jpg` : null,
+        avatar_hash: avatarHash,
+        relationship: 'friend',
+        friend_since: Math.floor(Date.now() / 1000) - 86400 * 30,
+        last_online: Date.now() - 3600000,
+        is_mutual: false
+      });
+    }
+
+    return friends;
+  } catch {
+    return [];
+  }
 }
 
 // Convert various Steam identifier formats to SteamID64
@@ -54,7 +191,7 @@ function toFriendCode(steamId64) {
   return Number(BigInt(normalized) - STEAM_BASE_ID).toString();
 }
 
-// Deterministic mock SteamID generator for test accounts
+// Deterministic mock SteamID generator for test/mock accounts
 function deterministicSteamId(seed) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -66,7 +203,11 @@ function deterministicSteamId(seed) {
 }
 
 export default async function activate(swch) {
-  swch.log('[Friend Manager] Activating mod v1.0.0 (SDK 1.1)');
+  swch.log('[Friend Manager] Activating mod v1.1.0 (SDK 1.1)');
+
+  const localSteamPath = findSteamPath();
+  const localSteamUsers = readSteamLoginUsers(localSteamPath);
+  swch.log(`[Friend Manager] Detected Steam at: ${localSteamPath || 'None'} (${localSteamUsers.size} users mapped)`);
 
   // 1. Register Tab
   swch.registerTab({
@@ -106,7 +247,6 @@ export default async function activate(swch) {
       timestamp: Date.now(),
       ...entry
     });
-    // Keep last 150 entries
     if (log.length > 150) log.length = 150;
     await swch.storage.set(STORAGE_ACTIVITY_LOG, log);
     swch.events.emit('friends.activity_updated', { count: log.length });
@@ -115,36 +255,64 @@ export default async function activate(swch) {
   async function getAllAccounts() {
     const realAccounts = (await swch.accounts.list()) || [];
     const mockAccounts = (await swch.storage.get(STORAGE_MOCK_ACCOUNTS)) || [];
-
-    // Combine real and mock accounts
     const all = [...realAccounts, ...mockAccounts];
 
-    // Normalize each account with a SteamID64 and friend code
     return all.map(acc => {
-      let steamId64 = normalizeSteamId(acc.id) || normalizeSteamId(acc.username);
+      let steamId64 = null;
+      let friendCode = null;
+      let matchedEntry = null;
+
+      // 1. If it's a Steam account, match against real local Steam installation
+      if (acc.launcher === 'steam' || !acc.launcher) {
+        const lookupKey1 = (acc.username || '').toLowerCase();
+        const lookupKey2 = (acc.display_name || '').toLowerCase();
+        const lookupKey3 = (acc.id || '').replace(/^steam_/, '').toLowerCase();
+
+        matchedEntry = localSteamUsers.get(lookupKey1)
+          || localSteamUsers.get(lookupKey2)
+          || localSteamUsers.get(lookupKey3);
+
+        if (matchedEntry) {
+          steamId64 = matchedEntry.steamid64;
+          friendCode = matchedEntry.id32;
+        }
+      }
+
+      // 2. Fallback normalization from ID / username
+      if (!steamId64) {
+        steamId64 = normalizeSteamId(acc.id) || normalizeSteamId(acc.username);
+      }
+
+      // 3. Fallback to deterministic ID for mock/unresolved accounts
       if (!steamId64) {
         steamId64 = deterministicSteamId(`${acc.launcher || 'steam'}:${acc.id}:${acc.username}`);
       }
+      if (!friendCode) {
+        friendCode = toFriendCode(steamId64);
+      }
+
+      const displayName = acc.display_name || matchedEntry?.personaName || acc.username || acc.id;
+
       return {
         id: acc.id,
         username: acc.username || acc.id,
-        display_name: acc.display_name || acc.username || acc.id,
+        display_name: displayName,
         launcher: acc.launcher || 'steam',
         is_active: Boolean(acc.is_active),
         steamid64: steamId64,
-        friend_code: toFriendCode(steamId64),
+        friend_code: friendCode,
+        steam_id32: matchedEntry?.id32 || friendCode,
         profile_url: `https://steamcommunity.com/profiles/${steamId64}`,
         protocol_uri: `steam://friends/add/${steamId64}`
       };
     });
   }
 
-  // Generate sample fixture friends for an account if empty
-  function generateFixtureFriends(account, count = 12) {
+  // Generate fallback fixture friends only when no real friends exist on disk
+  function generateFixtureFriends(account, count = 10) {
     const sampleNames = [
       'NightStalker', 'CyberViking', 'PixelWarrior', 'ShadowRaven', 'AeroGamer',
-      'QuantumGhost', 'VortexRider', 'NovaBlast', 'EchoStriker', 'TitanSlayer',
-      'FrostBite', 'SilentNinja', 'SolarFlare', 'DarkPhoenix', 'IronClaw'
+      'QuantumGhost', 'VortexRider', 'NovaBlast', 'EchoStriker', 'TitanSlayer'
     ];
     const friends = [];
     for (let i = 0; i < count; i++) {
@@ -155,7 +323,7 @@ export default async function activate(swch) {
         steamid,
         friend_code: toFriendCode(steamid),
         name,
-        avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg',
+        avatar: null,
         relationship: 'friend',
         friend_since: Math.floor(Date.now() / 1000) - (daysAgo * 86400),
         last_online: Date.now() - (daysAgo * 86400 * 1000),
@@ -165,22 +333,60 @@ export default async function activate(swch) {
     return friends;
   }
 
-  // Ensure accounts have friend lists in cache
-  async function ensureAccountFriends(accounts) {
+  // Ensure accounts have friend lists in cache (preferring real local Steam files)
+  async function ensureAccountFriends(accounts, forceRefresh = false) {
     const cache = await getFriendsCache();
     let modified = false;
+
+    // Collect all registered SteamIDs for mutual friendship checks
+    const registeredSteamIds = new Set(accounts.map(a => a.steamid64).filter(Boolean));
+
     for (const acc of accounts) {
-      if (!cache[acc.id] || !Array.isArray(cache[acc.id].friends)) {
+      const hasCached = cache[acc.id] && Array.isArray(cache[acc.id].friends) && cache[acc.id].friends.length > 0;
+
+      if (!hasCached || forceRefresh) {
+        let friendsList = [];
+
+        // 1. Try to read real Steam local friends from userdata/<id32>/config/localconfig.vdf
+        if (localSteamPath && acc.steam_id32) {
+          const localFriends = readSteamLocalFriends(localSteamPath, acc.steam_id32);
+          if (localFriends && localFriends.length > 0) {
+            friendsList = localFriends;
+            swch.log(`[Friend Manager] Loaded ${localFriends.length} real Steam friends for ${acc.username} (${acc.steam_id32})`);
+          }
+        }
+
+        // 2. If still empty, only use fixture if account is not already cached
+        if (friendsList.length === 0) {
+          if (!hasCached) {
+            friendsList = generateFixtureFriends(acc, 8);
+          } else {
+            friendsList = cache[acc.id].friends;
+          }
+        }
+
+        // 3. Update mutual status against other SWCH accounts
+        for (const f of friendsList) {
+          f.is_mutual = registeredSteamIds.has(f.steamid);
+        }
+
         cache[acc.id] = {
           account_id: acc.id,
           username: acc.username,
+          display_name: acc.display_name,
           steamid64: acc.steamid64,
-          friends: generateFixtureFriends(acc, 10),
+          friends: friendsList,
           last_synced: Date.now()
         };
         modified = true;
+      } else {
+        // Just refresh mutual flags
+        for (const f of cache[acc.id].friends) {
+          f.is_mutual = registeredSteamIds.has(f.steamid);
+        }
       }
     }
+
     if (modified) {
       await saveFriendsCache(cache);
     }
@@ -202,7 +408,6 @@ export default async function activate(swch) {
       throw new Error('Для взаимной дружбы требуется как минимум 2 зарегистрированных аккаунта');
     }
 
-    // Generate ordered pairs (A -> B)
     const pairs = [];
     for (let i = 0; i < targetAccounts.length; i++) {
       for (let j = 0; j < targetAccounts.length; j++) {
@@ -220,18 +425,14 @@ export default async function activate(swch) {
       job.signal.throwIfAborted();
       const { from, to } = pairs[i];
 
-      // Update progress
       await job.progress({
         current_index: i + 1,
         total: pairs.length,
         percent: Math.round(((i + 1) / pairs.length) * 100),
-        status_text: `Отправка запроса: ${from.username} → ${to.username}`
+        status_text: `Связывание: ${from.display_name || from.username} → ${to.display_name || to.username}`
       });
 
-      // Execute simulated or real connection
-      const steamApiKey = await swch.secrets.get('steam_api_key');
       const sessionCookie = await swch.secrets.get('steam_session_cookie');
-
       let actionStatus = 'success';
       let note = 'Протокольная привязка steam://friends/add/';
 
@@ -244,7 +445,6 @@ export default async function activate(swch) {
         }
       }
 
-      // Add to local friendship cache
       if (!cache[from.id]) {
         cache[from.id] = { account_id: from.id, friends: [], last_synced: Date.now() };
       }
@@ -254,7 +454,7 @@ export default async function activate(swch) {
           steamid: to.steamid64,
           friend_code: to.friend_code,
           name: to.display_name || to.username,
-          avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg',
+          avatar: null,
           relationship: 'friend',
           friend_since: Math.floor(Date.now() / 1000),
           last_online: Date.now(),
@@ -266,21 +466,19 @@ export default async function activate(swch) {
       }
 
       results.push({
-        from: from.username,
-        to: to.username,
+        from: from.display_name || from.username,
+        to: to.display_name || to.username,
         to_steamid: to.steamid64,
         protocol_uri: to.protocol_uri,
         status: actionStatus,
         note
       });
 
-      // Save durable checkpoint after each step
       await job.checkpoint({
         completed_index: i + 1,
         last_pair: `${from.username} → ${to.username}`
       });
 
-      // Throttle to respect rate limits
       if (i < pairs.length - 1 && delay > 0) {
         await sleep(delay, job.signal);
       }
@@ -304,7 +502,7 @@ export default async function activate(swch) {
     };
   });
 
-  // Job 2: Batch Remove Friends (Mass unfriend with filter and checkboxes)
+  // Job 2: Batch Remove Friends (Mass unfriend with checkboxes)
   swch.jobs.register('batch_remove_friends', async (input, job) => {
     swch.log('[Friend Manager Job] Starting batch_remove_friends', input);
     const { account_id, friend_ids } = input || {};
@@ -333,7 +531,6 @@ export default async function activate(swch) {
         status_text: `Удаление друга ${i + 1}/${friend_ids.length}: ${friendName}`
       });
 
-      // Remove from memory list
       accountData.friends = accountData.friends.filter(f => f.steamid !== steamId);
       removed.push({ steamid: steamId, name: friendName });
 
@@ -352,7 +549,7 @@ export default async function activate(swch) {
 
     await logActivity({
       type: 'batch_remove',
-      description: `Удалено ${removed.length} друзей из аккаунта ${accountData.username || account_id}`,
+      description: `Удалено ${removed.length} друзей из аккаунта ${accountData.display_name || accountData.username || account_id}`,
       status: 'success',
       details: { account_id, removed_friends: removed }
     });
@@ -398,10 +595,9 @@ export default async function activate(swch) {
         current_index: i + 1,
         total: senders.length,
         percent: Math.round(((i + 1) / senders.length) * 100),
-        status_text: `Отправка инвайта с аккаунта ${sender.username} (${i + 1}/${senders.length})`
+        status_text: `Отправка инвайта с аккаунта ${sender.display_name || sender.username} (${i + 1}/${senders.length})`
       });
 
-      // Record in local cache as pending/added friend
       if (!cache[sender.id]) {
         cache[sender.id] = { account_id: sender.id, friends: [], last_synced: Date.now() };
       }
@@ -411,7 +607,7 @@ export default async function activate(swch) {
           steamid: targetSteamId,
           friend_code: toFriendCode(targetSteamId),
           name: target_name || `Игрок (${toFriendCode(targetSteamId)})`,
-          avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg',
+          avatar: null,
           relationship: 'friend',
           friend_since: Math.floor(Date.now() / 1000),
           last_online: Date.now(),
@@ -421,7 +617,7 @@ export default async function activate(swch) {
 
       dispatched.push({
         sender_id: sender.id,
-        sender_username: sender.username,
+        sender_username: sender.display_name || sender.username,
         target_steamid: targetSteamId,
         protocol_uri: `steam://friends/add/${targetSteamId}`
       });
@@ -454,7 +650,7 @@ export default async function activate(swch) {
     };
   });
 
-  // Job 4: Synchronize Friends List
+  // Job 4: Synchronize Friends List (Re-reads real Steam local friends and Web API)
   swch.jobs.register('sync_friends', async (input, job) => {
     swch.log('[Friend Manager Job] Starting sync_friends', input);
     const accounts = await getAllAccounts();
@@ -473,9 +669,20 @@ export default async function activate(swch) {
         current_index: i + 1,
         total: targetAccounts.length,
         percent: Math.round(((i + 1) / targetAccounts.length) * 100),
-        status_text: `Синхронизация друзей для ${acc.username} (${i + 1}/${targetAccounts.length})`
+        status_text: `Синхронизация друзей для ${acc.display_name || acc.username} (${i + 1}/${targetAccounts.length})`
       });
 
+      let updatedFriends = null;
+
+      // 1. Try reading real local Steam friends first
+      if (localSteamPath && acc.steam_id32) {
+        const localFriends = readSteamLocalFriends(localSteamPath, acc.steam_id32);
+        if (localFriends && localFriends.length > 0) {
+          updatedFriends = localFriends;
+        }
+      }
+
+      // 2. Try Steam Web API if key is present
       if (apiKey && acc.steamid64) {
         try {
           const url = `https://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(acc.steamid64)}&relationship=friend`;
@@ -483,11 +690,8 @@ export default async function activate(swch) {
           if (res.ok) {
             const data = await res.json();
             const rawFriends = data?.friendslist?.friends || [];
-            cache[acc.id] = {
-              account_id: acc.id,
-              username: acc.username,
-              steamid64: acc.steamid64,
-              friends: rawFriends.map(f => ({
+            if (rawFriends.length > 0) {
+              updatedFriends = rawFriends.map(f => ({
                 steamid: f.steamid,
                 friend_code: toFriendCode(f.steamid),
                 name: `SteamUser_${f.steamid.slice(-4)}`,
@@ -495,21 +699,30 @@ export default async function activate(swch) {
                 friend_since: f.friend_since,
                 last_online: Date.now() - 3600000,
                 is_mutual: accounts.some(a => a.steamid64 === f.steamid)
-              })),
-              last_synced: Date.now()
-            };
+              }));
+            }
           }
         } catch (e) {
-          swch.log(`[Friend Manager] Web API sync error for ${acc.username}: ${e.message}`);
+          swch.log(`[Friend Manager] Web API sync note for ${acc.username}: ${e.message}`);
         }
       }
 
-      if (!cache[acc.id] || !cache[acc.id].friends) {
+      if (updatedFriends) {
         cache[acc.id] = {
           account_id: acc.id,
           username: acc.username,
+          display_name: acc.display_name,
           steamid64: acc.steamid64,
-          friends: generateFixtureFriends(acc, 10),
+          friends: updatedFriends,
+          last_synced: Date.now()
+        };
+      } else if (!cache[acc.id] || !cache[acc.id].friends) {
+        cache[acc.id] = {
+          account_id: acc.id,
+          username: acc.username,
+          display_name: acc.display_name,
+          steamid64: acc.steamid64,
+          friends: generateFixtureFriends(acc, 8),
           last_synced: Date.now()
         };
       }
@@ -640,8 +853,8 @@ export default async function activate(swch) {
         else if (aHasB || bHasA) status = 'one_way';
 
         matrix.push({
-          account_a: { id: a.id, username: a.username, steamid: a.steamid64 },
-          account_b: { id: b.id, username: b.username, steamid: b.steamid64 },
+          account_a: { id: a.id, username: a.display_name || a.username, steamid: a.steamid64 },
+          account_b: { id: b.id, username: b.display_name || b.username, steamid: b.steamid64 },
           status,
           protocol_uris: [
             `steam://friends/add/${b.steamid64}`,
@@ -659,7 +872,7 @@ export default async function activate(swch) {
     const senders = accounts.filter(a => !from_account_ids || from_account_ids.includes(a.id));
 
     const commands = senders.map(s => ({
-      account: s.username,
+      account: s.display_name || s.username,
       steamid: target_steamid,
       uri: `steam://friends/add/${target_steamid}`,
       web_url: `https://steamcommunity.com/profiles/${target_steamid}`
@@ -677,6 +890,7 @@ export default async function activate(swch) {
       accounts: accounts.map(a => ({
         id: a.id,
         username: a.username,
+        display_name: a.display_name,
         steamid: a.steamid64,
         friends: cache[a.id]?.friends || []
       }))
@@ -701,6 +915,7 @@ export default async function activate(swch) {
         cache[acc.id] = {
           account_id: acc.id,
           username: acc.username,
+          display_name: acc.display_name || acc.username,
           steamid64: acc.steamid,
           friends: acc.friends,
           last_synced: Date.now()
@@ -745,15 +960,15 @@ export default async function activate(swch) {
   const unbindAccountsEvent = swch.events.on('accounts.changed', async () => {
     swch.log('[Friend Manager] Accounts changed in SWCH, refreshing state...');
     const accounts = await getAllAccounts();
-    await ensureAccountFriends(accounts);
+    await ensureAccountFriends(accounts, true);
     swch.events.emit('friends.updated', { type: 'accounts_changed' });
   });
 
-  // Perform initial auto-sync if enabled
+  // Initial auto-sync
   const initialSettings = await getSettings();
   if (initialSettings.auto_sync) {
     const accs = await getAllAccounts();
-    await ensureAccountFriends(accs);
+    await ensureAccountFriends(accs, true);
   }
 
   swch.log('[Friend Manager] Activated successfully');
